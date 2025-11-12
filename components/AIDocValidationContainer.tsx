@@ -67,12 +67,10 @@ const AIDocValidationContainer = ({
   }, []);
 
   const handleContentChange = (content: string) => {
-    logger.debug('Editor content changed', { contentLength: content.length }, 'AIDocValidationContainer');
     onContentChange?.(content);
   };
 
   const handleExportReady = (ready: boolean) => {
-    logger.info('Export ready state changed', { ready }, 'AIDocValidationContainer');
     setHasDocument(ready);
     onExportReadyChange?.(ready);
   };

@@ -50,6 +50,63 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
 
+  // Generate default placeholder content
+  const getDefaultEditorContent = () => {
+    const placeholder = dict.docValidation.editorPlaceholder;
+    return `
+      <h1 style="text-align: center; color: #f97316;">${placeholder.title}</h1>
+      <p style="text-align: center; color: #94a3b8; font-size: 1.1em;"><em>${placeholder.subtitle}</em></p>
+      
+      <p><br></p>
+      
+      <h2 style="color: #f97316;">📚 ${placeholder.section1Title}</h2>
+      <p style="line-height: 1.8;">${placeholder.section1Content}</p>
+      
+      <p><br></p>
+      
+      <h2 style="color: #f97316;">🚀 ${placeholder.section2Title}</h2>
+      <ul>
+        <li><strong>Option 1 - ${placeholder.section2Item1}</strong></li>
+        <li><strong>Option 2 - ${placeholder.section2Item2}</strong></li>
+      </ul>
+      
+      <p><br></p>
+      
+      <h2 style="color: #f97316;">✨ ${placeholder.section3Title}</h2>
+      <p style="line-height: 1.8;">${placeholder.section3Content}</p>
+      
+      <p><br></p>
+      
+      <h2 style="color: #f97316;">💾 ${placeholder.section4Title}</h2>
+      <p style="line-height: 1.8;">${placeholder.section4Content}</p>
+      
+      <p><br></p>
+      
+      <h2 style="color: #f97316;">💡 ${placeholder.section5Title}</h2>
+      <ol>
+        <li style="margin-bottom: 0.5em;">${placeholder.section5Tip1}</li>
+        <li style="margin-bottom: 0.5em;">${placeholder.section5Tip2}</li>
+        <li style="margin-bottom: 0.5em;">${placeholder.section5Tip3}</li>
+      </ol>
+      
+      <p><br></p>
+      <p><br></p>
+      
+      <p style="text-align: center; padding: 1em; background-color: #fef3c7; border-left: 4px solid #f59e0b;">
+        <strong style="color: #92400e;">🎉 ${placeholder.footer}</strong>
+      </p>
+      
+      <p><br></p>
+      <p><br></p>
+      
+      <hr style="border: 2px solid #e5e7eb; margin: 2em 0;">
+      
+      <p><br></p>
+      <p style="color: #6b7280; font-size: 1.1em;">👇 <strong>Start typing below this line...</strong></p>
+      <p><br></p>
+    `;
+  };
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -67,7 +124,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
       TextStyle,
       Color,
     ],
-    content: '<p>Upload a Word document to start editing...</p>',
+    content: getDefaultEditorContent(),
     immediatelyRender: false,
     editorProps: {
       attributes: {
@@ -103,7 +160,8 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
   useEffect(() => {
     // Notify parent when editor is ready and has content
-    if (editor && fileName) {
+    // Export is enabled when editor is ready (regardless of whether a file was uploaded)
+    if (editor) {
       onExportReady?.(true);
     } else {
       onExportReady?.(false);
@@ -499,24 +557,17 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        {/* Upload Overlay */}
-        {!fileName && (
-          <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-10 pointer-events-none">
-            <div className="text-center p-8 bg-card border-4 border-dashed border-border pointer-events-auto">
-              <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold text-foreground mb-2">
+        {/* Drag and Drop Hint Overlay - Only shows when dragging */}
+        {dragActive && (
+          <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-sm z-10 pointer-events-none">
+            <div className="text-center p-8 bg-card border-4 border-dashed border-primary">
+              <Upload className="w-16 h-16 mx-auto mb-4 text-primary" />
+              <h3 className="text-xl font-semibold text-foreground mb-2">
                 {dict.docValidation.uploadHint}
               </h3>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="text-sm text-muted-foreground">
                 {dict.docValidation.uploadHintDetail}
               </p>
-              <button
-                onClick={handleUploadClick}
-                disabled={isUploading}
-                className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all shadow-sm disabled:opacity-50"
-              >
-                {dict.docValidation.uploadDocument}
-              </button>
             </div>
           </div>
         )}

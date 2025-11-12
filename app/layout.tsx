@@ -28,8 +28,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${dmSans.variable} ${spaceMono.variable} antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${dmSans.variable} ${spaceMono.variable} antialiased`} suppressHydrationWarning>
         {children}
         <FloatingChatButton />
       </body>
