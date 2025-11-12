@@ -111,99 +111,6 @@ Output files will be in the `dist` directory:
 
 For more details, see [Desktop Packaging Documentation](./docs/features/desktop-packaging.md).
 
-## Project Structure
-
-```
-AIDocMaster/
-├── app/                    # Next.js app directory
-│   ├── layout.tsx         # Root layout
-│   ├── page.tsx           # Home page
-│   └── globals.css        # Global styles with theme
-├── components/            # React components
-│   ├── Header.tsx         # Top navigation bar
-│   ├── Footer.tsx         # Bottom footer
-│   ├── Taskbar.tsx        # Vertical task navigation
-│   └── Container.tsx      # Main content area
-├── electron/              # Electron desktop application
-│   ├── main.js           # Main process (window management)
-│   └── preload.js        # Preload script (IPC bridge)
-├── scripts/               # Build and automation scripts
-│   ├── build-desktop.js  # Desktop packaging script
-│   ├── verify-desktop-setup.js # Setup verification
-│   └── README.md         # Scripts documentation
-├── lib/                   # Utility libraries
-│   ├── utils.ts           # Helper functions
-│   ├── logger.ts          # Logging utility
-│   └── i18n/              # Internationalization
-│       ├── config.ts      # i18n configuration
-│       └── dictionaries.ts # Translation dictionaries
-├── docs/                  # Documentation
-│   ├── features/         # Feature documentation
-│   │   ├── desktop-packaging.md        # Desktop feature guide
-│   │   ├── desktop-quick-start.md      # Quick start guide
-│   │   └── desktop-installation-guide.md # Installation guide
-│   └── apis/             # API documentation
-├── public/                # Static assets
-├── electron-builder.json  # Electron Builder configuration
-├── .env.example           # Environment variables template
-└── package.json           # Project dependencies
-```
-
-## Architecture
-
-### Layout Structure
-
-The application uses a fixed-height layout designed for desktop applications:
-
-```
-┌─────────────────────────────────┐
-│          Header                  │
-├────┬────────────────────────────┤
-│    │                             │
-│ T  │                             │
-│ a  │       Container             │
-│ s  │                             │
-│ k  │                             │
-│ b  │                             │
-│ a  │                             │
-│ r  │                             │
-│    │                             │
-├────┴────────────────────────────┤
-│          Footer                  │
-└─────────────────────────────────┘
-```
-
-### Key Components
-
-- **Header**: Top navigation bar with application title
-- **Taskbar**: Vertical sidebar on the left with task icons and tooltips
-- **Container**: Main content area for displaying active task content
-- **Footer**: Bottom bar with copyright information
-
-### Theme System
-
-The project uses a custom neo-brutalism theme with:
-- Bold borders (4px)
-- Strong shadows
-- High contrast colors
-- Clean typography (DM Sans, Space Mono)
-- OKLCH color space for better color perception
-
-### Internationalization
-
-The i18n system supports multiple languages with:
-- Dictionary-based translations
-- Type-safe translation keys
-- Easy language switching capability
-
-### Logging
-
-Comprehensive logging system with:
-- Multiple log levels (info, warn, error, debug, success)
-- Contextual logging
-- Component lifecycle tracking
-- API call logging
-- Development/production mode awareness
 
 ## Configuration
 
@@ -238,6 +145,8 @@ This project is proprietary software. All rights reserved.
 ## Support
 
 For support, please open an issue in the GitHub repository.
+
+Contact me: xdrshjr@mail.com
 
 ---
 
