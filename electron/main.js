@@ -13,7 +13,7 @@
  * - Resizable: Yes
  */
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -129,6 +129,10 @@ function createWindow() {
       minWidth: WINDOW_CONFIG.MIN_WIDTH,
       minHeight: WINDOW_CONFIG.MIN_HEIGHT,
     });
+
+    // Remove the default menu bar (File, Edit, etc.)
+    Menu.setApplicationMenu(null);
+    logger.info('Application menu bar removed');
 
     // Load the app
     const startUrl = app.isPackaged
@@ -311,6 +315,18 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 /**
+ * Model Configuration File Path
+ */
+const MODEL_CONFIG_FILE = 'model-configs.json';
+
+/**
+ * Get model configuration file path
+ */
+function getModelConfigPath() {
+  return path.join(app.getPath('userData'), MODEL_CONFIG_FILE);
+}
+
+/**
  * IPC Handlers
  */
 ipcMain.handle('get-app-version', () => {
@@ -330,6 +346,96 @@ ipcMain.handle('get-window-bounds', () => {
     return bounds;
   }
   return null;
+});
+
+/**
+ * IPC Handler: Load model configurations from file system
+ */
+ipcMain.handle('load-model-configs', async () => {
+  logger.info('IPC: load-model-configs called');
+  
+  try {
+    const configPath = getModelConfigPath();
+    logger.debug('Loading model configs from file', { path: configPath });
+
+    // Check if file exists
+    if (!fs.existsSync(configPath)) {
+      logger.info('Model config file does not exist, returning empty config');
+      return {
+        success: true,
+        data: { models: [] },
+      };
+    }
+
+    // Read file
+    const fileContent = fs.readFileSync(configPath, 'utf-8');
+    const configs = JSON.parse(fileContent);
+
+    logger.success('Model configurations loaded successfully', {
+      count: configs.models?.length || 0,
+    });
+
+    return {
+      success: true,
+      data: configs,
+    };
+  } catch (error) {
+    logger.error('Failed to load model configurations', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    return {
+      success: false,
+      error: error.message,
+      data: { models: [] },
+    };
+  }
+});
+
+/**
+ * IPC Handler: Save model configurations to file system
+ */
+ipcMain.handle('save-model-configs', async (event, configs) => {
+  logger.info('IPC: save-model-configs called', {
+    modelCount: configs.models?.length || 0,
+  });
+
+  try {
+    const configPath = getModelConfigPath();
+    logger.debug('Saving model configs to file', { path: configPath });
+
+    // Ensure directory exists
+    const configDir = path.dirname(configPath);
+    if (!fs.existsSync(configDir)) {
+      logger.debug('Creating config directory', { dir: configDir });
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+
+    // Write file with pretty formatting
+    const jsonContent = JSON.stringify(configs, null, 2);
+    fs.writeFileSync(configPath, jsonContent, 'utf-8');
+
+    logger.success('Model configurations saved successfully', {
+      path: configPath,
+      count: configs.models?.length || 0,
+      size: `${jsonContent.length} bytes`,
+    });
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    logger.error('Failed to save model configurations', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
 });
 
 logger.info('Electron main process initialized');

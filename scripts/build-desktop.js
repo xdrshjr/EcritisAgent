@@ -206,11 +206,35 @@ function buildNextApp() {
   let apiMoved = false;
   
   try {
+    // Clean up any existing backup directory first
+    if (fs.existsSync(apiBackupDir)) {
+      logger.info('Removing existing backup directory');
+      fs.rmSync(apiBackupDir, { recursive: true, force: true });
+    }
+    
     if (fs.existsSync(apiDir)) {
       logger.info('Temporarily moving API routes folder');
-      fs.renameSync(apiDir, apiBackupDir);
-      apiMoved = true;
-      logger.success('API routes folder moved temporarily');
+      
+      // Use a more robust method for Windows
+      try {
+        fs.renameSync(apiDir, apiBackupDir);
+        apiMoved = true;
+        logger.success('API routes folder moved temporarily');
+      } catch (renameError) {
+        // Fallback: copy and delete if rename fails (Windows file lock issue)
+        logger.warn('Rename failed, attempting copy and delete', {
+          error: renameError.message
+        });
+        
+        // Copy recursively
+        fs.cpSync(apiDir, apiBackupDir, { recursive: true });
+        
+        // Delete original
+        fs.rmSync(apiDir, { recursive: true, force: true });
+        
+        apiMoved = true;
+        logger.success('API routes folder moved temporarily (via copy)');
+      }
     }
     
     // Set environment variable for desktop build mode
@@ -244,8 +268,24 @@ function buildNextApp() {
     // Restore API folder
     if (apiMoved && fs.existsSync(apiBackupDir)) {
       logger.info('Restoring API routes folder');
-      fs.renameSync(apiBackupDir, apiDir);
-      logger.success('API routes folder restored');
+      
+      try {
+        fs.renameSync(apiBackupDir, apiDir);
+        logger.success('API routes folder restored');
+      } catch (restoreError) {
+        // Fallback: copy and delete if rename fails
+        logger.warn('Rename failed during restore, attempting copy and delete', {
+          error: restoreError.message
+        });
+        
+        // Copy recursively
+        fs.cpSync(apiBackupDir, apiDir, { recursive: true });
+        
+        // Delete backup
+        fs.rmSync(apiBackupDir, { recursive: true, force: true });
+        
+        logger.success('API routes folder restored (via copy)');
+      }
     }
   }
 }

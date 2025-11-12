@@ -112,6 +112,68 @@ const electronAPI = {
     logger.debug('Platform retrieved', { platform });
     return platform;
   },
+
+  /**
+   * Load model configurations from file system
+   */
+  loadModelConfigs: async () => {
+    try {
+      logger.info('Loading model configurations');
+      const result = await ipcRenderer.invoke('load-model-configs');
+      
+      if (result.success) {
+        logger.info('Model configurations loaded successfully', {
+          count: result.data.models?.length || 0,
+        });
+      } else {
+        logger.error('Failed to load model configurations', {
+          error: result.error,
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('Exception while loading model configurations', {
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: error.message,
+        data: { models: [] },
+      };
+    }
+  },
+
+  /**
+   * Save model configurations to file system
+   */
+  saveModelConfigs: async (configs) => {
+    try {
+      logger.info('Saving model configurations', {
+        count: configs.models?.length || 0,
+      });
+      
+      const result = await ipcRenderer.invoke('save-model-configs', configs);
+      
+      if (result.success) {
+        logger.info('Model configurations saved successfully');
+      } else {
+        logger.error('Failed to save model configurations', {
+          error: result.error,
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('Exception while saving model configurations', {
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
 };
 
 /**
@@ -121,6 +183,7 @@ try {
   logger.info('Exposing Electron API to renderer process');
   
   contextBridge.exposeInMainWorld('electron', electronAPI);
+  contextBridge.exposeInMainWorld('electronAPI', electronAPI);
   
   logger.info('Electron API exposed successfully', {
     exposedAPIs: Object.keys(electronAPI),

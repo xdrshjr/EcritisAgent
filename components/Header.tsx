@@ -6,8 +6,9 @@
 'use client';
 
 import { logger } from '@/lib/logger';
-import { useEffect } from 'react';
-import { Download } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Download, Settings } from 'lucide-react';
+import SettingsDialog from './SettingsDialog';
 
 interface HeaderProps {
   title: string;
@@ -103,6 +104,8 @@ const DocAIMasterIcon = () => {
 };
 
 const Header = ({ title, showExport = false, onExport, exportDisabled = false }: HeaderProps) => {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   useEffect(() => {
     logger.component('Header', 'mounted');
     logger.debug('Header configuration', { 
@@ -117,30 +120,52 @@ const Header = ({ title, showExport = false, onExport, exportDisabled = false }:
     onExport?.();
   };
 
+  const handleSettingsClick = () => {
+    logger.info('Settings button clicked', undefined, 'Header');
+    setIsSettingsOpen(true);
+  };
+
+  const handleSettingsClose = () => {
+    logger.info('Settings dialog closed', undefined, 'Header');
+    setIsSettingsOpen(false);
+  };
+
   return (
-    <header className="h-8 bg-background border-b-4 border-border flex items-center px-4 shadow-sm">
-      <div className="flex items-center justify-between w-full">
-        <div className="flex items-center gap-3 ml-3">
-          <DocAIMasterIcon />
-          <h1 className="text-lg font-bold tracking-tight text-foreground">
-            {title}
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {showExport && (
+    <>
+      <header className="h-8 bg-background border-b-4 border-border flex items-center px-4 shadow-sm">
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-3 ml-3">
+            <DocAIMasterIcon />
+            <h1 className="text-lg font-bold tracking-tight text-foreground">
+              {title}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            {showExport && (
+              <button
+                onClick={handleExportClick}
+                disabled={exportDisabled}
+                className="px-3 py-1 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                aria-label="Export Document"
+              >
+                <Download className="w-3 h-3" />
+                <span className="font-medium">Export</span>
+              </button>
+            )}
             <button
-              onClick={handleExportClick}
-              disabled={exportDisabled}
-              className="px-3 py-1 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
-              aria-label="Export Document"
+              onClick={handleSettingsClick}
+              className="w-8 h-8 flex items-center justify-center bg-muted border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all shadow-sm"
+              aria-label="Settings"
+              title="Settings"
             >
-              <Download className="w-3 h-3" />
-              <span className="font-medium">Export</span>
+              <Settings className="w-4 h-4 text-foreground" />
             </button>
-          )}
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      <SettingsDialog isOpen={isSettingsOpen} onClose={handleSettingsClose} />
+    </>
   );
 };
 

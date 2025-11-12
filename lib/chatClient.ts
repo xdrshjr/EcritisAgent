@@ -2,9 +2,11 @@
  * Chat Client Utility
  * Handles communication with OpenAI-compatible LLM API
  * Supports streaming responses for real-time chat experience
+ * Now supports custom model configurations from user settings
  */
 
 import { logger } from './logger';
+import { getDefaultModel, getLLMConfigFromModel } from './modelConfig';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -24,9 +26,9 @@ export interface StreamChunk {
 }
 
 /**
- * Get LLM configuration from environment variables
+ * Get LLM configuration from environment variables (fallback)
  */
-export const getLLMConfig = (): LLMConfig => {
+export const getLLMConfigFromEnv = (): LLMConfig => {
   const config: LLMConfig = {
     apiKey: process.env.LLM_API_KEY || '',
     apiUrl: process.env.LLM_API_URL || 'https://api.openai.com/v1',
@@ -34,7 +36,7 @@ export const getLLMConfig = (): LLMConfig => {
     timeout: parseInt(process.env.LLM_API_TIMEOUT || '30000', 10),
   };
 
-  logger.debug('LLM configuration loaded', {
+  logger.debug('LLM configuration loaded from environment', {
     apiUrl: config.apiUrl,
     modelName: config.modelName,
     timeout: config.timeout,
@@ -42,6 +44,53 @@ export const getLLMConfig = (): LLMConfig => {
   }, 'ChatClient');
 
   return config;
+};
+
+/**
+ * Get LLM configuration - prioritizes user-configured models over environment variables
+ */
+export const getLLMConfig = async (): Promise<LLMConfig> => {
+  logger.info('Fetching LLM configuration for API call', undefined, 'ChatClient');
+
+  try {
+    // Try to get default model from user configuration
+    const defaultModel = await getDefaultModel();
+    
+    if (defaultModel) {
+      logger.success('Using user-configured default model', {
+        source: 'User Settings',
+        modelId: defaultModel.id,
+        displayName: defaultModel.name,
+        modelName: defaultModel.modelName,
+        apiUrl: defaultModel.apiUrl,
+        isEnabled: defaultModel.isEnabled !== false,
+      }, 'ChatClient');
+      
+      return getLLMConfigFromModel(defaultModel);
+    }
+
+    // Fallback to environment variables
+    logger.warn('No user-configured model found, falling back to environment variables', {
+      source: 'Environment Variables',
+    }, 'ChatClient');
+    
+    const envConfig = getLLMConfigFromEnv();
+    logger.info('Using environment variable configuration', {
+      source: 'Environment Variables',
+      apiUrl: envConfig.apiUrl,
+      modelName: envConfig.modelName,
+      hasApiKey: !!envConfig.apiKey,
+    }, 'ChatClient');
+    
+    return envConfig;
+  } catch (error) {
+    logger.error('Error loading user model configuration, falling back to environment variables', {
+      source: 'Environment Variables (Fallback)',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 'ChatClient');
+    
+    return getLLMConfigFromEnv();
+  }
 };
 
 /**

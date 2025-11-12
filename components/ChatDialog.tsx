@@ -6,12 +6,13 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import { logger } from '@/lib/logger';
 import type { ChatMessage as ChatMessageType } from '@/lib/chatClient';
+import { syncModelConfigsToCookies } from '@/lib/modelConfigSync';
 
 export interface ChatDialogProps {
   isOpen: boolean;
@@ -34,8 +35,44 @@ const ChatDialog = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [viewportHeight, setViewportHeight] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Track viewport height for responsive dialog sizing
+  useEffect(() => {
+    const updateViewportHeight = () => {
+      const height = window.innerHeight;
+      setViewportHeight(height);
+      logger.debug('Viewport height updated', { 
+        height, 
+        calculatedChatHeight: Math.floor(height * 0.8) 
+      }, 'ChatDialog');
+    };
+
+    // Initialize viewport height
+    updateViewportHeight();
+    logger.info('Chat dialog viewport tracking initialized', { 
+      initialHeight: window.innerHeight 
+    }, 'ChatDialog');
+
+    // Add resize listener with debouncing for performance
+    let resizeTimeout: NodeJS.Timeout;
+    const handleResize = () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        updateViewportHeight();
+      }, 100);
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      clearTimeout(resizeTimeout);
+      window.removeEventListener('resize', handleResize);
+      logger.debug('Chat dialog viewport tracking cleaned up', undefined, 'ChatDialog');
+    };
+  }, []);
 
   // Initialize with welcome message
   useEffect(() => {
@@ -77,6 +114,9 @@ const ChatDialog = ({
     logger.info('Sending chat message', { messageLength: content.length }, 'ChatDialog');
 
     try {
+      // Sync model configurations to cookies before API call
+      await syncModelConfigsToCookies();
+      
       // Prepare messages for API (without id and timestamp)
       const apiMessages: ChatMessageType[] = messages
         .filter(msg => msg.id !== 'welcome') // Exclude welcome message
@@ -197,9 +237,22 @@ const ChatDialog = ({
     return null;
   }
 
+  // Calculate chat dialog height as 80% of viewport height
+  // Minimum height of 300px to ensure usability
+  const calculatedHeight = viewportHeight > 0 
+    ? Math.max(Math.floor(viewportHeight * 0.8), 300)
+    : 720; // Default fallback height
+
+  logger.debug('Chat dialog height calculated', {
+    viewportHeight,
+    calculatedHeight,
+    percentage: '80%'
+  }, 'ChatDialog');
+
   return (
     <div
-      className="fixed bottom-24 right-6 w-[576px] h-[900px] bg-background border-2 border-border rounded-lg shadow-xl flex flex-col z-50 animate-slideUp"
+      className="fixed bottom-24 right-6 w-[576px] bg-background border-2 border-border rounded-lg shadow-xl flex flex-col z-50 animate-slideUp"
+      style={{ height: `${calculatedHeight}px` }}
       onKeyDown={handleKeyDown}
       role="dialog"
       aria-label={title}
