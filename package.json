@@ -20,6 +20,7 @@
     "clsx": "^2.1.1",
     "docx": "^9.5.1",
     "file-saver": "^2.0.5",
+    "highlight.js": "^11.9.0",
     "html-docx-js": "^0.3.1",
     "i18next": "^25.6.2",
     "lucide-react": "^0.553.0",
@@ -30,10 +31,14 @@
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-i18next": "^16.3.0",
+    "react-markdown": "^9.0.1",
+    "rehype-highlight": "^7.0.0",
+    "remark-gfm": "^4.0.0",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tailwindcss/typography": "^0.5.15",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

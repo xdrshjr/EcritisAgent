@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { DM_Sans, Space_Mono } from "next/font/google";
 import "./globals.css";
+import "./chat.css";
+import FloatingChatButton from "@/components/FloatingChatButton";
 
 const dmSans = DM_Sans({
   subsets: ["latin"],
@@ -29,6 +31,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${dmSans.variable} ${spaceMono.variable} antialiased`}>
         {children}
+        <FloatingChatButton />
       </body>
     </html>
   );

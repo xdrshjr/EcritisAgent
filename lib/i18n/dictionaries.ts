@@ -50,6 +50,17 @@ const en = {
     uploadError: 'Failed to upload document',
     exportError: 'Failed to export document',
   },
+  chat: {
+    title: 'AI Assistant',
+    welcomeMessage: 'Hello! I\'m your AI assistant. How can I help you today?',
+    inputPlaceholder: 'Type your message...',
+    sendButton: 'Send',
+    closeButton: 'Close chat',
+    openButton: 'Open chat',
+    thinking: 'Thinking...',
+    errorMessage: 'Sorry, I encountered an error. Please try again.',
+    configError: 'Chat is not configured. Please check your settings.',
+  },
 };
 
 // Chinese translations
@@ -97,6 +108,17 @@ const zh = {
     uploadSuccess: '文档上传成功',
     uploadError: '文档上传失败',
     exportError: '文档导出失败',
+  },
+  chat: {
+    title: 'AI助手',
+    welcomeMessage: '您好！我是您的AI助手。有什么可以帮您的吗？',
+    inputPlaceholder: '输入您的消息...',
+    sendButton: '发送',
+    closeButton: '关闭对话',
+    openButton: '打开对话',
+    thinking: '思考中...',
+    errorMessage: '抱歉，遇到了错误。请重试。',
+    configError: '聊天未配置。请检查您的设置。',
   },
 };
 
