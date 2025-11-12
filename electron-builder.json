@@ -1,0 +1,59 @@
+{
+  "appId": "com.aidocmaster.app",
+  "productName": "AIDocMaster",
+  "copyright": "Copyright © 2025 AIDocMaster",
+  "directories": {
+    "output": "dist",
+    "buildResources": "build"
+  },
+  "files": [
+    "out/**/*",
+    "electron/**/*",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "main": "electron/main.js"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
+        "target": "portable",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "icon": "app/favicon.ico",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "publisherName": "AIDocMaster"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "AIDocMaster",
+    "artifactName": "${productName}-${version}-Setup.${ext}",
+    "deleteAppDataOnUninstall": false,
+    "installerIcon": "app/favicon.ico",
+    "uninstallerIcon": "app/favicon.ico",
+    "installerHeaderIcon": "app/favicon.ico",
+    "displayLanguageSelector": false,
+    "language": "2052"
+  },
+  "portable": {
+    "artifactName": "${productName}-${version}-Portable.${ext}"
+  },
+  "compression": "maximum",
+  "asar": true,
+  "asarUnpack": [
+    "**/*.node"
+  ]
+}
+

@@ -14,16 +14,19 @@ DocAIMaster is a sophisticated desktop application built with Next.js and React,
 - 🎨 **Beautiful UI** - Clean, modern interface with neo-brutalism design system
 - 🌍 **Internationalization** - Built-in support for multiple languages (English, Chinese)
 - 📝 **Detailed Logging** - Comprehensive logging system for debugging and monitoring
-- 🖥️ **Desktop-Ready** - Fixed-height layout optimized for desktop applications
+- 🖥️ **Desktop Application** - Native Windows desktop app with Electron (1024×768 default, 800×600 minimum)
+- 📦 **Easy Distribution** - One-click installer and portable executable for Windows
 
 ## Technology Stack
 
 - **Framework**: Next.js 16 with App Router
 - **UI Library**: React 19
+- **Desktop**: Electron 28 with secure IPC bridge
 - **Styling**: Tailwind CSS 4 with custom neo-brutalism theme
 - **TypeScript**: Full type safety
 - **Icons**: Lucide React
 - **Internationalization**: Custom i18n implementation
+- **Build Tools**: Electron Builder for Windows packaging
 
 ## Getting Started
 
@@ -74,6 +77,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to see the a
 
 ### Build
 
+#### Web Application Build
+
 Create a production build:
 
 ```bash
@@ -85,6 +90,24 @@ Start the production server:
 ```bash
 npm start
 ```
+
+#### Desktop Application Build
+
+Build as a Windows desktop application:
+
+```bash
+# Verify setup first (recommended)
+npm run verify:desktop
+
+# Build desktop application
+npm run build:desktop
+```
+
+Output files will be in the `dist` directory:
+- `AIDocMaster-{version}-Setup.exe` - NSIS installer
+- `AIDocMaster-{version}-Portable.exe` - Portable executable
+
+For more details, see [Desktop Packaging Documentation](./docs/features/desktop-packaging.md).
 
 ## Project Structure
 
@@ -99,13 +122,27 @@ AIDocMaster/
 │   ├── Footer.tsx         # Bottom footer
 │   ├── Taskbar.tsx        # Vertical task navigation
 │   └── Container.tsx      # Main content area
+├── electron/              # Electron desktop application
+│   ├── main.js           # Main process (window management)
+│   └── preload.js        # Preload script (IPC bridge)
+├── scripts/               # Build and automation scripts
+│   ├── build-desktop.js  # Desktop packaging script
+│   ├── verify-desktop-setup.js # Setup verification
+│   └── README.md         # Scripts documentation
 ├── lib/                   # Utility libraries
 │   ├── utils.ts           # Helper functions
 │   ├── logger.ts          # Logging utility
 │   └── i18n/              # Internationalization
 │       ├── config.ts      # i18n configuration
 │       └── dictionaries.ts # Translation dictionaries
+├── docs/                  # Documentation
+│   ├── features/         # Feature documentation
+│   │   ├── desktop-packaging.md        # Desktop feature guide
+│   │   ├── desktop-quick-start.md      # Quick start guide
+│   │   └── desktop-installation-guide.md # Installation guide
+│   └── apis/             # API documentation
 ├── public/                # Static assets
+├── electron-builder.json  # Electron Builder configuration
 ├── .env.example           # Environment variables template
 └── package.json           # Project dependencies
 ```

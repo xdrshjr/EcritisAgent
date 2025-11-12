@@ -87,7 +87,7 @@ const ChatMessage = ({ role, content, timestamp }: ChatMessageProps) => {
                 rehypePlugins={[rehypeHighlight]}
                 components={{
                   // Custom rendering for code blocks
-                  code: ({ node, inline, className, children, ...props }) => {
+                  code: ({ node, inline, className, children, ...props }: any) => {
                     const match = /language-(\w+)/.exec(className || '');
                     return !inline ? (
                       <code className={className} {...props}>

@@ -2,11 +2,16 @@
   "name": "docaimaster",
   "version": "0.1.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "build:desktop": "node scripts/build-desktop.js",
+    "build:electron": "electron-builder --win --x64 --config electron-builder.json",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "verify:desktop": "node scripts/verify-desktop-setup.js"
   },
   "dependencies": {
     "@tiptap/extension-color": "^3.10.5",
@@ -42,9 +47,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^8.2.2",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
     "eslint": "^9",
     "eslint-config-next": "16.0.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^7.2.0"
   }
 }

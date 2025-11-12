@@ -1,7 +1,13 @@
 # AI Document Validation Feature
 
 ## Overview
-The AI Document Validation feature provides a comprehensive Word document editing and validation system with a split-panel interface. Users can upload Word documents, edit them online with full formatting support, and export the modified versions.
+The AI Document Validation feature provides a comprehensive Word document editing and validation system with a split-panel interface. Users can start editing immediately in the rich text editor, or upload existing Word documents for editing with full formatting support. All documents can be exported as .docx files.
+
+### Key Capabilities
+- **Immediate Editing**: Start typing right away without uploading a document
+- **Document Upload**: Import existing Word documents (.doc, .docx)
+- **Full Formatting**: Rich text editing with comprehensive formatting tools
+- **Export**: Download edited content as Word documents (.docx)
 
 ## Architecture
 
@@ -32,18 +38,29 @@ app/page.tsx (Main Container)
 
 ## Features
 
-### 1. Document Upload
+### 1. Editor Initialization (Updated: 2025-11-12)
+- **Default State**: Editor displays placeholder content with helpful instructions
+- **Immediate Editing**: Users can start typing without uploading a document
+- **Placeholder Content**: 
+  - Welcoming title
+  - Instructions for using the editor
+  - Guidance on upload and export features
+  - "Start typing here..." prompt
+- **Always Editable**: Editor is fully functional from the moment it loads
+
+### 2. Document Upload
 - **Supported Formats**: .doc, .docx
 - **Maximum Size**: 10MB
 - **Upload Methods**:
-  - Click to upload button
-  - Drag and drop onto editor area
+  - Click "Upload Document" button in toolbar
+  - Drag and drop onto editor area (visual feedback on drag)
 - **Validation**:
   - File type checking
   - Size limitation enforcement
   - Format verification
+- **Upload Behavior**: Replaces placeholder content with document content
 
-### 2. Document Editing
+### 3. Document Editing
 The editor provides comprehensive formatting capabilities:
 
 #### Text Formatting
@@ -60,7 +77,7 @@ The editor provides comprehensive formatting capabilities:
 - Real-time content synchronization
 - Format preservation from original Word document
 
-### 3. Split-Panel Layout
+### 4. Split-Panel Layout
 - **Left Panel**: Document editor (default 60% width)
 - **Right Panel**: Validation results (default 40% width)
 - **Resizable**: Drag the separator to adjust panel sizes
@@ -68,14 +85,15 @@ The editor provides comprehensive formatting capabilities:
   - Maximum left panel: 70%
 - **Interactive Resizer**: Visual feedback on hover and during resize
 
-### 4. Document Export
+### 5. Document Export (Updated: 2025-11-12)
 - **Format**: .docx (Microsoft Word)
 - **Export Button**: Located in the header (top-right)
-- **Disabled State**: Export is disabled until a document is uploaded
+- **Always Available**: Export is enabled immediately when editor is ready
+- **Works Without Upload**: Can export documents created directly in the editor
 - **Filename**: Auto-generated with timestamp
 - **Processing**: Client-side conversion (no server upload required)
 
-### 5. Validation Results Panel
+### 6. Validation Results Panel
 - **Current State**: Placeholder with coming soon features
 - **Future Features**:
   - Grammar and spelling checks
@@ -86,9 +104,18 @@ The editor provides comprehensive formatting capabilities:
 
 ## User Flow
 
-### Typical Usage
+### Workflow A: Start from Scratch (Updated: 2025-11-12)
 1. User opens the AI Document Validation task
-2. User uploads a Word document (click or drag-and-drop)
+2. Editor displays default placeholder content with instructions
+3. User starts typing directly in the editor
+4. User applies formatting using the toolbar as needed
+5. Changes are tracked in real-time
+6. User clicks "Export" button when finished
+7. Document is downloaded as .docx
+
+### Workflow B: Edit Existing Document
+1. User opens the AI Document Validation task
+2. User uploads a Word document (click "Upload Document" or drag-and-drop)
 3. Document is converted to HTML and displayed in editor
 4. User edits the document using the formatting toolbar
 5. Changes are tracked in real-time
@@ -169,13 +196,17 @@ All components use structured logging with the following context tags:
 - **error**: Error conditions
 - **success**: Successful operation completions
 
-### Key Logged Events
-1. Document upload start/complete/failure
-2. Document conversion (Word to HTML)
-3. Editor content changes
-4. Export ready state changes
-5. Panel resizing operations
-6. Export operations start/complete/failure
+### Key Logged Events (Updated: 2025-11-12)
+1. Editor initialization with default placeholder content
+2. Document upload start/complete/failure
+3. Document conversion (Word to HTML)
+4. Editor content changes
+5. Export ready state changes
+6. Panel resizing operations
+7. Export operations start/complete/failure
+8. Drag and drop interactions (enter/leave/drop)
+9. Upload button clicks
+10. File dialog operations
 
 ## Internationalization
 
@@ -185,7 +216,7 @@ The feature supports multiple languages through the i18n system:
 - English (en)
 - Chinese (zh)
 
-### Translation Keys
+### Translation Keys (Updated: 2025-11-12)
 ```typescript
 docValidation: {
   uploadDocument: string
@@ -193,6 +224,12 @@ docValidation: {
   uploadHintDetail: string
   validationResults: string
   validationPlaceholder: string
+  editorPlaceholder: {
+    title: string
+    line1: string
+    line2: string
+    line3: string
+  }
   editorToolbar: {
     bold, italic, underline, strike,
     heading1, heading2,

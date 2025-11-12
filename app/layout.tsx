@@ -1,21 +1,18 @@
 import type { Metadata } from "next";
-import { DM_Sans, Space_Mono } from "next/font/google";
 import "./globals.css";
 import "./chat.css";
 import FloatingChatButton from "@/components/FloatingChatButton";
 
-const dmSans = DM_Sans({
-  subsets: ["latin"],
+// Use system fonts for desktop build to avoid Google Fonts fetch issues
+const dmSans = {
   variable: "--font-sans",
-  display: "swap",
-});
+  className: "",
+};
 
-const spaceMono = Space_Mono({
-  weight: ["400", "700"],
-  subsets: ["latin"],
+const spaceMono = {
   variable: "--font-mono",
-  display: "swap",
-});
+  className: "",
+};
 
 export const metadata: Metadata = {
   title: "DocAIMaster - AI Document Validation Tool",
