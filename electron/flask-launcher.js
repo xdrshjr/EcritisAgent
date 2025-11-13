@@ -32,6 +32,12 @@ class FlaskBackendManager {
    * Get Python executable path
    */
   getPythonPath() {
+    this.logger.info('Searching for Python executable', {
+      isPackaged: this.app.isPackaged,
+      platform: process.platform,
+      resourcesPath: process.resourcesPath,
+    });
+
     // Check for bundled Python first (for packaged app)
     if (this.app.isPackaged) {
       const bundledPython = path.join(
@@ -40,17 +46,73 @@ class FlaskBackendManager {
         'python.exe'
       );
       
+      this.logger.debug('Checking for bundled Python', { path: bundledPython });
+      
       if (fs.existsSync(bundledPython)) {
-        this.logger.info('Using bundled Python', { path: bundledPython });
-        return bundledPython;
+        this.logger.success('Found bundled Python', { path: bundledPython });
+        
+        // Verify Python is executable
+        try {
+          const { execSync } = require('child_process');
+          const version = execSync(`"${bundledPython}" --version`, {
+            encoding: 'utf-8',
+            stdio: 'pipe',
+          }).trim();
+          this.logger.info('Bundled Python version verified', { version });
+          return bundledPython;
+        } catch (error) {
+          this.logger.error('Bundled Python found but not executable', {
+            path: bundledPython,
+            error: error.message,
+          });
+          // Fall through to system Python
+        }
+      } else {
+        this.logger.warn('Bundled Python not found at expected location', {
+          expectedPath: bundledPython,
+          resourcesPath: process.resourcesPath,
+        });
+        
+        // List files in resources directory for debugging
+        try {
+          const resourcesFiles = fs.readdirSync(process.resourcesPath);
+          this.logger.debug('Files in resources directory', {
+            count: resourcesFiles.length,
+            files: resourcesFiles,
+          });
+        } catch (error) {
+          this.logger.error('Cannot list resources directory', {
+            error: error.message,
+          });
+        }
       }
       
-      this.logger.warn('Bundled Python not found, falling back to system Python');
+      this.logger.warn('Falling back to system Python');
     }
     
     // Fallback to system Python
     const systemPython = process.platform === 'win32' ? 'python' : 'python3';
-    this.logger.info('Using system Python', { command: systemPython });
+    this.logger.info('Attempting to use system Python', { command: systemPython });
+    
+    // Try to verify system Python is available
+    try {
+      const { execSync } = require('child_process');
+      const version = execSync(`${systemPython} --version`, {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      }).trim();
+      this.logger.success('System Python found and verified', {
+        command: systemPython,
+        version,
+      });
+    } catch (error) {
+      this.logger.error('System Python not found or not in PATH', {
+        command: systemPython,
+        error: error.message,
+        suggestion: 'Please install Python from python.org or ensure it is in PATH',
+      });
+    }
+    
     return systemPython;
   }
 
@@ -177,7 +239,11 @@ class FlaskBackendManager {
    */
   async start() {
     if (this.isStarting || this.isRunning) {
-      this.logger.warn('Flask backend already starting or running');
+      this.logger.warn('Flask backend already starting or running', {
+        isStarting: this.isStarting,
+        isRunning: this.isRunning,
+        currentPort: this.flaskPort,
+      });
       return { success: false, error: 'Already starting or running', port: this.flaskPort };
     }
 
@@ -187,14 +253,20 @@ class FlaskBackendManager {
     if (this.startAttempts > this.maxStartAttempts) {
       this.logger.error('Max start attempts reached for Flask backend', {
         attempts: this.startAttempts,
+        maxAttempts: this.maxStartAttempts,
       });
       this.isStarting = false;
-      return { success: false, error: 'Max start attempts reached', port: null };
+      return { 
+        success: false, 
+        error: `Failed to start Flask backend after ${this.maxStartAttempts} attempts`, 
+        port: null 
+      };
     }
 
     this.logger.info('Starting Flask backend', {
       attempt: this.startAttempts,
       maxAttempts: this.maxStartAttempts,
+      isPackaged: this.app.isPackaged,
     });
 
     try {
@@ -209,10 +281,31 @@ class FlaskBackendManager {
 
       // Verify Flask app exists
       if (!fs.existsSync(flaskAppPath)) {
-        throw new Error(`Flask app not found at: ${flaskAppPath}`);
+        const error = `Flask app not found at: ${flaskAppPath}`;
+        this.logger.error(error);
+        
+        // List files in backend directory for debugging
+        try {
+          const backendFiles = fs.readdirSync(backendDir);
+          this.logger.debug('Files in backend directory', {
+            directory: backendDir,
+            files: backendFiles,
+          });
+        } catch (listError) {
+          this.logger.error('Cannot list backend directory', {
+            error: listError.message,
+          });
+        }
+        
+        throw new Error(error);
       }
 
-      this.logger.debug('Flask backend paths', {
+      // Verify backend directory exists
+      if (!fs.existsSync(backendDir)) {
+        throw new Error(`Backend directory not found at: ${backendDir}`);
+      }
+
+      this.logger.info('Flask backend paths verified', {
         python: pythonPath,
         app: flaskAppPath,
         workDir: backendDir,
@@ -226,14 +319,30 @@ class FlaskBackendManager {
         PYTHONIOENCODING: 'utf-8',
       };
 
+      this.logger.debug('Environment variables prepared', {
+        FLASK_PORT: env.FLASK_PORT,
+        PYTHONUNBUFFERED: env.PYTHONUNBUFFERED,
+        PYTHONIOENCODING: env.PYTHONIOENCODING,
+      });
+
       // Spawn Flask process
+      this.logger.info('Spawning Flask process', {
+        command: pythonPath,
+        args: [flaskAppPath],
+        cwd: backendDir,
+      });
+
       this.flaskProcess = spawn(pythonPath, [flaskAppPath], {
         cwd: backendDir,
         env: env,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      this.logger.success('Flask process spawned', {
+      if (!this.flaskProcess || !this.flaskProcess.pid) {
+        throw new Error('Failed to spawn Flask process - no PID received');
+      }
+
+      this.logger.success('Flask process spawned successfully', {
         pid: this.flaskProcess.pid,
         port: this.flaskPort,
       });
@@ -256,25 +365,48 @@ class FlaskBackendManager {
 
       // Handle process events
       this.flaskProcess.on('error', (error) => {
-        this.logger.error('Flask process error', {
+        this.logger.error('Flask process error event', {
           error: error.message,
+          code: error.code,
           stack: error.stack,
+          pid: this.flaskProcess?.pid,
         });
+        
+        // Log specific error types
+        if (error.code === 'ENOENT') {
+          this.logger.error('Python executable not found', {
+            suggestion: 'Please install Python or check the Python path configuration',
+          });
+        }
+        
         this.isRunning = false;
         this.isStarting = false;
       });
 
       this.flaskProcess.on('exit', (code, signal) => {
-        this.logger.warn('Flask process exited', {
+        const logLevel = code === 0 ? 'info' : 'warn';
+        this.logger[logLevel]('Flask process exited', {
           code,
           signal,
           pid: this.flaskProcess?.pid,
+          wasRunning: this.isRunning,
         });
+        
+        // Log specific exit codes
+        if (code !== 0 && code !== null) {
+          this.logger.error('Flask process exited with error code', {
+            exitCode: code,
+            suggestion: 'Check Flask backend logs for details',
+          });
+        }
+        
         this.isRunning = false;
         this.isStarting = false;
         this.flaskProcess = null;
       });
 
+      this.logger.info('Starting Flask health check');
+      
       // Wait for Flask to be ready
       const isHealthy = await this.checkFlaskHealth();
 
@@ -286,14 +418,20 @@ class FlaskBackendManager {
         this.logger.success('Flask backend started successfully', {
           port: this.flaskPort,
           pid: this.flaskProcess.pid,
+          attempts: this.startAttempts,
         });
 
         return { success: true, port: this.flaskPort, pid: this.flaskProcess.pid };
       } else {
         // Health check failed, kill the process
-        this.logger.error('Flask backend failed health check');
+        this.logger.error('Flask backend failed health check', {
+          port: this.flaskPort,
+          pid: this.flaskProcess?.pid,
+          attempt: this.startAttempts,
+        });
         
         if (this.flaskProcess && !this.flaskProcess.killed) {
+          this.logger.info('Killing Flask process after failed health check');
           this.flaskProcess.kill();
         }
 
@@ -301,24 +439,41 @@ class FlaskBackendManager {
         this.isStarting = false;
         this.flaskProcess = null;
 
-        return { success: false, error: 'Health check failed', port: null };
+        return { 
+          success: false, 
+          error: 'Flask backend health check failed - backend may not be responding', 
+          port: null 
+        };
       }
 
     } catch (error) {
-      this.logger.error('Failed to start Flask backend', {
+      this.logger.error('Exception during Flask backend startup', {
         error: error.message,
         stack: error.stack,
+        attempt: this.startAttempts,
+        port: this.flaskPort,
       });
 
       this.isRunning = false;
       this.isStarting = false;
 
       if (this.flaskProcess && !this.flaskProcess.killed) {
-        this.flaskProcess.kill();
+        this.logger.info('Cleaning up Flask process after exception');
+        try {
+          this.flaskProcess.kill();
+        } catch (killError) {
+          this.logger.warn('Failed to kill Flask process', {
+            error: killError.message,
+          });
+        }
         this.flaskProcess = null;
       }
 
-      return { success: false, error: error.message, port: null };
+      return { 
+        success: false, 
+        error: `Flask backend startup failed: ${error.message}`, 
+        port: null 
+      };
     }
   }
 

@@ -24,6 +24,11 @@
 # electron
 *.log
 
+# python bundle
+/python-embed/
+python-embed.zip
+.api_backup_temp/
+
 # misc
 .DS_Store
 *.pem

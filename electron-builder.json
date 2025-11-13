@@ -59,6 +59,13 @@
   ],
   "extraResources": [
     {
+      "from": "python-embed",
+      "to": "python",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
       "from": "backend",
       "to": "backend",
       "filter": [

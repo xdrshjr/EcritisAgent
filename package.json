@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "bundle:python": "node scripts/bundle-python.js",
     "build:desktop": "node scripts/build-desktop.js",
     "build:electron": "electron-builder --win --x64 --config electron-builder.json",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",

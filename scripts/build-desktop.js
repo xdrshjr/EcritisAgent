@@ -16,6 +16,7 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { main: bundlePython, checkExistingPython } = require('./bundle-python');
 
 // ANSI color codes for console output
 const colors = {
@@ -308,6 +309,46 @@ function fixElectronPaths() {
 }
 
 /**
+ * Bundle Python runtime
+ */
+async function bundlePythonRuntime() {
+  logger.step('Bundling Python Runtime');
+  
+  logger.info('Checking if Python runtime needs to be bundled');
+  
+  try {
+    // Check if Python is already bundled
+    if (checkExistingPython()) {
+      logger.success('Python runtime is already bundled and verified');
+      logger.info('Skipping Python bundling step');
+      return;
+    }
+    
+    logger.info('Python runtime not found or invalid, starting bundling process');
+    
+    // Run Python bundling process
+    await bundlePython();
+    
+    // Verify Python was bundled successfully
+    const pythonDir = path.resolve('python-embed');
+    const pythonExe = path.join(pythonDir, 'python.exe');
+    
+    if (!fs.existsSync(pythonExe)) {
+      throw new Error('Python bundling completed but python.exe not found');
+    }
+    
+    logger.success('Python runtime bundled successfully', {
+      pythonDirectory: pythonDir,
+      pythonExecutable: pythonExe,
+    });
+    
+  } catch (error) {
+    logger.error('Failed to bundle Python runtime', error);
+    throw error;
+  }
+}
+
+/**
  * Package with Electron
  */
 function packageElectron() {
@@ -380,13 +421,16 @@ async function main() {
     cleanDirectory('dist');
     cleanDirectory('.next');
     
-    // Step 3: Build Next.js app
+    // Step 3: Bundle Python runtime
+    await bundlePythonRuntime();
+    
+    // Step 4: Build Next.js app
     buildNextApp();
     
-    // Step 4: Fix Electron paths
+    // Step 5: Fix Electron paths
     fixElectronPaths();
     
-    // Step 5: Package with Electron
+    // Step 6: Package with Electron
     packageElectron();
     
     // Build complete
