@@ -147,7 +147,7 @@ This project is proprietary software. All rights reserved.
 
 For support, please open an issue in the GitHub repository.
 
-Contact me: xdrshjr@mail.com
+Contact me: xdrshjr@gmail.com
 
 ---
 
