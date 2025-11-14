@@ -28,6 +28,10 @@ export default function Home() {
   const [docValidationLeftPanelWidth, setDocValidationLeftPanelWidth] = useState(60);
   const [selectedModelId, setSelectedModelId] = useState<string | undefined>(undefined);
   
+  // Document content getters/setters for agent
+  const [getDocumentContentFn, setGetDocumentContentFn] = useState<(() => string) | undefined>(undefined);
+  const [updateDocumentContentFn, setUpdateDocumentContentFn] = useState<((content: string) => void) | undefined>(undefined);
+  
   // AI Chat state
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -213,6 +217,12 @@ export default function Home() {
     }, 'Home');
     setSelectedModelId(modelId);
   };
+  
+  const handleDocumentFunctionsReady = useCallback((getContent: () => string, updateContent: (content: string) => void) => {
+    logger.debug('Document functions received from editor', undefined, 'Home');
+    setGetDocumentContentFn(() => getContent);
+    setUpdateDocumentContentFn(() => updateContent);
+  }, []);
 
   return (
     <div className="h-screen flex flex-col">
@@ -249,6 +259,9 @@ export default function Home() {
               onLeftPanelWidthChange={handleDocValidationPanelWidthChange}
               selectedModelId={selectedModelId}
               onSelectedModelIdChange={handleSelectedModelIdChange}
+              getDocumentContent={getDocumentContentFn}
+              updateDocumentContent={updateDocumentContentFn}
+              onDocumentFunctionsReady={handleDocumentFunctionsReady}
             />
           )}
         </main>
@@ -257,7 +270,11 @@ export default function Home() {
       <Footer copyright={dict.footer.copyright} />
       
       {/* Floating Chat Button - only visible when NOT in AI Chat task */}
-      <FloatingChatButton isVisible={activeTaskId !== 'ai-chat'} />
+      <FloatingChatButton 
+        isVisible={activeTaskId !== 'ai-chat'} 
+        getDocumentContent={getDocumentContentFn}
+        updateDocumentContent={updateDocumentContentFn}
+      />
     </div>
   );
 }

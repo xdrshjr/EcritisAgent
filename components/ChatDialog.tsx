@@ -8,9 +8,10 @@
 
 import { useState, useEffect, useRef, forwardRef } from 'react';
 import { flushSync } from 'react-dom';
-import { X, Loader2, Trash2, Trash } from 'lucide-react';
+import { X, Loader2, Trash2, Trash, Bot } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
+import AgentStatusPanel, { type AgentStatus, type TodoItem } from './AgentStatusPanel';
 import { logger } from '@/lib/logger';
 import type { ChatMessage as ChatMessageType } from '@/lib/chatClient';
 import { syncModelConfigsToCookies } from '@/lib/modelConfigSync';
@@ -22,6 +23,8 @@ export interface ChatDialogProps {
   onClose: () => void;
   title?: string;
   welcomeMessage?: string;
+  getDocumentContent?: () => string;
+  updateDocumentContent?: (content: string) => void;
 }
 
 interface Message extends ChatMessageType {
@@ -33,7 +36,9 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
   isOpen, 
   onClose, 
   title = 'AI Assistant',
-  welcomeMessage = 'Hello! I\'m your AI assistant. How can I help you today?'
+  welcomeMessage = 'Hello! I\'m your AI assistant. How can I help you today?',
+  getDocumentContent,
+  updateDocumentContent,
 }, ref) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,6 +49,11 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
   const [isLoadingModels, setIsLoadingModels] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Agent mode state
+  const [isAgentMode, setIsAgentMode] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
+  const [isAgentRunning, setIsAgentRunning] = useState(false);
 
   // Track viewport height for responsive dialog sizing
   useEffect(() => {
@@ -147,12 +157,329 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
     }
   }, [messages, streamingContent]);
 
+  const handleAgentExecution = async (command: string) => {
+    logger.info('Starting new agent execution', { 
+      command: command.substring(0, 100),
+      hasExistingStatus: !!agentStatus,
+      existingPhase: agentStatus?.phase,
+    }, 'ChatDialog');
+    
+    // Clear previous status and start new execution
+    // Previous execution record will be replaced by new one
+    setIsAgentRunning(true);
+    setAgentStatus({
+      phase: 'planning',
+      message: 'Initializing agent...',
+    });
+    
+    logger.debug('Agent status reset for new execution', {
+      previousPhase: agentStatus?.phase,
+      note: 'Previous execution record will be replaced',
+    }, 'ChatDialog');
+
+    try {
+      // Get appropriate API URL
+      const apiUrl = await buildApiUrl('/api/agent-validation');
+      logger.debug('Using agent validation API URL', { apiUrl }, 'ChatDialog');
+
+      // Get document content from parent
+      const documentContent = getDocumentContent ? getDocumentContent() : "";
+      
+      if (!documentContent || documentContent.trim().length === 0) {
+        throw new Error('No document loaded. Please upload a document first.');
+      }
+      
+      logger.debug('Got document content for agent', { contentLength: documentContent.length }, 'ChatDialog');
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          command,
+          content: documentContent,
+          language: 'en', // TODO: Get from language context
+          modelId: selectedModel?.id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Agent validation failed: ${response.statusText}`);
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is empty');
+      }
+
+      // Process SSE stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          logger.info('Agent execution stream completed', undefined, 'ChatDialog');
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          
+          if (!trimmedLine || trimmedLine === 'data: [DONE]') {
+            continue;
+          }
+
+          if (trimmedLine.startsWith('data: ')) {
+            try {
+              const jsonStr = trimmedLine.slice(6);
+              const data = JSON.parse(jsonStr);
+              
+              logger.debug('Agent event received', { type: data.type }, 'ChatDialog');
+
+              // Update agent status based on event type
+              if (data.type === 'status') {
+                logger.debug('[Agent Event] Status update', { 
+                  phase: data.phase, 
+                  message: data.message?.substring(0, 50),
+                  currentStep: data.current_step,
+                  totalSteps: data.total_steps,
+                }, 'ChatDialog');
+                
+                setAgentStatus(prev => ({
+                  ...prev,
+                  phase: data.phase,
+                  message: data.message,
+                  currentStep: data.current_step,
+                  totalSteps: data.total_steps,
+                  stepDescription: data.step_description,
+                }));
+              } else if (data.type === 'todo_list') {
+                logger.info('[Agent Event] TODO list received', { 
+                  todoCount: data.todo_list?.length || 0,
+                  message: data.message,
+                }, 'ChatDialog');
+                
+                setAgentStatus(prev => ({
+                  ...prev,
+                  todoList: data.todo_list,
+                  message: data.message,
+                }));
+              } else if (data.type === 'tool_result') {
+                logger.info('[Agent Event] Tool result', { 
+                  step: data.step,
+                  tool: data.tool,
+                  success: data.result?.success || data.result?.found,
+                  message: data.result?.message?.substring(0, 100),
+                }, 'ChatDialog');
+                // Tool result is now handled by todo_item_update event
+              } else if (data.type === 'todo_item_update') {
+                logger.info('[Agent Event] TODO item status update', { 
+                  todo_id: data.todo_id,
+                  status: data.status,
+                  step: data.step,
+                  has_result: !!data.result,
+                  has_error: !!data.error,
+                }, 'ChatDialog');
+                
+                // Update specific todo item status
+                setAgentStatus(prev => {
+                  if (!prev?.todoList) return prev;
+                  const updatedList = [...prev.todoList];
+                  const todoIndex = updatedList.findIndex(t => t.id === data.todo_id);
+                  
+                  if (todoIndex >= 0) {
+                    logger.debug('[Agent Event] Updating TODO item in list', {
+                      todoIndex,
+                      todo_id: data.todo_id,
+                      old_status: updatedList[todoIndex].status,
+                      new_status: data.status,
+                    }, 'ChatDialog');
+                    
+                    updatedList[todoIndex] = {
+                      ...updatedList[todoIndex],
+                      status: data.status as 'pending' | 'in_progress' | 'completed' | 'failed',
+                      result: data.result || updatedList[todoIndex].result,
+                      error: data.error || updatedList[todoIndex].error,
+                    };
+                  } else {
+                    logger.warn('[Agent Event] TODO item not found in list', {
+                      todo_id: data.todo_id,
+                      available_ids: updatedList.map(t => t.id),
+                    }, 'ChatDialog');
+                  }
+                  
+                  return {
+                    ...prev,
+                    todoList: updatedList,
+                  };
+                });
+              } else if (data.type === 'document_update') {
+                logger.info('[Agent Event] Document update received', { 
+                  step: data.step,
+                  contentLength: data.updated_content?.length || 0,
+                  message: data.message,
+                  hasUpdateHandler: !!updateDocumentContent,
+                  hasContent: !!data.updated_content,
+                }, 'ChatDialog');
+                
+                // Update document in editor
+                if (updateDocumentContent && data.updated_content) {
+                  try {
+                    logger.debug('[Agent Event] Calling updateDocumentContent', {
+                      contentLengthBefore: data.updated_content.length,
+                      contentPreview: data.updated_content.substring(0, 100),
+                    }, 'ChatDialog');
+                    
+                    updateDocumentContent(data.updated_content);
+                    
+                    logger.success('[Agent Event] Document updated successfully in editor', { 
+                      step: data.step,
+                      contentLength: data.updated_content.length,
+                    }, 'ChatDialog');
+                  } catch (updateError) {
+                    logger.error('[Agent Event] Failed to update document', {
+                      error: updateError instanceof Error ? updateError.message : 'Unknown error',
+                      step: data.step,
+                    }, 'ChatDialog');
+                  }
+                } else {
+                  logger.error('[Agent Event] Cannot update document - missing handler or content', {
+                    hasHandler: !!updateDocumentContent,
+                    hasContent: !!data.updated_content,
+                    contentLength: data.updated_content?.length || 0,
+                  }, 'ChatDialog');
+                }
+              } else if (data.type === 'complete') {
+                logger.success('[Agent Event] Agent workflow completed', {
+                  message: data.message,
+                  hasSummary: !!data.summary,
+                  summaryLength: data.summary?.length || 0,
+                }, 'ChatDialog');
+                
+                const completedStatus: AgentStatus = {
+                  phase: 'complete',
+                  message: data.message,
+                  summary: data.summary,
+                  todoList: agentStatus?.todoList,
+                };
+                
+                setAgentStatus(completedStatus);
+                
+                logger.info('Agent execution completed, status will be collapsed', {
+                  hasTodoList: !!completedStatus.todoList,
+                  todoCount: completedStatus.todoList?.length || 0,
+                  hasSummary: !!completedStatus.summary,
+                }, 'ChatDialog');
+                
+                // Add completion message
+                const completionMsg: Message = {
+                  id: `agent-complete-${Date.now()}`,
+                  role: 'assistant',
+                  content: `✓ Task completed!\n\n${data.summary}`,
+                  timestamp: new Date(),
+                };
+                setMessages(prev => [...prev, completionMsg]);
+              } else if (data.type === 'error') {
+                logger.error('[Agent Event] Agent error received', {
+                  message: data.message,
+                  errorDetails: data.error_details || data.error,
+                }, 'ChatDialog');
+                
+                setAgentStatus({
+                  phase: 'error',
+                  message: data.message,
+                  error: data.error_details || data.message,
+                });
+                
+                // Add error message
+                const errorMsg: Message = {
+                  id: `agent-error-${Date.now()}`,
+                  role: 'assistant',
+                  content: `✗ Error: ${data.message}`,
+                  timestamp: new Date(),
+                };
+                setMessages(prev => [...prev, errorMsg]);
+              } else {
+                logger.debug('[Agent Event] Other event type', { 
+                  type: data.type,
+                }, 'ChatDialog');
+              }
+              
+            } catch (parseError) {
+              logger.warn('Failed to parse agent SSE chunk', {
+                error: parseError instanceof Error ? parseError.message : 'Unknown error',
+              }, 'ChatDialog');
+            }
+          }
+        }
+      }
+
+    } catch (error) {
+      logger.error('Agent execution failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }, 'ChatDialog');
+
+      const errorStatus: AgentStatus = {
+        phase: 'error',
+        message: 'Agent execution failed',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        todoList: agentStatus?.todoList, // Preserve existing TODO list
+      };
+      
+      setAgentStatus(errorStatus);
+      
+      logger.info('Agent execution failed, error status will be collapsed', {
+        phase: 'error',
+        hasTodoList: !!errorStatus.todoList,
+        todoCount: errorStatus.todoList?.length || 0,
+      }, 'ChatDialog');
+
+      const errorMsg: Message = {
+        id: `agent-error-${Date.now()}`,
+        role: 'assistant',
+        content: `✗ Agent execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMsg]);
+    } finally {
+      setIsAgentRunning(false);
+      
+      logger.info('Agent execution cleanup completed', {
+        hasStatus: !!agentStatus,
+        currentPhase: agentStatus?.phase,
+        note: 'Execution record kept in collapsed state for user reference',
+      }, 'ChatDialog');
+    }
+  };
+
   const handleSendMessage = async (content: string) => {
-    if (!content.trim() || isLoading) {
+    if (!content.trim() || isLoading || isAgentRunning) {
       logger.debug('Message send blocked', { 
         hasContent: !!content.trim(), 
-        isLoading 
+        isLoading,
+        isAgentRunning,
       }, 'ChatDialog');
+      return;
+    }
+    
+    // If agent mode is enabled, use agent execution
+    if (isAgentMode) {
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, userMessage]);
+      
+      await handleAgentExecution(content);
       return;
     }
 
@@ -677,11 +1004,62 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
         </div>
       </div>
 
+      {/* Agent Mode Toggle */}
+      <div className="px-6 py-3 border-t border-border/50 bg-background/50 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Bot className="w-4 h-4 text-muted-foreground" />
+          <label htmlFor="agent-mode-toggle" className="text-sm font-medium text-foreground cursor-pointer">
+            Agent Mode
+          </label>
+          <button
+            id="agent-mode-toggle"
+            onClick={() => {
+              setIsAgentMode(!isAgentMode);
+              logger.info('Agent mode toggled', { enabled: !isAgentMode }, 'ChatDialog');
+            }}
+            disabled={isLoading || isAgentRunning}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+              isAgentMode ? 'bg-primary' : 'bg-muted'
+            }`}
+            role="switch"
+            aria-checked={isAgentMode}
+            aria-label="Toggle Agent Mode"
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                isAgentMode ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+          {isAgentMode && (
+            <span className="text-xs text-primary font-medium">Enabled</span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {isAgentMode 
+            ? 'Agent will plan and execute document modifications' 
+            : 'Normal chat mode'}
+        </p>
+      </div>
+
+      {/* Agent Status Panel - Last Execution */}
+      {isAgentMode && agentStatus && (
+        <div className="px-6 pb-3 max-h-96 overflow-y-auto">
+          <AgentStatusPanel 
+            status={agentStatus} 
+            isActive={isAgentRunning}
+            defaultCollapsed={false}
+          />
+        </div>
+      )}
+
       {/* Input */}
       <ChatInput
         onSend={handleSendMessage}
-        disabled={isLoading}
-        placeholder="Type your message..."
+        disabled={isLoading || isAgentRunning}
+        placeholder={isAgentMode 
+          ? "Describe what you want to do with the document..." 
+          : "Type your message..."}
       />
     </div>
   );

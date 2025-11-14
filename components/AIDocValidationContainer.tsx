@@ -56,6 +56,9 @@ interface AIDocValidationContainerProps {
   onLeftPanelWidthChange: (width: number) => void;
   selectedModelId?: string;
   onSelectedModelIdChange?: (modelId: string) => void;
+  getDocumentContent?: () => string;
+  updateDocumentContent?: (content: string) => void;
+  onDocumentFunctionsReady?: (getContent: () => string, updateContent: (content: string) => void) => void;
 }
 
 const AIDocValidationContainer = ({ 
@@ -68,6 +71,9 @@ const AIDocValidationContainer = ({
   onLeftPanelWidthChange,
   selectedModelId,
   onSelectedModelIdChange,
+  getDocumentContent,
+  updateDocumentContent,
+  onDocumentFunctionsReady,
 }: AIDocValidationContainerProps) => {
   const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -86,6 +92,55 @@ const AIDocValidationContainer = ({
   
   // Reference to WordEditorPanel to get content and control highlighting
   const wordEditorRef = useRef<WordEditorPanelRef>(null);
+  
+  // Expose document functions when editor is ready
+  useEffect(() => {
+    if (wordEditorRef.current && onDocumentFunctionsReady) {
+      const getContent = () => {
+        if (wordEditorRef.current) {
+          const editor = wordEditorRef.current.getEditor();
+          if (editor) {
+            // Return HTML content for agent to work with
+            // Agent needs HTML to preserve formatting when making modifications
+            const html = editor.getHTML();
+            logger.debug('Getting document content for agent', {
+              contentLength: html.length,
+              contentType: 'HTML',
+            }, 'AIDocValidationContainer');
+            return html;
+          }
+        }
+        logger.warn('Cannot get document content - editor not available', undefined, 'AIDocValidationContainer');
+        return '';
+      };
+      
+      const updateContent = (content: string) => {
+        if (wordEditorRef.current) {
+          const editor = wordEditorRef.current.getEditor();
+          if (editor) {
+            logger.info('Updating document content from agent', {
+              contentLength: content.length,
+              previousLength: editor.getHTML().length,
+            }, 'AIDocValidationContainer');
+            
+            // Set HTML content
+            editor.commands.setContent(content);
+            
+            logger.success('Document content updated successfully', {
+              newLength: editor.getHTML().length,
+            }, 'AIDocValidationContainer');
+          } else {
+            logger.error('Cannot update document content - editor not available', undefined, 'AIDocValidationContainer');
+          }
+        } else {
+          logger.error('Cannot update document content - editor ref not available', undefined, 'AIDocValidationContainer');
+        }
+      };
+      
+      onDocumentFunctionsReady(getContent, updateContent);
+      logger.debug('Document functions exposed to parent', undefined, 'AIDocValidationContainer');
+    }
+  }, [wordEditorRef.current, onDocumentFunctionsReady]);
 
   // Callback to clear validation results when new document is uploaded
   const handleDocumentUpload = () => {

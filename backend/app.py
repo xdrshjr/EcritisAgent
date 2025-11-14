@@ -59,7 +59,7 @@ def setup_logging():
     
     # Console handler for stdout
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)  # Set to DEBUG to see all log levels in console
     console_handler.setFormatter(formatter)
     
     # Configure root logger
@@ -76,7 +76,8 @@ def setup_logging():
     app.logger.info('=' * 80)
     app.logger.info('Flask Backend Logging Initialized')
     app.logger.info(f'Log file location: {log_file}')
-    app.logger.info(f'Log level: DEBUG')
+    app.logger.info(f'Console log level: DEBUG')
+    app.logger.info(f'File log level: DEBUG')
     app.logger.info('=' * 80)
     
     return log_file
@@ -899,6 +900,175 @@ def model_configs():
         return jsonify({
             'success': False,
             'error': 'Failed to save model configurations',
+            'details': str(e)
+        }), 500
+
+# Agent-based document validation endpoint
+@app.route('/api/agent-validation', methods=['POST'])
+def agent_validation():
+    """
+    Handle agent-based document validation with streaming support
+    Uses LangGraph agent to plan and execute document modifications
+    """
+    start_time = datetime.now()
+    app.logger.info('Agent validation request received')
+    
+    try:
+        # Parse request body
+        data = request.get_json()
+        user_command = data.get('command', '')
+        document_content = data.get('content', '')
+        language = data.get('language', 'en')
+        model_id = data.get('modelId')
+        
+        if not user_command or not isinstance(user_command, str):
+            app.logger.warning(f'Invalid command in agent validation request: {type(user_command)}')
+            return jsonify({'error': 'Command is required and must be a string'}), 400
+        
+        if not document_content or not isinstance(document_content, str):
+            app.logger.warning(f'Invalid content in agent validation request: {type(document_content)}')
+            return jsonify({'error': 'Document content is required and must be a string'}), 400
+        
+        # Normalize language parameter
+        if language not in ['en', 'zh']:
+            app.logger.warning(f'Unsupported language "{language}" received, defaulting to English')
+            language = 'en'
+        
+        app.logger.info(f'Processing agent validation request: command length: {len(user_command)}, content length: {len(document_content)}, language: {language}, modelId: {model_id or "default"}')
+        
+        # Get and validate LLM configuration
+        config = config_loader.get_llm_config(model_id=model_id)
+        
+        if config is None:
+            app.logger.error('LLM configuration not available - no model configured')
+            return jsonify({
+                'error': 'No LLM model configured',
+                'details': 'Please configure a model in Settings to use agent validation features.'
+            }), 500
+        
+        validation = config_loader.validate_llm_config(config)
+        
+        if not validation['valid']:
+            app.logger.error(f'LLM configuration validation failed: {validation.get("error")}')
+            return jsonify({'error': validation.get('error', 'Invalid LLM configuration')}), 500
+        
+        # Import agent module
+        try:
+            from agent.document_agent import DocumentAgent
+        except ImportError as import_error:
+            app.logger.error(f'Failed to import DocumentAgent: {str(import_error)}')
+            return jsonify({
+                'error': 'Agent module not available',
+                'details': 'Please ensure LangGraph dependencies are installed.'
+            }), 500
+        
+        # Initialize agent
+        try:
+            agent = DocumentAgent(
+                api_key=config['apiKey'],
+                api_url=config['apiUrl'],
+                model_name=config['modelName'],
+                language=language
+            )
+            app.logger.info(f'DocumentAgent initialized successfully')
+        except Exception as agent_error:
+            app.logger.error(f'Failed to initialize DocumentAgent: {str(agent_error)}', exc_info=True)
+            return jsonify({
+                'error': 'Failed to initialize agent',
+                'details': str(agent_error)
+            }), 500
+        
+        # Stream agent execution
+        def generate():
+            try:
+                app.logger.info('[SSE] Starting agent workflow streaming')
+                chunk_count = 0
+                event_types_count = {}
+                document_updates_count = 0
+                
+                for result in agent.run(user_command, document_content):
+                    chunk_count += 1
+                    event_type = result.get('type', 'unknown')
+                    event_types_count[event_type] = event_types_count.get(event_type, 0) + 1
+                    
+                    # Log each event type
+                    if event_type == 'document_update':
+                        document_updates_count += 1
+                        app.logger.info('[SSE] Document update event', extra={
+                            'event_type': event_type,
+                            'step': result.get('step'),
+                            'updated_content_length': len(result.get('updated_content', '')),
+                            'event_message': result.get('message', ''),
+                        })
+                    elif event_type == 'tool_result':
+                        app.logger.info('[SSE] Tool result event', extra={
+                            'event_type': event_type,
+                            'step': result.get('step'),
+                            'tool': result.get('tool'),
+                            'success': result.get('result', {}).get('success', result.get('result', {}).get('found', True)),
+                        })
+                    elif event_type == 'status':
+                        app.logger.debug('[SSE] Status event', extra={
+                            'event_type': event_type,
+                            'phase': result.get('phase'),
+                            'event_message': result.get('message', '')[:100],
+                        })
+                    elif event_type in ['todo_list', 'complete', 'error']:
+                        app.logger.info('[SSE] Major event', extra={
+                            'event_type': event_type,
+                            'event_message': result.get('message', '')[:100],
+                        })
+                    
+                    # Convert result to SSE format
+                    sse_data = f"data: {json.dumps(result, ensure_ascii=False)}\n\n"
+                    yield sse_data.encode('utf-8')
+                    
+                    # Log progress periodically
+                    if chunk_count % 10 == 0:
+                        app.logger.debug('[SSE] Agent stream progress', extra={
+                            'chunks_sent': chunk_count,
+                            'document_updates': document_updates_count,
+                            'event_types': dict(event_types_count),
+                        })
+                
+                duration = (datetime.now() - start_time).total_seconds()
+                app.logger.info('[SSE] Agent workflow completed', extra={
+                    'total_chunks': chunk_count,
+                    'duration_seconds': f'{duration:.2f}',
+                    'document_updates': document_updates_count,
+                    'event_types_summary': dict(event_types_count),
+                })
+                
+                # Send completion marker
+                yield b"data: [DONE]\n\n"
+                
+            except Exception as e:
+                app.logger.error('[SSE] Error in agent stream', extra={
+                    'error': str(e),
+                    'error_type': type(e).__name__,
+                    'chunks_sent_before_error': chunk_count,
+                }, exc_info=True)
+                error_data = {
+                    "type": "error",
+                    "message": "Agent execution failed",
+                    "error": str(e)
+                }
+                yield f"data: {json.dumps(error_data)}\n\n".encode('utf-8')
+        
+        return Response(
+            stream_with_context(generate()),
+            content_type='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive'
+            }
+        )
+    
+    except Exception as e:
+        duration = (datetime.now() - start_time).total_seconds()
+        app.logger.error(f'Agent validation request failed after {duration:.2f}s: {str(e)}', exc_info=True)
+        return jsonify({
+            'error': 'Failed to process agent validation request',
             'details': str(e)
         }), 500
 

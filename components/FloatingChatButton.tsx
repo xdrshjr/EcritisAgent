@@ -15,12 +15,16 @@ export interface FloatingChatButtonProps {
   title?: string;
   welcomeMessage?: string;
   isVisible?: boolean;
+  getDocumentContent?: () => string;
+  updateDocumentContent?: (content: string) => void;
 }
 
 const FloatingChatButton = ({ 
   title = 'AI Assistant',
   welcomeMessage = 'Hello! I\'m your AI assistant. How can I help you today?',
-  isVisible = true
+  isVisible = true,
+  getDocumentContent,
+  updateDocumentContent,
 }: FloatingChatButtonProps) => {
   // Always call hooks in the same order - never conditionally
   const [isOpen, setIsOpen] = useState(false);
@@ -101,6 +105,8 @@ const FloatingChatButton = ({
         onClose={() => setIsOpen(false)}
         title={title}
         welcomeMessage={welcomeMessage}
+        getDocumentContent={getDocumentContent}
+        updateDocumentContent={updateDocumentContent}
         ref={dialogRef}
       />
 
