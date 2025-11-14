@@ -26,34 +26,14 @@ export interface StreamChunk {
 }
 
 /**
- * Get LLM configuration from environment variables (fallback)
- */
-export const getLLMConfigFromEnv = (): LLMConfig => {
-  const config: LLMConfig = {
-    apiKey: process.env.LLM_API_KEY || '',
-    apiUrl: process.env.LLM_API_URL || 'https://api.openai.com/v1',
-    modelName: process.env.LLM_MODEL_NAME || 'gpt-4',
-    timeout: parseInt(process.env.LLM_API_TIMEOUT || '60000', 10), // Increased to 60 seconds for more reliable streaming
-  };
-
-  logger.debug('LLM configuration loaded from environment', {
-    apiUrl: config.apiUrl,
-    modelName: config.modelName,
-    timeout: config.timeout,
-    hasApiKey: !!config.apiKey,
-  }, 'ChatClient');
-
-  return config;
-};
-
-/**
- * Get LLM configuration - prioritizes user-configured models over environment variables
+ * Get LLM configuration - uses user-configured default model
+ * No longer depends on environment variables
  */
 export const getLLMConfig = async (): Promise<LLMConfig> => {
   logger.info('Fetching LLM configuration for API call', undefined, 'ChatClient');
 
   try {
-    // Try to get default model from user configuration
+    // Get default model from user configuration or persistent storage
     const defaultModel = await getDefaultModel();
     
     if (defaultModel) {
@@ -69,27 +49,25 @@ export const getLLMConfig = async (): Promise<LLMConfig> => {
       return getLLMConfigFromModel(defaultModel);
     }
 
-    // Fallback to environment variables
-    logger.warn('No user-configured model found, falling back to environment variables', {
-      source: 'Environment Variables',
+    // No model configured - throw error with helpful message
+    const errorMessage = 'No LLM model configured. Please configure a model in Settings.';
+    logger.error(errorMessage, {
+      source: 'User Settings',
+      suggestion: 'Open Settings dialog and add a model configuration',
     }, 'ChatClient');
     
-    const envConfig = getLLMConfigFromEnv();
-    logger.info('Using environment variable configuration', {
-      source: 'Environment Variables',
-      apiUrl: envConfig.apiUrl,
-      modelName: envConfig.modelName,
-      hasApiKey: !!envConfig.apiKey,
-    }, 'ChatClient');
-    
-    return envConfig;
+    throw new Error(errorMessage);
   } catch (error) {
-    logger.error('Error loading user model configuration, falling back to environment variables', {
-      source: 'Environment Variables (Fallback)',
+    if (error instanceof Error && error.message.includes('No LLM model configured')) {
+      // Re-throw configuration errors as-is
+      throw error;
+    }
+    
+    logger.error('Error loading user model configuration', {
       error: error instanceof Error ? error.message : 'Unknown error',
     }, 'ChatClient');
     
-    return getLLMConfigFromEnv();
+    throw new Error('Failed to load LLM configuration. Please check your model settings.');
   }
 };
 

@@ -1,0 +1,27 @@
+{
+  "models": [
+    {
+      "apiKey": "sk-a5f209d824d54b6883fbc397f9fb4e28",
+      "apiUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "createdAt": "2025-11-14T06:37:44.793519Z",
+      "id": "model_1763073464.793519",
+      "isDefault": false,
+      "isEnabled": false,
+      "modelName": "qwen-max-latest",
+      "name": "Qwen Max (Default)",
+      "updatedAt": "2025-11-14T06:45:58.653Z"
+    },
+    {
+      "apiKey": "sk-a5f209d824d54b6883fbc397f9fb4e28",
+      "apiUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "createdAt": "2025-11-14T06:45:53.663Z",
+      "id": "model_1763102753663_kyli8q9",
+      "isDefault": false,
+      "isEnabled": true,
+      "modelName": "deepseek-v3",
+      "name": "deepseek-v3",
+      "updatedAt": "2025-11-14T06:46:32.693Z"
+    }
+  ],
+  "defaultModelId": null
+}

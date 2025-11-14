@@ -171,7 +171,8 @@ export const getDefaultModelServer = async (request?: Request): Promise<ModelCon
 
 /**
  * Get LLM configuration for API calls (server-side)
- * Prioritizes user-configured models, falls back to environment variables
+ * Uses user-configured models from persistent storage
+ * No longer depends on environment variables
  */
 export const getLLMConfigServer = async (request?: Request): Promise<{
   apiKey: string;
@@ -182,7 +183,7 @@ export const getLLMConfigServer = async (request?: Request): Promise<{
   logger.info('Fetching LLM configuration (server-side)', undefined, 'ModelConfigServer');
 
   try {
-    // Try to get default model from user configuration
+    // Get default model from user configuration or persistent storage
     const defaultModel = await getDefaultModelServer(request);
     
     if (defaultModel) {
@@ -203,36 +204,25 @@ export const getLLMConfigServer = async (request?: Request): Promise<{
       };
     }
 
-    // Fallback to environment variables
-    logger.warn('No user-configured model found, falling back to environment variables', undefined, 'ModelConfigServer');
-    
-    const envConfig = {
-      apiKey: process.env.LLM_API_KEY || '',
-      apiUrl: process.env.LLM_API_URL || 'https://api.openai.com/v1',
-      modelName: process.env.LLM_MODEL_NAME || 'gpt-4',
-      timeout: parseInt(process.env.LLM_API_TIMEOUT || '30000', 10),
-    };
-    
-    logger.info('Using environment variable configuration', {
-      source: 'Environment Variables',
-      apiUrl: envConfig.apiUrl,
-      modelName: envConfig.modelName,
-      hasApiKey: !!envConfig.apiKey,
+    // No model configured - throw error with helpful message
+    const errorMessage = 'No LLM model configured. Please configure a model in Settings.';
+    logger.error(errorMessage, {
+      source: 'User Settings',
+      suggestion: 'Open Settings dialog and add a model configuration',
     }, 'ModelConfigServer');
     
-    return envConfig;
+    throw new Error(errorMessage);
   } catch (error) {
-    logger.error('Error loading user model configuration, falling back to environment variables', {
+    if (error instanceof Error && error.message.includes('No LLM model configured')) {
+      // Re-throw configuration errors as-is
+      throw error;
+    }
+    
+    logger.error('Error loading user model configuration', {
       error: error instanceof Error ? error.message : 'Unknown error',
     }, 'ModelConfigServer');
     
-    // Final fallback to environment variables
-    return {
-      apiKey: process.env.LLM_API_KEY || '',
-      apiUrl: process.env.LLM_API_URL || 'https://api.openai.com/v1',
-      modelName: process.env.LLM_MODEL_NAME || 'gpt-4',
-      timeout: parseInt(process.env.LLM_API_TIMEOUT || '30000', 10),
-    };
+    throw new Error('Failed to load LLM configuration. Please check your model settings.');
   }
 };
 

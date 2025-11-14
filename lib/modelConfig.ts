@@ -1,10 +1,11 @@
 /**
  * Model Configuration Service
  * Manages LLM model configurations with support for multiple models
- * Supports both browser localStorage and Electron file system storage
+ * Supports browser localStorage, Electron file system storage, and Python backend persistence
  */
 
 import { logger } from './logger';
+import { buildFlaskApiUrl } from './flaskConfig';
 
 export interface ModelConfig {
   id: string;
@@ -80,12 +81,59 @@ export const validateModelConfig = (config: Partial<ModelConfig>): { valid: bool
 };
 
 /**
+ * Try to load model configurations from Python backend
+ */
+const tryLoadFromPythonBackend = async (): Promise<ModelConfigList | null> => {
+  try {
+    logger.debug('Attempting to load model configs from Python backend', undefined, 'ModelConfig');
+    
+    const apiUrl = buildFlaskApiUrl('/api/model-configs');
+    
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.data) {
+        logger.success('Model configurations loaded from Python backend', {
+          count: result.data.models?.length || 0,
+        }, 'ModelConfig');
+        return result.data;
+      }
+    }
+    
+    logger.debug('Python backend did not return model configs', {
+      status: response.status,
+    }, 'ModelConfig');
+    return null;
+  } catch (error) {
+    logger.debug('Could not load from Python backend (non-critical)', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 'ModelConfig');
+    return null;
+  }
+};
+
+/**
  * Load model configurations from storage
  */
 export const loadModelConfigs = async (): Promise<ModelConfigList> => {
   logger.info('Loading model configurations', undefined, 'ModelConfig');
 
   try {
+    // First, try to load from Python backend (this ensures we get the default config on first run)
+    const backendConfigs = await tryLoadFromPythonBackend();
+    if (backendConfigs && backendConfigs.models.length > 0) {
+      logger.info('Using model configurations from Python backend', {
+        count: backendConfigs.models.length,
+      }, 'ModelConfig');
+      return backendConfigs;
+    }
+    
     if (isElectron()) {
       // Use Electron IPC to load from file system
       logger.debug('Loading model configs from Electron file system', undefined, 'ModelConfig');
@@ -127,6 +175,44 @@ export const loadModelConfigs = async (): Promise<ModelConfigList> => {
 };
 
 /**
+ * Sync model configurations to Python backend for persistent storage
+ */
+const syncToPythonBackend = async (configs: ModelConfigList): Promise<void> => {
+  try {
+    logger.debug('Syncing model configs to Python backend', {
+      count: configs.models.length,
+    }, 'ModelConfig');
+    
+    const apiUrl = buildFlaskApiUrl('/api/model-configs');
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(configs),
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      logger.success('Model configurations synced to Python backend', {
+        count: result.count,
+      }, 'ModelConfig');
+    } else {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      logger.warn('Failed to sync to Python backend, continuing with local storage', {
+        status: response.status,
+        error: errorData.error,
+      }, 'ModelConfig');
+    }
+  } catch (error) {
+    logger.warn('Exception while syncing to Python backend, continuing with local storage', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 'ModelConfig');
+  }
+};
+
+/**
  * Save model configurations to storage
  */
 export const saveModelConfigs = async (configs: ModelConfigList): Promise<{ success: boolean; error?: string }> => {
@@ -135,6 +221,8 @@ export const saveModelConfigs = async (configs: ModelConfigList): Promise<{ succ
   }, 'ModelConfig');
 
   try {
+    let saveResult: { success: boolean; error?: string } = { success: false };
+    
     if (isElectron()) {
       // Use Electron IPC to save to file system
       logger.debug('Saving model configs to Electron file system', undefined, 'ModelConfig');
@@ -150,7 +238,7 @@ export const saveModelConfigs = async (configs: ModelConfigList): Promise<{ succ
         }, 'ModelConfig');
       }
       
-      return result;
+      saveResult = result;
     } else {
       // Use localStorage for browser
       logger.debug('Saving model configs to localStorage', undefined, 'ModelConfig');
@@ -160,8 +248,18 @@ export const saveModelConfigs = async (configs: ModelConfigList): Promise<{ succ
         count: configs.models.length,
       }, 'ModelConfig');
       
-      return { success: true };
+      saveResult = { success: true };
     }
+    
+    // Additionally sync to Python backend for unified persistence
+    // This runs in the background and doesn't affect the main save result
+    syncToPythonBackend(configs).catch(err => {
+      logger.debug('Background sync to Python backend failed (non-critical)', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+      }, 'ModelConfig');
+    });
+    
+    return saveResult;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Failed to save model configurations', {

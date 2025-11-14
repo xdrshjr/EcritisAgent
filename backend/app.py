@@ -95,6 +95,9 @@ class ConfigLoader:
         self.config_file = 'model-configs.json'
         self.config_path = self._get_config_path()
         app.logger.info(f'ConfigLoader initialized with path: {self.config_path}')
+        
+        # Initialize default model configuration if file doesn't exist
+        self._ensure_default_config()
     
     def _get_config_path(self):
         """Determine configuration file path based on environment"""
@@ -110,6 +113,50 @@ class ConfigLoader:
         
         config_dir.mkdir(parents=True, exist_ok=True)
         return config_dir / self.config_file
+    
+    def _ensure_default_config(self):
+        """Ensure default model configuration exists on first run"""
+        try:
+            if not self.config_path.exists():
+                app.logger.info('Model config file does not exist, creating default configuration')
+                
+                # Get current UTC timestamp
+                from datetime import timezone
+                current_time = datetime.now(timezone.utc)
+                model_id = f'model_{current_time.timestamp()}'
+                
+                # Create default model configuration
+                default_config = {
+                    'models': [
+                        {
+                            'id': model_id,
+                            'name': 'Qwen Max (Default)',
+                            'apiUrl': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                            'apiKey': 'sk-a5f209d824d54b6883fbc397f9fb4e28',
+                            'modelName': 'qwen-max-latest',
+                            'isDefault': True,
+                            'isEnabled': True,
+                            'createdAt': current_time.isoformat(),
+                            'updatedAt': current_time.isoformat()
+                        }
+                    ],
+                    'defaultModelId': model_id
+                }
+                
+                # Save default configuration
+                with open(self.config_path, 'w', encoding='utf-8') as f:
+                    json.dump(default_config, f, indent=2, ensure_ascii=False)
+                
+                app.logger.info('Default model configuration created successfully', extra={
+                    'modelName': 'qwen-max-latest',
+                    'apiUrl': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                    'path': str(self.config_path)
+                })
+            else:
+                app.logger.debug('Model config file already exists, skipping default initialization')
+        
+        except Exception as e:
+            app.logger.error(f'Failed to create default model configuration: {str(e)}', exc_info=True)
     
     def load_model_configs(self):
         """Load model configurations from file"""
@@ -165,10 +212,15 @@ class ConfigLoader:
         return None
     
     def get_llm_config(self):
-        """Get LLM configuration for API calls"""
-        app.logger.info('Getting LLM configuration')
+        """
+        Get LLM configuration for API calls
+        Uses user-configured models from persistent storage
+        No longer depends on environment variables
+        """
+        app.logger.info('Getting LLM configuration from user settings')
         
         try:
+            # Get default model from user configuration or persistent storage
             default_model = self.get_default_model()
             
             if default_model:
@@ -179,32 +231,24 @@ class ConfigLoader:
                     'timeout': 120  # 120 seconds timeout
                 }
                 
-                app.logger.info(f'Using user-configured model: {config["modelName"]} at {config["apiUrl"]}')
+                app.logger.info(f'Using user-configured model: {config["modelName"]} at {config["apiUrl"]}', extra={
+                    'source': 'User Settings',
+                    'modelName': config['modelName'],
+                    'apiUrl': config['apiUrl'],
+                    'hasApiKey': bool(config['apiKey'])
+                })
                 return config
             
-            # Fallback to environment variables
-            app.logger.warning('No user-configured model, using environment variables')
-            
-            config = {
-                'apiKey': os.environ.get('LLM_API_KEY', ''),
-                'apiUrl': os.environ.get('LLM_API_URL', 'https://api.openai.com/v1'),
-                'modelName': os.environ.get('LLM_MODEL_NAME', 'gpt-4'),
-                'timeout': 120
-            }
-            
-            app.logger.info(f'Using environment config: {config["modelName"]} at {config["apiUrl"]}')
-            return config
+            # No model configured - return None to trigger error
+            app.logger.error('No LLM model configured in user settings', extra={
+                'source': 'User Settings',
+                'suggestion': 'Please configure a model in Settings dialog'
+            })
+            return None
         
         except Exception as e:
             app.logger.error(f'Error loading LLM configuration: {str(e)}', exc_info=True)
-            
-            # Return default config as last resort
-            return {
-                'apiKey': os.environ.get('LLM_API_KEY', ''),
-                'apiUrl': os.environ.get('LLM_API_URL', 'https://api.openai.com/v1'),
-                'modelName': os.environ.get('LLM_MODEL_NAME', 'gpt-4'),
-                'timeout': 120
-            }
+            return None
     
     def validate_llm_config(self, config):
         """Validate LLM configuration"""
@@ -250,6 +294,15 @@ def chat():
         
         try:
             config = config_loader.get_llm_config()
+            
+            if config is None:
+                app.logger.info('Chat API health check: No model configured')
+                return jsonify({
+                    'status': 'ok',
+                    'configured': False,
+                    'message': 'No model configured. Please add a model in Settings.'
+                })
+            
             validation = config_loader.validate_llm_config(config)
             
             return jsonify({
@@ -279,6 +332,14 @@ def chat():
         
         # Get and validate LLM configuration
         config = config_loader.get_llm_config()
+        
+        if config is None:
+            app.logger.error('LLM configuration not available - no model configured')
+            return jsonify({
+                'error': 'No LLM model configured',
+                'details': 'Please configure a model in Settings to use chat features.'
+            }), 500
+        
         validation = config_loader.validate_llm_config(config)
         
         if not validation['valid']:
@@ -388,6 +449,15 @@ def document_validation():
         
         try:
             config = config_loader.get_llm_config()
+            
+            if config is None:
+                app.logger.info('Validation API health check: No model configured')
+                return jsonify({
+                    'status': 'ok',
+                    'configured': False,
+                    'message': 'No model configured. Please add a model in Settings.'
+                })
+            
             validation = config_loader.validate_llm_config(config)
             
             return jsonify({
@@ -425,6 +495,14 @@ def document_validation():
         
         # Get and validate LLM configuration
         config = config_loader.get_llm_config()
+        
+        if config is None:
+            app.logger.error('LLM configuration not available - no model configured')
+            return jsonify({
+                'error': 'No LLM model configured',
+                'details': 'Please configure a model in Settings to use document validation features.'
+            }), 500
+        
         validation = config_loader.validate_llm_config(config)
         
         if not validation['valid']:
@@ -656,6 +734,114 @@ def get_logs():
         app.logger.error(f'Failed to read log file: {str(e)}', exc_info=True)
         return jsonify({
             'error': 'Failed to read log file',
+            'details': str(e)
+        }), 500
+
+# Model configuration endpoints
+@app.route('/api/model-configs', methods=['GET', 'POST'])
+def model_configs():
+    """
+    Manage model configurations with persistent storage
+    GET: Retrieve all model configurations
+    POST: Save model configurations
+    """
+    if request.method == 'GET':
+        app.logger.info('Model configurations retrieval requested')
+        
+        try:
+            configs = config_loader.load_model_configs()
+            
+            app.logger.info(f'Returning {len(configs.get("models", []))} model configurations')
+            
+            return jsonify({
+                'success': True,
+                'data': configs,
+                'count': len(configs.get('models', [])),
+                'configPath': str(config_loader.config_path)
+            })
+        
+        except Exception as e:
+            app.logger.error(f'Failed to retrieve model configurations: {str(e)}', exc_info=True)
+            return jsonify({
+                'success': False,
+                'error': 'Failed to retrieve model configurations',
+                'details': str(e)
+            }), 500
+    
+    # POST request - save model configurations
+    app.logger.info('Model configuration save requested')
+    
+    try:
+        data = request.get_json()
+        
+        if not data:
+            app.logger.warning('No data provided in model config save request')
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        # Validate required fields
+        if 'models' not in data:
+            app.logger.warning('Models array missing in request data')
+            return jsonify({
+                'success': False,
+                'error': 'Models array is required'
+            }), 400
+        
+        models = data.get('models', [])
+        app.logger.debug(f'Saving {len(models)} model configurations')
+        
+        # Validate each model configuration
+        for idx, model in enumerate(models):
+            required_fields = ['id', 'name', 'apiUrl', 'apiKey', 'modelName']
+            missing_fields = [field for field in required_fields if field not in model or not model[field]]
+            
+            if missing_fields:
+                app.logger.warning(f'Model at index {idx} missing required fields: {missing_fields}')
+                return jsonify({
+                    'success': False,
+                    'error': f'Model at index {idx} is missing required fields: {", ".join(missing_fields)}'
+                }), 400
+            
+            app.logger.debug(f'Model {idx}: {model.get("name")} ({model.get("modelName")})')
+        
+        # Add timestamps if not present
+        from datetime import timezone
+        current_time = datetime.now(timezone.utc).isoformat()
+        for model in models:
+            if 'updatedAt' not in model:
+                model['updatedAt'] = current_time
+            if 'createdAt' not in model:
+                model['createdAt'] = current_time
+        
+        # Save to file
+        config_data = {
+            'models': models,
+            'defaultModelId': data.get('defaultModelId')
+        }
+        
+        with open(config_loader.config_path, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, indent=2, ensure_ascii=False)
+        
+        app.logger.info(f'Model configurations saved successfully: {len(models)} models', extra={
+            'count': len(models),
+            'path': str(config_loader.config_path),
+            'defaultModelId': data.get('defaultModelId')
+        })
+        
+        return jsonify({
+            'success': True,
+            'message': 'Model configurations saved successfully',
+            'count': len(models),
+            'configPath': str(config_loader.config_path)
+        })
+    
+    except Exception as e:
+        app.logger.error(f'Failed to save model configurations: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to save model configurations',
             'details': str(e)
         }), 500
 
