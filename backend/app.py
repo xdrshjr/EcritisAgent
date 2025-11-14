@@ -14,6 +14,13 @@ from flask_cors import CORS
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
+# Ensure backend directory is in Python path for module imports
+# This is critical for both development and packaged (Electron) modes
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+    print(f"[Python Path] Added backend directory to sys.path: {backend_dir}")
+
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
@@ -954,12 +961,32 @@ def agent_validation():
         
         # Import agent module
         try:
+            app.logger.debug('[Agent Import] Attempting to import DocumentAgent module', extra={
+                'sys_path': sys.path[:3],  # Log first 3 paths for debugging
+                'backend_dir': backend_dir,
+                'cwd': os.getcwd(),
+            })
+            
             from agent.document_agent import DocumentAgent
+            
+            app.logger.info('[Agent Import] DocumentAgent module imported successfully')
+            
         except ImportError as import_error:
-            app.logger.error(f'Failed to import DocumentAgent: {str(import_error)}')
+            # Log detailed error information for debugging
+            app.logger.error('[Agent Import] Failed to import DocumentAgent module', extra={
+                'error': str(import_error),
+                'error_type': type(import_error).__name__,
+                'sys_path': sys.path,
+                'backend_dir': backend_dir,
+                'cwd': os.getcwd(),
+                'agent_dir_exists': os.path.exists(os.path.join(backend_dir, 'agent')),
+                'agent_init_exists': os.path.exists(os.path.join(backend_dir, 'agent', '__init__.py')),
+                'document_agent_exists': os.path.exists(os.path.join(backend_dir, 'agent', 'document_agent.py')),
+            }, exc_info=True)
+            
             return jsonify({
                 'error': 'Agent module not available',
-                'details': 'Please ensure LangGraph dependencies are installed.'
+                'details': f'Failed to import agent module: {str(import_error)}. Please ensure LangGraph dependencies are installed and agent module is properly packaged.'
             }), 500
         
         # Initialize agent

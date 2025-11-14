@@ -393,26 +393,68 @@ function installDependencies(pythonDir) {
       requirements: requirementsPath 
     });
 
-    // Install dependencies using pip
-    const command = `"${pythonExe}" -m pip install -r "${requirementsPath}" --no-warn-script-location`;
-    
-    const output = execSync(command, {
-      cwd: pythonDir,
-      encoding: 'utf-8',
-      stdio: 'pipe',
-    });
+    // First, upgrade pip to latest version
+    logger.info('Upgrading pip to latest version');
+    try {
+      const upgradePipCmd = `"${pythonExe}" -m pip install --upgrade pip`;
+      const upgradePipOutput = execSync(upgradePipCmd, {
+        cwd: pythonDir,
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      });
+      logger.success('pip upgraded successfully', { output: upgradePipOutput.trim().split('\n').slice(-3).join('\n') });
+    } catch (upgradePipError) {
+      logger.warn('Failed to upgrade pip, continuing with existing version', { error: upgradePipError.message });
+    }
 
-    logger.info('Dependency installation output', { output: output.trim() });
+    // Install dependencies using pip with verbose output
+    logger.info('Installing dependencies from requirements.txt (this may take several minutes)');
+    const command = `"${pythonExe}" -m pip install -r "${requirementsPath}" --no-warn-script-location --verbose`;
+    
+    let output;
+    try {
+      output = execSync(command, {
+        cwd: pythonDir,
+        encoding: 'utf-8',
+        stdio: 'pipe',
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for verbose output
+      });
+    } catch (installError) {
+      logger.error('Dependency installation failed', {
+        error: installError.message,
+        stdout: installError.stdout?.toString() || 'No stdout',
+        stderr: installError.stderr?.toString() || 'No stderr',
+      });
+      throw installError;
+    }
+
+    // Log last 50 lines of output for debugging
+    const outputLines = output.trim().split('\n');
+    const lastLines = outputLines.slice(-50).join('\n');
+    logger.info('Dependency installation output (last 50 lines)', { output: lastLines });
     logger.success('All dependencies installed successfully');
 
     // Verify installation
     const sitePackages = path.join(pythonDir, 'Lib', 'site-packages');
     if (fs.existsSync(sitePackages)) {
       const packages = fs.readdirSync(sitePackages);
-      logger.info('Installed packages', { 
+      logger.info('Installed packages in site-packages', { 
         count: packages.length,
         location: sitePackages 
       });
+      
+      // List critical package directories
+      const criticalPackages = ['flask', 'langchain', 'langchain_openai', 'langchain_core', 'langgraph'];
+      logger.info('Checking for critical package directories:');
+      for (const pkg of criticalPackages) {
+        const pkgPath = path.join(sitePackages, pkg);
+        const pkgExists = fs.existsSync(pkgPath);
+        if (pkgExists) {
+          logger.success(`  ✓ ${pkg} directory found`);
+        } else {
+          logger.error(`  ✗ ${pkg} directory NOT found`);
+        }
+      }
     }
 
   } catch (error) {
@@ -469,6 +511,37 @@ function verifyPythonInstallation(pythonDir) {
       stdio: 'pipe',
     });
     logger.success('Flask version', { version: flaskOutput.trim() });
+
+    // Check critical dependencies for agent functionality
+    logger.info('Verifying critical dependencies for agent functionality');
+    const criticalPackages = [
+      'flask',
+      'flask_cors', 
+      'requests',
+      'langchain',
+      'langchain_openai',
+      'langchain_core',
+      'langgraph'
+    ];
+
+    const missingPackages = [];
+    for (const pkg of criticalPackages) {
+      try {
+        const checkCmd = `"${pythonExe}" -c "import ${pkg}; print(${pkg}.__version__ if hasattr(${pkg}, '__version__') else 'installed')"`;
+        const pkgOutput = execSync(checkCmd, {
+          encoding: 'utf-8',
+          stdio: 'pipe',
+        });
+        logger.success(`Package verified: ${pkg}`, { version: pkgOutput.trim() });
+      } catch (pkgError) {
+        logger.error(`Package missing or invalid: ${pkg}`, { error: pkgError.message });
+        missingPackages.push(pkg);
+      }
+    }
+
+    if (missingPackages.length > 0) {
+      throw new Error(`Critical packages missing: ${missingPackages.join(', ')}`);
+    }
 
     logger.success('Python installation verified successfully');
     return true;

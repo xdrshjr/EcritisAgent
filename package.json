@@ -12,7 +12,8 @@
     "build:desktop": "node scripts/build-desktop.js",
     "build:electron": "electron-builder --win --x64 --config electron-builder.json",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "verify:desktop": "node scripts/verify-desktop-setup.js"
+    "verify:desktop": "node scripts/verify-desktop-setup.js",
+    "fix:packaged": "node scripts/fix-packaged-dependencies.js"
   },
   "dependencies": {
     "@tiptap/extension-color": "^3.10.5",

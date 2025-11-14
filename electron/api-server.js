@@ -7,6 +7,7 @@
  * Handles:
  * - /api/chat - Proxies to Flask backend for AI chat completions
  * - /api/document-validation - Proxies to Flask backend for document validation
+ * - /api/agent-validation - Proxies to Flask backend for agent-based document validation
  * - /api/logs - Proxies to Flask backend for log file access
  * 
  * This server only runs in packaged mode. In development mode, the Next.js
@@ -226,6 +227,19 @@ class APIRouteHandlers {
   }
 
   /**
+   * Handle POST /api/agent-validation
+   */
+  async handleAgentValidationRequest(reqBody, res) {
+    this.logger.info('Agent validation request received', {
+      hasCommand: !!reqBody?.command,
+      hasContent: !!reqBody?.content,
+      commandLength: reqBody?.command?.length || 0,
+      contentLength: reqBody?.content?.length || 0,
+    });
+    this.proxyToFlask('/api/agent-validation', 'POST', reqBody, res);
+  }
+
+  /**
    * Handle GET /api/chat (health check)
    */
   async handleChatHealthCheck(res) {
@@ -345,6 +359,19 @@ class ElectronAPIServer {
           res.writeHead(405, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Method not allowed' }));
         }
+      } else if (normalizedPath === '/api/agent-validation') {
+        if (method === 'POST') {
+          this.logger.info('Received agent validation request', {
+            method,
+            path: normalizedPath,
+          });
+          const body = await this.parseRequestBody(req);
+          await this.routeHandlers.handleAgentValidationRequest(body, res);
+        } else {
+          this.logger.warn('Method not allowed for agent-validation endpoint', { method });
+          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+        }
       } else if (normalizedPath === '/api/logs') {
         if (method === 'GET') {
           await this.routeHandlers.handleLogsRequest(queryString, res);
@@ -355,7 +382,7 @@ class ElectronAPIServer {
       } else {
         this.logger.warn('Route not found', { pathname, normalizedPath, method });
         res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Route not found' }));
+        res.end(JSON.stringify({ error: 'Not Found' }));
       }
     } catch (error) {
       this.logger.error('Request handling failed', {
