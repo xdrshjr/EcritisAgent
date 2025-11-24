@@ -214,13 +214,25 @@ const ChatPanel = ({
       const apiUrl = await buildApiUrl('/api/chat');
       logger.debug('Using API URL for chat', { apiUrl }, 'ChatPanel');
 
+      // Prepare request body with selected model ID
+      const requestBody = {
+        messages: apiMessages,
+        modelId: selectedModel?.id || null,
+      };
+
+      logger.info('Sending chat request with model selection', {
+        modelId: selectedModel?.id || 'default',
+        modelName: selectedModel?.name || 'default',
+        messageCount: apiMessages.length,
+      }, 'ChatPanel');
+
       // Call streaming API
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ messages: apiMessages }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {

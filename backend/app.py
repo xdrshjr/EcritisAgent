@@ -271,17 +271,30 @@ class ConfigLoader:
             model_id: Optional model ID to use specific model. If None, uses default model.
         """
         if model_id:
-            app.logger.info(f'Getting LLM configuration for specific model: {model_id}')
+            app.logger.info(f'Getting LLM configuration for specific model: {model_id}', extra={
+                'requestedModelId': model_id,
+                'source': 'User Selection'
+            })
         else:
-            app.logger.info('Getting LLM configuration from default model')
+            app.logger.info('Getting LLM configuration from default model', extra={
+                'source': 'Default Model'
+            })
         
         try:
             # Get model from user configuration or persistent storage
             if model_id:
                 selected_model = self.get_model_by_id(model_id)
                 if not selected_model:
-                    app.logger.warning(f'Specified model {model_id} not found, falling back to default')
+                    app.logger.warning(f'Specified model {model_id} not found, falling back to default', extra={
+                        'requestedModelId': model_id,
+                        'fallbackReason': 'Model not found or disabled'
+                    })
                     selected_model = self.get_default_model()
+                    if selected_model:
+                        app.logger.info(f'Using default model as fallback: {selected_model.get("name")} ({selected_model.get("modelName")})', extra={
+                            'fallbackModelId': selected_model.get('id'),
+                            'fallbackModelName': selected_model.get('name')
+                        })
             else:
                 selected_model = self.get_default_model()
             
@@ -299,7 +312,9 @@ class ConfigLoader:
                     'modelDisplayName': selected_model.get('name'),
                     'modelName': config['modelName'],
                     'apiUrl': config['apiUrl'],
-                    'hasApiKey': bool(config['apiKey'])
+                    'hasApiKey': bool(config['apiKey']),
+                    'wasRequested': model_id is not None,
+                    'requestedModelId': model_id
                 })
                 return config
             
@@ -387,18 +402,26 @@ def chat():
         # Parse request body
         data = request.get_json()
         messages = data.get('messages', [])
+        model_id = data.get('modelId')  # Get optional model ID from request
         
         if not messages or not isinstance(messages, list):
             app.logger.warning(f'Invalid messages in chat request: {type(messages)}')
             return jsonify({'error': 'Messages array is required and must not be empty'}), 400
         
-        app.logger.debug(f'Processing chat request with {len(messages)} messages')
+        app.logger.info(f'Processing chat request with {len(messages)} messages, modelId: {model_id or "default"}', extra={
+            'messageCount': len(messages),
+            'requestedModelId': model_id,
+            'usingDefaultModel': model_id is None
+        })
         
-        # Get and validate LLM configuration
-        config = config_loader.get_llm_config()
+        # Get and validate LLM configuration with specified model ID
+        config = config_loader.get_llm_config(model_id=model_id)
         
         if config is None:
-            app.logger.error('LLM configuration not available - no model configured')
+            app.logger.error('LLM configuration not available - no model configured', extra={
+                'requestedModelId': model_id,
+                'error': 'No model configured'
+            })
             return jsonify({
                 'error': 'No LLM model configured',
                 'details': 'Please configure a model in Settings to use chat features.'
@@ -407,8 +430,19 @@ def chat():
         validation = config_loader.validate_llm_config(config)
         
         if not validation['valid']:
-            app.logger.error(f'LLM configuration validation failed: {validation.get("error")}')
+            app.logger.error(f'LLM configuration validation failed: {validation.get("error")}', extra={
+                'requestedModelId': model_id,
+                'validationError': validation.get('error'),
+                'modelName': config.get('modelName', 'unknown')
+            })
             return jsonify({'error': validation.get('error', 'Invalid LLM configuration')}), 500
+        
+        app.logger.info(f'LLM configuration validated successfully, using model: {config["modelName"]}', extra={
+            'modelName': config['modelName'],
+            'apiUrl': config['apiUrl'],
+            'requestedModelId': model_id,
+            'messageCount': len(messages)
+        })
         
         # Prepare system message
         system_message = {

@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
-    const { messages } = body as { messages: ChatMessage[] };
+    const { messages, modelId } = body as { messages: ChatMessage[]; modelId?: string | null };
 
     // Validate messages
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
     logger.debug('Proxying chat request to Flask backend', {
       messageCount: messages.length,
       lastMessageRole: messages[messages.length - 1]?.role,
+      modelId: modelId || 'default',
     }, 'API:Chat');
 
     // Build Flask backend URL
@@ -54,7 +55,14 @@ export async function POST(request: NextRequest) {
     logger.info('Forwarding to Flask backend', {
       url: flaskUrl,
       messageCount: messages.length,
+      modelId: modelId || 'default',
     }, 'API:Chat');
+
+    // Prepare request body for Flask backend
+    const flaskRequestBody = {
+      messages,
+      ...(modelId && { modelId }), // Only include modelId if it's provided
+    };
 
     // Forward request to Flask backend
     const controller = new AbortController();
@@ -68,7 +76,7 @@ export async function POST(request: NextRequest) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify(flaskRequestBody),
         signal: controller.signal,
       });
       
