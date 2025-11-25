@@ -462,6 +462,30 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
                     hasHtml: !!data.html,
                   }, 'ChatDialog');
                 }
+              } else if (data.type === 'paragraph_summary' && isAutoWriterAgent) {
+                // Display paragraph summary in chat bubble
+                logger.info('[Agent Event] Paragraph summary received', {
+                  section_index: data.section_index,
+                  section_title: data.section_title,
+                  summary_length: data.summary?.length || 0,
+                  current: data.current,
+                  total: data.total,
+                }, 'ChatDialog');
+                
+                // Create a chat message bubble showing the summary
+                const summaryMessage: Message = {
+                  id: `paragraph-summary-${data.section_index}-${Date.now()}`,
+                  role: 'assistant',
+                  content: `📝 **段落 ${data.current}/${data.total} 完成：《${data.section_title}》**\n\n💡 总结：${data.summary}`,
+                  timestamp: new Date(),
+                };
+                
+                setMessages(prev => [...prev, summaryMessage]);
+                
+                logger.debug('[Agent Event] Paragraph summary added to chat', {
+                  message_id: summaryMessage.id,
+                  section_title: data.section_title,
+                }, 'ChatDialog');
               } else if (data.type === 'complete') {
                 logger.success('[Agent Event] Agent workflow completed', {
                   message: data.message,

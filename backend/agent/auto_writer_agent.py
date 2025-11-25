@@ -68,6 +68,7 @@ class WriterState(TypedDict, total=False):
     parameters: WriterParameters
     outline: List[Dict[str, str]]
     completed_sections: Annotated[List[Dict[str, str]], operator.add]
+    section_summaries: Annotated[List[Dict[str, str]], operator.add]  # Track summaries of completed paragraphs
     refined_sections: Annotated[List[str], operator.add]
     final_article_markdown: str
     final_article_html: str
@@ -278,13 +279,87 @@ class AutoWriterAgent:
             "timeline": timeline,
         }
 
+    def _generate_section_summary(
+        self,
+        section_title: str,
+        section_content: str,
+        section_index: int
+    ) -> str:
+        """
+        Generate a concise summary of a completed paragraph for context in subsequent paragraphs.
+        
+        Args:
+            section_title: Title of the completed section
+            section_content: Full content of the completed section
+            section_index: Index of the section (0-based)
+            
+        Returns:
+            Concise summary of the paragraph
+        """
+        logger.info("[AutoWriter] Generating paragraph summary", extra={
+            "section_index": section_index + 1,
+            "section_title": section_title,
+            "content_length": len(section_content),
+        })
+        
+        # Use a dedicated LLM instance with lower temperature for consistent summarization
+        summary_llm = self.config.get_llm(temperature=0.3, streaming=False)
+        
+        # Create prompt for summarization
+        prompt = SystemMessage(
+            content=(
+                f"你是一名专业的文本总结专家。请为以下段落生成一个简短的总结，不超过50字。\n\n"
+                f"段落标题：{section_title}\n\n"
+                f"段落内容：\n{section_content}\n\n"
+                f"要求：\n"
+                f"- 总结必须简洁，不超过50字\n"
+                f"- 抓住段落的核心观点和主要内容\n"
+                f"- 使用清晰、流畅的语言\n"
+                f"- 直接输出总结内容，不要添加任何前缀或后缀\n"
+            )
+        )
+        
+        try:
+            logger.debug("[AutoWriter] Calling LLM for paragraph summary", extra={
+                "section_index": section_index + 1,
+            })
+            
+            response = summary_llm.invoke([prompt])
+            summary = response.content.strip() if hasattr(response, "content") else str(response).strip()
+            
+            logger.info("[AutoWriter] Paragraph summary generated successfully", extra={
+                "section_index": section_index + 1,
+                "section_title": section_title,
+                "summary_length": len(summary),
+                "summary_preview": summary[:50] + "..." if len(summary) > 50 else summary,
+            })
+            
+            return summary
+            
+        except Exception as error:
+            logger.error("[AutoWriter] Failed to generate paragraph summary", extra={
+                "section_index": section_index + 1,
+                "section_title": section_title,
+                "error": str(error),
+            }, exc_info=True)
+            
+            # Fallback: return a truncated version of the content
+            fallback_summary = section_content[:80].strip() + "..."
+            logger.info("[AutoWriter] Using fallback summary", extra={
+                "section_index": section_index + 1,
+                "fallback_summary": fallback_summary,
+            })
+            
+            return fallback_summary
+
     def _stream_section_content(
         self,
         section: Dict[str, str],
         section_index: int,
         total_sections: int,
         params: WriterParameters,
-        previous_sections: List[Dict[str, str]]
+        previous_sections: List[Dict[str, str]],
+        previous_summaries: List[Dict[str, str]]
     ) -> Generator[Dict, None, str]:
         """
         Stream section content generation with real-time chunk events.
@@ -295,28 +370,43 @@ class AutoWriterAgent:
             "section_index": section_index + 1,
             "total_sections": total_sections,
             "section_title": section["title"],
+            "previous_summaries_count": len(previous_summaries),
         })
 
         # Create streaming LLM instance
         streaming_llm = self.config.get_llm(temperature=params["temperature"], streaming=True)
 
-        # Build context from previous sections
-        previous_snippets = "\n".join(
-            f"{idx + 1}. {item['title']}: {item['content'][:120]}"
-            for idx, item in enumerate(previous_sections)
-        )
+        # Build context from previous paragraph summaries (优化：使用总结而非完整内容)
+        previous_context = ""
+        if previous_summaries:
+            logger.debug("[AutoWriter] Including previous paragraph summaries in context", extra={
+                "section_index": section_index + 1,
+                "summaries_count": len(previous_summaries),
+            })
+            
+            summary_lines = [
+                f"{idx + 1}. {item['title']}：{item['summary']}"
+                for idx, item in enumerate(previous_summaries)
+            ]
+            previous_context = "前面段落的内容总结：\n" + "\n".join(summary_lines)
+        else:
+            logger.debug("[AutoWriter] No previous summaries - this is the first paragraph", extra={
+                "section_index": section_index + 1,
+            })
+            previous_context = "这是文章的第一段。"
 
-        # Create prompt for section
+        # Create prompt for section with article title and previous summaries
         prompt = SystemMessage(
             content=(
-                f"你是一名专业写作者，语言为{params['language']}。\n"
+                f"你是一名专业写作者，语言为{params['language']}。\n\n"
+                f"文章标题：《{params['title']}》\n"
                 f"主题：{params['topic']}\n"
                 f"目标读者：{params['audience']}\n"
                 f"语调：{params['tone']}\n"
-                f"必备关键词：{', '.join(params['keywords']) or '无'}\n"
-                f"之前段落内容（供参考）：\n{previous_snippets or '无'}\n"
+                f"必备关键词：{', '.join(params['keywords']) or '无'}\n\n"
+                f"{previous_context}\n\n"
                 f"请写作段落《{section['title']}》，要求紧扣概述：{section['summary']}，字数 250-400 字。\n"
-                "内容需要结构清晰，使用自然段，语言流畅。"
+                f"内容需要结构清晰，使用自然段，语言流畅，并与前面段落保持连贯性。"
             )
         )
 
@@ -464,11 +554,12 @@ class AutoWriterAgent:
                 timeline,
             )
 
-            # Phase 4: Stream Section Writing
+            # Phase 4: Stream Section Writing with Summary Generation
             drafted_sections: List[Dict[str, str]] = []
+            section_summaries: List[Dict[str, str]] = []  # Track paragraph summaries
             total_sections = len(outline)
 
-            logger.info("[AutoWriter] Starting streaming section generation", extra={
+            logger.info("[AutoWriter] Starting streaming section generation with summary tracking", extra={
                 "total_sections": total_sections,
             })
 
@@ -496,7 +587,8 @@ class AutoWriterAgent:
                     section_index,
                     total_sections,
                     parameters,
-                    drafted_sections
+                    drafted_sections,
+                    section_summaries  # Pass summaries for context
                 ):
                     if event["type"] == "content_chunk":
                         # Forward chunk event to frontend
@@ -547,10 +639,30 @@ class AutoWriterAgent:
                 }
                 drafted_sections.append(completed_section)
 
-                logger.info("[AutoWriter] Section completed", extra={
+                logger.info("[AutoWriter] Section completed, generating summary", extra={
                     "section_index": section_index + 1,
                     "section_title": section["title"],
                     "content_length": len(section_content),
+                })
+
+                # Generate summary for the completed paragraph
+                section_summary = self._generate_section_summary(
+                    section["title"],
+                    section_content,
+                    section_index
+                )
+                
+                # Store summary for use in subsequent paragraphs
+                section_summaries.append({
+                    "title": section["title"],
+                    "summary": section_summary,
+                })
+                
+                logger.info("[AutoWriter] Section summary stored for context", extra={
+                    "section_index": section_index + 1,
+                    "section_title": section["title"],
+                    "summary_length": len(section_summary),
+                    "total_summaries": len(section_summaries),
                 })
 
                 # Yield section completion progress
@@ -560,6 +672,16 @@ class AutoWriterAgent:
                     "total": total_sections,
                     "title": section["title"],
                     "content": section_content,
+                }
+                
+                # Yield paragraph summary event for display in chat
+                yield {
+                    "type": "paragraph_summary",
+                    "section_index": section_index,
+                    "section_title": section["title"],
+                    "summary": section_summary,
+                    "current": section_index + 1,
+                    "total": total_sections,
                 }
 
                 # Send full draft HTML after each section completes
