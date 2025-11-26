@@ -312,17 +312,21 @@ class FlaskBackendManager {
       });
 
       // Prepare environment variables
+      // CRITICAL: Pass Electron userData path to Flask so it reads configs from the same location
+      const userDataPath = this.app.getPath('userData');
       const env = {
         ...process.env,
         FLASK_PORT: this.flaskPort.toString(),
         PYTHONUNBUFFERED: '1',
         PYTHONIOENCODING: 'utf-8',
+        ELECTRON_USER_DATA: userDataPath,  // Pass userData path to Flask backend
       };
 
-      this.logger.debug('Environment variables prepared', {
+      this.logger.info('Environment variables prepared for Flask backend', {
         FLASK_PORT: env.FLASK_PORT,
         PYTHONUNBUFFERED: env.PYTHONUNBUFFERED,
         PYTHONIOENCODING: env.PYTHONIOENCODING,
+        ELECTRON_USER_DATA: userDataPath,
       });
 
       // Spawn Flask process

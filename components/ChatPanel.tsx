@@ -239,15 +239,19 @@ const ChatPanel = ({
         })) : [],
       };
 
-      logger.info('Sending chat request with model selection and MCP tools', {
-        modelId: selectedModel?.id || 'default',
-        modelName: selectedModel?.name || 'default',
+      logger.info('[ModelSelection] Sending chat request with selected model and MCP tools', {
+        selectedModelId: selectedModel?.id || 'no-model-selected',
+        selectedModelName: selectedModel?.name || 'default',
+        selectedModelApiName: selectedModel?.modelName || 'unknown',
+        selectedModelApiUrl: selectedModel?.apiUrl || 'unknown',
+        willUseModelId: selectedModel?.id || null,
         messageCount: apiMessages.length,
         mcpEnabled: mcpEnabled && enabledMCPTools.length > 0,
         mcpToolCount: enabledMCPTools.length,
         mcpMasterEnabled: mcpEnabled,
         enabledToolsCount: enabledMCPTools.length,
         toolDetails: enabledMCPTools.map(t => ({ name: t.name, id: t.id })),
+        conversationId,
       }, 'ChatPanel');
 
       // Debug: Log the actual request body being sent
@@ -778,13 +782,21 @@ const ChatPanel = ({
     
     if (model) {
       setSelectedModel(model);
-      logger.info('Model selection changed', {
-        modelId: model.id,
-        modelName: model.name,
-        displayName: model.name,
+      logger.info('[ModelSelection] Model selection changed by user', {
+        selectedModelId: model.id,
+        selectedModelName: model.name,
+        selectedModelDisplayName: model.name,
+        selectedModelApiName: model.modelName,
+        apiUrl: model.apiUrl,
+        availableModelsCount: availableModels.length,
+        conversationId,
       }, 'ChatPanel');
     } else {
-      logger.warn('Selected model not found', { modelId }, 'ChatPanel');
+      logger.warn('[ModelSelection] Selected model not found in available models', { 
+        requestedModelId: modelId,
+        availableModelIds: availableModels.map(m => m.id),
+        availableModelsCount: availableModels.length,
+      }, 'ChatPanel');
     }
   };
 

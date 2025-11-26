@@ -109,15 +109,34 @@ class ConfigLoader:
     
     def _get_config_path(self):
         """Determine configuration file path based on environment"""
-        if getattr(sys, 'frozen', False):
-            # Running as packaged executable
+        # CRITICAL FIX: Check for ELECTRON_USER_DATA environment variable first
+        # This ensures Flask backend reads from the same location as Electron main process
+        electron_user_data = os.environ.get('ELECTRON_USER_DATA')
+        
+        if electron_user_data:
+            # Running in Electron - use the userData path provided by Electron
+            config_dir = Path(electron_user_data)
+            app.logger.info(f'Using Electron userData path for model configs: {config_dir}', extra={
+                'source': 'ELECTRON_USER_DATA environment variable',
+                'path': str(config_dir)
+            })
+        elif getattr(sys, 'frozen', False):
+            # Running as packaged executable (non-Electron)
             if sys.platform == 'win32':
                 config_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster'
             else:
                 config_dir = Path.home() / '.config' / 'AIDocMaster'
+            app.logger.info(f'Using packaged app config path: {config_dir}', extra={
+                'source': 'APPDATA or home directory',
+                'path': str(config_dir)
+            })
         else:
             # Running in development - look in parent directory
             config_dir = Path(__file__).parent.parent / 'userData'
+            app.logger.info(f'Using development config path: {config_dir}', extra={
+                'source': 'Development mode',
+                'path': str(config_dir)
+            })
         
         config_dir.mkdir(parents=True, exist_ok=True)
         return config_dir / self.config_file
@@ -236,13 +255,23 @@ class ConfigLoader:
     
     def get_model_by_id(self, model_id):
         """Get model by ID from configurations"""
-        app.logger.debug(f'Getting model by ID: {model_id}')
+        app.logger.info(f'[ModelSelection] Getting model by ID: {model_id}', extra={
+            'requestedModelId': model_id,
+            'configPath': str(self.config_path)
+        })
         
         configs = self.load_model_configs()
         models = configs.get('models', [])
         
+        app.logger.info(f'[ModelSelection] Loaded {len(models)} models from config file', extra={
+            'totalModels': len(models),
+            'availableModelIds': [m.get('id') for m in models],
+            'availableModelNames': [m.get('name') for m in models],
+            'configPath': str(self.config_path)
+        })
+        
         if not models:
-            app.logger.warning('No models configured')
+            app.logger.warning('[ModelSelection] No models configured in config file')
             return None
         
         # Find model by ID
@@ -253,12 +282,27 @@ class ConfigLoader:
         
         if model:
             if not model.get('isEnabled', True):
-                app.logger.warning(f'Model {model_id} is disabled')
+                app.logger.warning(f'[ModelSelection] Model {model_id} is disabled', extra={
+                    'modelId': model_id,
+                    'modelName': model.get('name'),
+                    'isEnabled': model.get('isEnabled')
+                })
                 return None
-            app.logger.info(f'Found model by ID: {model.get("name")} ({model.get("modelName")})')
+            app.logger.info(f'[ModelSelection] Successfully found and selected model by ID', extra={
+                'modelId': model_id,
+                'modelName': model.get('name'),
+                'displayName': model.get('name'),
+                'modelApiName': model.get('modelName'),
+                'apiUrl': model.get('apiUrl'),
+                'isEnabled': model.get('isEnabled')
+            })
             return model
         
-        app.logger.warning(f'Model with ID {model_id} not found')
+        app.logger.warning(f'[ModelSelection] Model with ID {model_id} not found in config', extra={
+            'requestedModelId': model_id,
+            'availableModelIds': [m.get('id') for m in models],
+            'totalModelsInConfig': len(models)
+        })
         return None
     
     def get_llm_config(self, model_id=None):
@@ -271,13 +315,15 @@ class ConfigLoader:
             model_id: Optional model ID to use specific model. If None, uses default model.
         """
         if model_id:
-            app.logger.info(f'Getting LLM configuration for specific model: {model_id}', extra={
+            app.logger.info(f'[ModelSelection] Getting LLM configuration for specific model: {model_id}', extra={
                 'requestedModelId': model_id,
-                'source': 'User Selection'
+                'source': 'User Selection',
+                'configPath': str(self.config_path)
             })
         else:
-            app.logger.info('Getting LLM configuration from default model', extra={
-                'source': 'Default Model'
+            app.logger.info('[ModelSelection] Getting LLM configuration from default model', extra={
+                'source': 'Default Model',
+                'configPath': str(self.config_path)
             })
         
         try:
@@ -285,15 +331,17 @@ class ConfigLoader:
             if model_id:
                 selected_model = self.get_model_by_id(model_id)
                 if not selected_model:
-                    app.logger.warning(f'Specified model {model_id} not found, falling back to default', extra={
+                    app.logger.warning(f'[ModelSelection] Specified model {model_id} not found, falling back to default', extra={
                         'requestedModelId': model_id,
-                        'fallbackReason': 'Model not found or disabled'
+                        'fallbackReason': 'Model not found or disabled',
+                        'configPath': str(self.config_path)
                     })
                     selected_model = self.get_default_model()
                     if selected_model:
-                        app.logger.info(f'Using default model as fallback: {selected_model.get("name")} ({selected_model.get("modelName")})', extra={
+                        app.logger.info(f'[ModelSelection] Using default model as fallback: {selected_model.get("name")} ({selected_model.get("modelName")})', extra={
                             'fallbackModelId': selected_model.get('id'),
-                            'fallbackModelName': selected_model.get('name')
+                            'fallbackModelName': selected_model.get('name'),
+                            'fallbackModelApiName': selected_model.get('modelName')
                         })
             else:
                 selected_model = self.get_default_model()
@@ -1666,8 +1714,15 @@ def mcp_configs():
         
         try:
             # Determine configuration file path
-            if getattr(sys, 'frozen', False):
-                # Running as packaged executable
+            # Use same config path logic as model configs
+            electron_user_data = os.environ.get('ELECTRON_USER_DATA')
+            
+            if electron_user_data:
+                # Running in Electron - use the userData path provided by Electron
+                config_dir = Path(electron_user_data)
+                app.logger.debug(f'Using Electron userData path for MCP configs: {config_dir}')
+            elif getattr(sys, 'frozen', False):
+                # Running as packaged executable (non-Electron)
                 if sys.platform == 'win32':
                     config_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster'
                 else:
@@ -1805,8 +1860,15 @@ def mcp_configs():
                 mcp['createdAt'] = current_time
         
         # Determine configuration file path
-        if getattr(sys, 'frozen', False):
-            # Running as packaged executable
+        # Use same config path logic as model configs
+        electron_user_data = os.environ.get('ELECTRON_USER_DATA')
+        
+        if electron_user_data:
+            # Running in Electron - use the userData path provided by Electron
+            config_dir = Path(electron_user_data)
+            app.logger.debug(f'Using Electron userData path for MCP configs: {config_dir}')
+        elif getattr(sys, 'frozen', False):
+            # Running as packaged executable (non-Electron)
             if sys.platform == 'win32':
                 config_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster'
             else:
