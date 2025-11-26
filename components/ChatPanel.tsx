@@ -45,6 +45,7 @@ const ChatPanel = ({
   const dict = getDictionary(locale);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [streamingMcpSteps, setStreamingMcpSteps] = useState<any[]>([]); // Real-time MCP steps during streaming
   const [availableModels, setAvailableModels] = useState<ModelConfig[]>([]);
   const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
   const [isLoadingModels, setIsLoadingModels] = useState(true);
@@ -189,6 +190,11 @@ const ChatPanel = ({
     
     setIsLoading(true);
     setStreamingContent('');
+    setStreamingMcpSteps([]); // Clear previous MCP steps when starting new request
+    
+    logger.debug('Initialized streaming state for new request', {
+      conversationId,
+    }, 'ChatPanel');
     
     // Store the updated map in a variable accessible to the async code below
     // This ensures we use the map that contains the user message
@@ -395,42 +401,107 @@ const ChatPanel = ({
                   logger.info('MCP reasoning received', {
                     reasoning: data.reasoning,
                   }, 'ChatPanel');
-                  mcpSteps.push({
+                  const newStep = {
                     type: 'reasoning',
                     reasoning: data.reasoning,
                     timestamp: new Date(),
+                  };
+                  mcpSteps.push(newStep);
+                  
+                  // Update streaming MCP steps state immediately for real-time display
+                  flushSync(() => {
+                    setStreamingMcpSteps([...mcpSteps]);
                   });
+                  
+                  logger.debug('MCP reasoning step displayed in real-time', {
+                    totalSteps: mcpSteps.length,
+                  }, 'ChatPanel');
                 } else if (data.type === 'mcp_tool_call') {
                   logger.info('MCP tool call started', {
                     toolName: data.tool_name,
                     parameters: data.parameters,
                   }, 'ChatPanel');
-                  mcpSteps.push({
+                  const newStep = {
                     type: 'tool_call',
                     toolName: data.tool_name,
                     parameters: data.parameters,
                     status: data.status || 'running',
                     timestamp: new Date(),
+                  };
+                  mcpSteps.push(newStep);
+                  
+                  // Update streaming MCP steps state immediately for real-time display
+                  flushSync(() => {
+                    setStreamingMcpSteps([...mcpSteps]);
                   });
+                  
+                  logger.debug('MCP tool call step displayed in real-time', {
+                    toolName: data.tool_name,
+                    totalSteps: mcpSteps.length,
+                  }, 'ChatPanel');
                 } else if (data.type === 'mcp_tool_result') {
                   logger.info('MCP tool result received', {
                     toolName: data.tool_name,
                     status: data.status,
                   }, 'ChatPanel');
-                  mcpSteps.push({
+                  
+                  // Find and update the corresponding tool_call step to mark it as complete
+                  const toolCallStepIndex = mcpSteps.findIndex(
+                    step => step.type === 'tool_call' && 
+                            step.toolName === data.tool_name && 
+                            step.status === 'running'
+                  );
+                  
+                  if (toolCallStepIndex !== -1) {
+                    // Update the tool_call step status to reflect completion
+                    mcpSteps[toolCallStepIndex].status = data.status;
+                    mcpSteps[toolCallStepIndex].completedAt = new Date();
+                    
+                    logger.debug('Updated tool_call step status to complete', {
+                      toolName: data.tool_name,
+                      newStatus: data.status,
+                      stepIndex: toolCallStepIndex,
+                    }, 'ChatPanel');
+                  }
+                  
+                  // Add the tool result step
+                  const newStep = {
                     type: 'tool_result',
                     toolName: data.tool_name,
                     result: data.result,
                     status: data.status,
                     error: data.error,
                     timestamp: new Date(),
+                  };
+                  mcpSteps.push(newStep);
+                  
+                  // Update streaming MCP steps state immediately for real-time display
+                  flushSync(() => {
+                    setStreamingMcpSteps([...mcpSteps]);
                   });
+                  
+                  logger.debug('MCP tool result step displayed in real-time', {
+                    toolName: data.tool_name,
+                    status: data.status,
+                    totalSteps: mcpSteps.length,
+                    toolCallStepUpdated: toolCallStepIndex !== -1,
+                  }, 'ChatPanel');
                 } else if (data.type === 'mcp_final_answer') {
                   logger.info('MCP generating final answer', undefined, 'ChatPanel');
-                  mcpSteps.push({
+                  const newStep = {
                     type: 'final_answer',
                     timestamp: new Date(),
+                  };
+                  mcpSteps.push(newStep);
+                  
+                  // Update streaming MCP steps state immediately for real-time display
+                  flushSync(() => {
+                    setStreamingMcpSteps([...mcpSteps]);
                   });
+                  
+                  logger.debug('MCP final answer step displayed in real-time', {
+                    totalSteps: mcpSteps.length,
+                  }, 'ChatPanel');
                 }
                 
                 // Handle regular chat content
@@ -574,6 +645,12 @@ const ChatPanel = ({
       }
 
       setStreamingContent('');
+      setStreamingMcpSteps([]); // Clear streaming MCP steps
+      
+      logger.debug('Cleared streaming state after message completion', {
+        conversationId,
+        mcpStepsCleared: mcpSteps.length,
+      }, 'ChatPanel');
 
     } catch (error) {
       logger.error('Failed to send chat message', {
@@ -621,6 +698,11 @@ const ChatPanel = ({
         onMessagesMapChange(newMapForError);
       }
       setStreamingContent('');
+      setStreamingMcpSteps([]); // Clear streaming MCP steps on error
+      
+      logger.debug('Cleared streaming state after error', {
+        conversationId,
+      }, 'ChatPanel');
     } finally {
       setIsLoading(false);
     }
@@ -758,9 +840,23 @@ const ChatPanel = ({
                 <ChatMessage
                   role="assistant"
                   content={streamingContent}
+                  mcpExecutionSteps={streamingMcpSteps.length > 0 ? streamingMcpSteps : undefined}
+                  isMcpStreaming={isLoading}
                 />
                 {/* Blinking cursor to indicate active streaming */}
                 <div className="inline-block w-1.5 h-4 bg-purple-500 ml-1 animate-pulse rounded-sm" />
+              </div>
+            )}
+            
+            {/* Show MCP steps even before content starts streaming */}
+            {!streamingContent && streamingMcpSteps.length > 0 && isLoading && (
+              <div className="relative">
+                <ChatMessage
+                  role="assistant"
+                  content=""
+                  mcpExecutionSteps={streamingMcpSteps}
+                  isMcpStreaming={true}
+                />
               </div>
             )}
 

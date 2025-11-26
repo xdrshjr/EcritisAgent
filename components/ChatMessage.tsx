@@ -19,9 +19,10 @@ export interface ChatMessageProps {
   content: string;
   timestamp?: Date;
   mcpExecutionSteps?: any[];
+  isMcpStreaming?: boolean; // Indicates if MCP steps are still being streamed
 }
 
-const ChatMessage = ({ role, content, timestamp, mcpExecutionSteps }: ChatMessageProps) => {
+const ChatMessage = ({ role, content, timestamp, mcpExecutionSteps, isMcpStreaming = false }: ChatMessageProps) => {
   const isUser = role === 'user';
 
   const handleFormatTimestamp = (date: Date): string => {
@@ -75,7 +76,7 @@ const ChatMessage = ({ role, content, timestamp, mcpExecutionSteps }: ChatMessag
         {!isUser && mcpExecutionSteps && mcpExecutionSteps.length > 0 && (
           <MCPToolExecutionDisplay
             steps={mcpExecutionSteps}
-            isComplete={true}
+            isComplete={!isMcpStreaming}
           />
         )}
 
