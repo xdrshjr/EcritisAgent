@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import type { Conversation } from '@/components/ConversationList';
 import type { Message } from '@/components/ChatPanel';
 import type { ValidationResult } from '@/components/AIDocValidationContainer';
+import { loadAIChatState, saveAIChatState } from '@/lib/chatStorage';
 
 export default function Home() {
   const { locale } = useLanguage();
@@ -38,6 +39,7 @@ export default function Home() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messagesMap, setMessagesMap] = useState<Map<string, Message[]>>(new Map());
+  const [isAIChatStateReady, setIsAIChatStateReady] = useState(false);
 
   useEffect(() => {
     logger.info('Home component mounted', { initialTask: activeTaskId, locale }, 'Home');
@@ -65,8 +67,84 @@ export default function Home() {
       }
     };
     
+    const initializeAIChatState = async () => {
+      try {
+        logger.info('Initializing AI Chat state from persistent storage', undefined, 'Home');
+        const restoredState = await loadAIChatState();
+
+        if (!restoredState) {
+          logger.info('No persisted AI Chat state found, starting with empty state', undefined, 'Home');
+          return;
+        }
+
+        setConversations(restoredState.conversations);
+        setActiveConversationId(restoredState.activeConversationId);
+        setMessagesMap(restoredState.messagesMap);
+
+        logger.success(
+          'AI Chat state restored from persistent storage',
+          {
+            conversations: restoredState.conversations.length,
+            hasActiveConversation: !!restoredState.activeConversationId,
+            totalMessages: Array.from(restoredState.messagesMap.values()).reduce(
+              (sum, msgs) => sum + msgs.length,
+              0
+            ),
+          },
+          'Home'
+        );
+      } catch (error) {
+        logger.error(
+          'Failed to initialize AI Chat state from persistent storage',
+          {
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          'Home'
+        );
+      } finally {
+        setIsAIChatStateReady(true);
+      }
+    };
+
     loadDefaultModel();
+    initializeAIChatState();
   }, [locale]);
+
+  useEffect(() => {
+    if (!isAIChatStateReady) {
+      return;
+    }
+
+    const persistState = async () => {
+      try {
+        logger.debug(
+          'Persisting AI Chat state after state change',
+          {
+            conversations: conversations.length,
+            hasActiveConversation: !!activeConversationId,
+            messagesMapSize: messagesMap.size,
+          },
+          'Home'
+        );
+
+        await saveAIChatState({
+          conversations,
+          activeConversationId,
+          messagesMap,
+        });
+      } catch (error) {
+        logger.error(
+          'Failed to persist AI Chat state',
+          {
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          'Home'
+        );
+      }
+    };
+
+    void persistState();
+  }, [conversations, activeConversationId, messagesMap, isAIChatStateReady]);
 
   const tasks = [
     {
@@ -247,14 +325,20 @@ export default function Home() {
         
         <main className="flex-1 bg-background overflow-hidden">
           {activeTaskId === 'ai-chat' && (
-            <AIChatContainer 
-              conversations={conversations}
-              activeConversationId={activeConversationId}
-              messagesMap={messagesMap}
-              onConversationsChange={handleConversationsChange}
-              onActiveConversationChange={handleActiveConversationChange}
-              onMessagesMapChange={handleMessagesMapChange}
-            />
+            isAIChatStateReady ? (
+              <AIChatContainer 
+                conversations={conversations}
+                activeConversationId={activeConversationId}
+                messagesMap={messagesMap}
+                onConversationsChange={handleConversationsChange}
+                onActiveConversationChange={handleActiveConversationChange}
+                onMessagesMapChange={handleMessagesMapChange}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground">
+                <p className="text-sm">Loading chat history...</p>
+              </div>
+            )
           )}
           {activeTaskId === 'ai-doc-validation' && (
             <AIDocValidationContainer 

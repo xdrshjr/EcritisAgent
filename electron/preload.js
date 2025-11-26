@@ -425,6 +425,68 @@ const electronAPI = {
       };
     }
   },
+
+  /**
+   * Load AI Chat state from file system
+   */
+  loadAIChatState: async () => {
+    try {
+      logger.info('Loading AI Chat state via IPC');
+      const result = await ipcRenderer.invoke('load-ai-chat-state');
+
+      if (result.success) {
+        logger.info('AI Chat state loaded via IPC', {
+          hasState: !!result.data,
+        });
+      } else {
+        logger.error('Failed to load AI Chat state via IPC', {
+          error: result.error,
+        });
+      }
+
+      return result;
+    } catch (error) {
+      logger.error('Exception while loading AI Chat state via IPC', {
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: error.message,
+        data: null,
+      };
+    }
+  },
+
+  /**
+   * Save AI Chat state to file system
+   */
+  saveAIChatState: async (state) => {
+    try {
+      logger.info('Saving AI Chat state via IPC', {
+        hasState: !!state,
+      });
+
+      const result = await ipcRenderer.invoke('save-ai-chat-state', state);
+
+      if (result.success) {
+        logger.info('AI Chat state saved via IPC');
+      } else {
+        logger.error('Failed to save AI Chat state via IPC', {
+          error: result.error,
+        });
+      }
+
+      return result;
+    } catch (error) {
+      logger.error('Exception while saving AI Chat state via IPC', {
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
 };
 
 /**

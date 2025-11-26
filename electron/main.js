@@ -454,6 +454,11 @@ const MODEL_CONFIG_FILE = 'model-configs.json';
 const MCP_CONFIG_FILE = 'mcp-configs.json';
 
 /**
+ * AI Chat State File Path
+ */
+const AI_CHAT_STATE_FILE = 'ai-chat-state.json';
+
+/**
  * MCP Server Processes
  */
 const mcpProcesses = new Map();
@@ -470,6 +475,13 @@ function getModelConfigPath() {
  */
 function getMCPConfigPath() {
   return path.join(app.getPath('userData'), MCP_CONFIG_FILE);
+}
+
+/**
+ * Get AI Chat state file path
+ */
+function getAIChatStatePath() {
+  return path.join(app.getPath('userData'), AI_CHAT_STATE_FILE);
 }
 
 /**
@@ -567,6 +579,118 @@ ipcMain.handle('load-model-configs', async () => {
       success: false,
       error: error.message,
       data: { models: [] },
+    };
+  }
+});
+
+/**
+ * IPC Handler: Load AI Chat state from file system
+ */
+ipcMain.handle('load-ai-chat-state', async () => {
+  logger.info('IPC: load-ai-chat-state called');
+
+  try {
+    const statePath = getAIChatStatePath();
+    logger.debug('Loading AI Chat state from file', { path: statePath });
+
+    if (!fs.existsSync(statePath)) {
+      logger.info('AI Chat state file does not exist, returning null state');
+      return {
+        success: true,
+        data: null,
+      };
+    }
+
+    const fileContent = fs.readFileSync(statePath, 'utf-8');
+
+    if (!fileContent || fileContent.trim().length === 0) {
+      logger.warn('AI Chat state file is empty, returning null state');
+      return {
+        success: true,
+        data: null,
+      };
+    }
+
+    let state;
+
+    try {
+      state = JSON.parse(fileContent);
+    } catch (parseError) {
+      logger.error('Failed to parse AI Chat state file', {
+        error: parseError.message,
+        stack: parseError.stack,
+      });
+
+      return {
+        success: false,
+        error: parseError.message,
+        data: null,
+      };
+    }
+
+    logger.success('AI Chat state loaded successfully', {
+      hasState: !!state,
+      conversations: Array.isArray(state?.conversations) ? state.conversations.length : 0,
+      hasActiveConversation: !!state?.activeConversationId,
+    });
+
+    return {
+      success: true,
+      data: state,
+    };
+  } catch (error) {
+    logger.error('Failed to load AI Chat state', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    return {
+      success: false,
+      error: error.message,
+      data: null,
+    };
+  }
+});
+
+/**
+ * IPC Handler: Save AI Chat state to file system
+ */
+ipcMain.handle('save-ai-chat-state', async (event, state) => {
+  logger.info('IPC: save-ai-chat-state called', {
+    hasState: !!state,
+    conversations: Array.isArray(state?.conversations) ? state.conversations.length : 0,
+  });
+
+  try {
+    const statePath = getAIChatStatePath();
+    logger.debug('Saving AI Chat state to file', { path: statePath });
+
+    const stateDir = path.dirname(statePath);
+    if (!fs.existsSync(stateDir)) {
+      logger.debug('Creating AI Chat state directory', { dir: stateDir });
+      fs.mkdirSync(stateDir, { recursive: true });
+    }
+
+    const jsonContent = JSON.stringify(state, null, 2);
+    fs.writeFileSync(statePath, jsonContent, 'utf-8');
+
+    logger.success('AI Chat state saved successfully', {
+      path: statePath,
+      size: `${jsonContent.length} bytes`,
+    });
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    logger.error('Failed to save AI Chat state', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    return {
+      success: false,
+      error: error.message,
     };
   }
 });

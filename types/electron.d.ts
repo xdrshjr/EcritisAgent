@@ -110,6 +110,55 @@ interface ElectronAPI {
     startedAt?: string;
     name?: string;
   }>;
+  loadAIChatState: () => Promise<{
+    success: boolean;
+    error?: string;
+    data: {
+      version: number;
+      conversations: Array<{
+        id: string;
+        title: string;
+        timestamp: string;
+        messageCount: number;
+      }>;
+      activeConversationId: string | null;
+      messagesByConversationId: Record<
+        string,
+        Array<{
+          id: string;
+          role: 'system' | 'user' | 'assistant';
+          content: string;
+          timestamp: string;
+          isCleared?: boolean;
+          mcpExecutionSteps?: unknown[];
+        }>
+      >;
+    } | null;
+  }>;
+  saveAIChatState: (state: {
+    version: number;
+    conversations: Array<{
+      id: string;
+      title: string;
+      timestamp: string;
+      messageCount: number;
+    }>;
+    activeConversationId: string | null;
+    messagesByConversationId: Record<
+      string,
+      Array<{
+        id: string;
+        role: 'system' | 'user' | 'assistant';
+        content: string;
+        timestamp: string;
+        isCleared?: boolean;
+        mcpExecutionSteps?: unknown[];
+      }>
+    >;
+  }) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
 }
 
 interface Window {
