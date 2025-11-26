@@ -401,17 +401,38 @@ def chat():
     try:
         # Parse request body
         data = request.get_json()
+        
+        # Debug: Log raw request data
+        app.logger.debug('Raw request data received', extra={
+            'data_keys': list(data.keys()) if data else [],
+            'data_preview': {k: v if k != 'messages' else f'[{len(v)} messages]' for k, v in (data.items() if data else [])}
+        })
+        
         messages = data.get('messages', [])
         model_id = data.get('modelId')  # Get optional model ID from request
+        mcp_enabled = data.get('mcpEnabled', False)  # Check if MCP is enabled
+        mcp_tools = data.get('mcpTools', [])  # Get enabled MCP tools
+        
+        # Debug: Log extracted MCP data
+        app.logger.debug('Extracted MCP configuration from request', extra={
+            'mcpEnabled_raw': data.get('mcpEnabled'),
+            'mcpEnabled_parsed': mcp_enabled,
+            'mcpTools_raw': data.get('mcpTools'),
+            'mcpTools_count': len(mcp_tools),
+            'mcpTools_preview': [{'name': t.get('name'), 'id': t.get('id')} for t in mcp_tools] if mcp_tools else [],
+        })
         
         if not messages or not isinstance(messages, list):
             app.logger.warning(f'Invalid messages in chat request: {type(messages)}')
             return jsonify({'error': 'Messages array is required and must not be empty'}), 400
         
-        app.logger.info(f'Processing chat request with {len(messages)} messages, modelId: {model_id or "default"}', extra={
+        app.logger.info(f'Processing chat request with {len(messages)} messages, modelId: {model_id or "default"}, MCP: {mcp_enabled}', extra={
             'messageCount': len(messages),
             'requestedModelId': model_id,
-            'usingDefaultModel': model_id is None
+            'usingDefaultModel': model_id is None,
+            'mcpEnabled': mcp_enabled,
+            'mcpToolCount': len(mcp_tools) if mcp_enabled else 0,
+            'mcpToolNames': [t.get('name') for t in mcp_tools] if mcp_tools else [],
         })
         
         # Get and validate LLM configuration with specified model ID
@@ -469,9 +490,207 @@ def chat():
             'max_tokens': 2000
         }
         
+        # Check if MCP tools should be used
+        mcp_execution_steps = []
+        should_use_mcp = mcp_enabled and len(mcp_tools) > 0
+        
+        if should_use_mcp:
+            app.logger.info('[MCP] MCP tools enabled for this chat request', extra={
+                'tool_count': len(mcp_tools),
+                'tool_names': [t['name'] for t in mcp_tools],
+            })
+        
         # Make streaming request to LLM API
         def generate():
             try:
+                # Step 1: If MCP is enabled, analyze if tools are needed
+                if should_use_mcp:
+                    app.logger.info('[MCP] Starting MCP tool analysis with LLM', extra={
+                        'tool_count': len(mcp_tools),
+                        'tool_names': [t['name'] for t in mcp_tools],
+                    })
+                    
+                    # Import MCP client
+                    try:
+                        from mcp_client import MCPClient, MCPToolCall, analyze_user_query_for_tools, format_tool_results_for_llm, get_mcp_tool_descriptions
+                    except ImportError as import_error:
+                        app.logger.error('[MCP] Failed to import MCP client', extra={
+                            'error': str(import_error),
+                        }, exc_info=True)
+                        # Continue without MCP if import fails
+                        should_use_mcp_local = False
+                    else:
+                        should_use_mcp_local = True
+                        
+                        # Get user's last message
+                        last_user_message = next((m['content'] for m in reversed(messages) if m['role'] == 'user'), '')
+                        
+                        app.logger.debug('[MCP] Extracted user message for analysis', extra={
+                            'message_preview': last_user_message[:100],
+                        })
+                        
+                        # Initialize MCP client
+                        mcp_client = MCPClient(mcp_tools)
+                        
+                        # Get detailed tool descriptions for LLM
+                        tool_descriptions = get_mcp_tool_descriptions(mcp_tools)
+                        
+                        app.logger.debug('[MCP] Generated tool descriptions for LLM', extra={
+                            'description_count': len(tool_descriptions),
+                        })
+                        
+                        # Create LLM client for tool analysis
+                        try:
+                            from langchain_openai import ChatOpenAI
+                            
+                            llm_for_analysis = ChatOpenAI(
+                                api_key=config['apiKey'],
+                                base_url=config['apiUrl'].rstrip('/'),
+                                model=config['modelName'],
+                                temperature=0.1,  # Lower temperature for more deterministic tool selection
+                            )
+                            
+                            app.logger.info('[MCP] Created LLM client for tool analysis', extra={
+                                'model': config['modelName'],
+                                'api_url': config['apiUrl'],
+                            })
+                            
+                        except Exception as llm_error:
+                            app.logger.warning('[MCP] Failed to create LLM client for analysis, will use fallback', extra={
+                                'error': str(llm_error),
+                            })
+                            llm_for_analysis = None
+                        
+                        # Analyze if tools are needed using LLM
+                        app.logger.info('[MCP] Calling LLM to analyze user intent and select tools')
+                        
+                        tool_calls_to_make = analyze_user_query_for_tools(
+                            last_user_message,
+                            tool_descriptions,
+                            llm_for_analysis,
+                        )
+                        
+                        if tool_calls_to_make:
+                            app.logger.info('[MCP] LLM selected tools for execution', extra={
+                                'tool_count': len(tool_calls_to_make),
+                                'tools': [tc['tool_name'] for tc in tool_calls_to_make],
+                                'parameters': [tc['parameters'] for tc in tool_calls_to_make],
+                            })
+                            
+                            # Create reasoning message
+                            tool_names_list = [tc['tool_name'] for tc in tool_calls_to_make]
+                            reasoning_text = f'Analyzing your query, I determined that I need to use external tools to provide accurate information. Selected tools: {", ".join(tool_names_list)}'
+                            
+                            # Send reasoning step to client
+                            reasoning_event = {
+                                'type': 'mcp_reasoning',
+                                'reasoning': reasoning_text,
+                            }
+                            
+                            app.logger.debug('[MCP] Sending reasoning event to client', extra={
+                                'reasoning': reasoning_text,
+                            })
+                            
+                            yield f"data: {json.dumps(reasoning_event, ensure_ascii=False)}\n\n".encode('utf-8')
+                            
+                            # Execute each tool
+                            executed_tools = []
+                            for idx, tool_call_data in enumerate(tool_calls_to_make, 1):
+                                tool_name = tool_call_data['tool_name']
+                                parameters = tool_call_data['parameters']
+                                
+                                app.logger.info(f'[MCP] Executing tool {idx}/{len(tool_calls_to_make)}', extra={
+                                    'tool_name': tool_name,
+                                    'parameters': parameters,
+                                })
+                                
+                                tool_call = MCPToolCall(
+                                    tool_name=tool_name,
+                                    parameters=parameters,
+                                )
+                                
+                                # Send tool call start event
+                                tool_start_event = {
+                                    'type': 'mcp_tool_call',
+                                    'tool_name': tool_call.tool_name,
+                                    'parameters': tool_call.parameters,
+                                    'status': 'running',
+                                }
+                                
+                                app.logger.debug('[MCP] Sending tool call start event', extra={
+                                    'tool_name': tool_name,
+                                })
+                                
+                                yield f"data: {json.dumps(tool_start_event, ensure_ascii=False)}\n\n".encode('utf-8')
+                                
+                                # Execute tool
+                                tool_call = mcp_client.execute_tool(tool_call)
+                                executed_tools.append(tool_call)
+                                
+                                app.logger.info(f'[MCP] Tool execution completed', extra={
+                                    'tool_name': tool_name,
+                                    'status': tool_call.status,
+                                    'has_result': tool_call.result is not None,
+                                    'has_error': tool_call.error is not None,
+                                })
+                                
+                                # Send tool result event
+                                tool_result_event = {
+                                    'type': 'mcp_tool_result',
+                                    'tool_name': tool_call.tool_name,
+                                    'status': tool_call.status,
+                                    'result': tool_call.result,
+                                    'error': tool_call.error,
+                                }
+                                
+                                app.logger.debug('[MCP] Sending tool result event', extra={
+                                    'tool_name': tool_name,
+                                    'status': tool_call.status,
+                                })
+                                
+                                yield f"data: {json.dumps(tool_result_event, ensure_ascii=False)}\n\n".encode('utf-8')
+                            
+                            # Format tool results for LLM context
+                            app.logger.info('[MCP] Formatting tool results for LLM context', extra={
+                                'executed_tool_count': len(executed_tools),
+                                'successful_tools': sum(1 for t in executed_tools if t.status == 'success'),
+                                'failed_tools': sum(1 for t in executed_tools if t.status == 'error'),
+                            })
+                            
+                            tool_results_context = format_tool_results_for_llm(executed_tools)
+                            
+                            app.logger.debug('[MCP] Tool results formatted', extra={
+                                'context_length': len(tool_results_context),
+                                'context_preview': tool_results_context[:200],
+                            })
+                            
+                            # Add tool results to the last message
+                            original_content = full_messages[-1]['content']
+                            full_messages[-1]['content'] = f"{original_content}\n\n{tool_results_context}"
+                            
+                            app.logger.info('[MCP] Tool results added to context for LLM', extra={
+                                'original_message_length': len(original_content),
+                                'enhanced_message_length': len(full_messages[-1]['content']),
+                            })
+                            
+                            # Update payload with modified messages
+                            payload['messages'] = full_messages
+                            
+                            app.logger.debug('[MCP] Updated payload with tool results')
+                            
+                            # Send final answer generation event
+                            final_answer_event = {
+                                'type': 'mcp_final_answer',
+                            }
+                            
+                            app.logger.debug('[MCP] Sending final answer generation event')
+                            
+                            yield f"data: {json.dumps(final_answer_event, ensure_ascii=False)}\n\n".encode('utf-8')
+                            
+                            app.logger.info('[MCP] MCP tool execution workflow completed, proceeding to LLM for final answer generation')
+                        else:
+                            app.logger.info('[MCP] LLM analysis determined no tools needed for this query')
+                
                 app.logger.info('Starting LLM API streaming request')
                 
                 with requests.post(
@@ -1405,6 +1624,200 @@ def agent_route():
         return jsonify({
             'error': 'Agent routing failed',
             'details': str(error)
+        }), 500
+
+
+# MCP configuration endpoints
+@app.route('/api/mcp-configs', methods=['GET', 'POST'])
+def mcp_configs():
+    """
+    Manage MCP (Model Context Protocol) server configurations with persistent storage
+    GET: Retrieve all MCP configurations
+    POST: Save MCP configurations
+    """
+    if request.method == 'GET':
+        app.logger.info('MCP configurations retrieval requested')
+        
+        try:
+            # Determine configuration file path
+            if getattr(sys, 'frozen', False):
+                # Running as packaged executable
+                if sys.platform == 'win32':
+                    config_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster'
+                else:
+                    config_dir = Path.home() / '.config' / 'AIDocMaster'
+            else:
+                # Running in development
+                config_dir = Path(__file__).parent.parent / 'userData'
+            
+            config_dir.mkdir(parents=True, exist_ok=True)
+            config_path = config_dir / 'mcp-configs.json'
+            
+            # Check if file exists
+            if not config_path.exists():
+                app.logger.info('MCP config file does not exist, creating default configuration')
+                
+                # Create default MCP configuration
+                current_time = datetime.now().isoformat()
+                default_config = {
+                    'mcpServers': [
+                        {
+                            'id': f'mcp_{datetime.now().timestamp()}',
+                            'name': 'tavily-ai-tavily-mcp',
+                            'command': 'npx',
+                            'args': ['-y', 'tavily-mcp@latest'],
+                            'env': {
+                                # Example: 'TAVILY_API_KEY': 'your-api-key-here'
+                            },
+                            'isEnabled': False,
+                            'createdAt': current_time,
+                            'updatedAt': current_time
+                        },
+                        {
+                            'id': f'mcp_{datetime.now().timestamp() + 1}',
+                            'name': 'caiyili-baidu-search-mcp',
+                            'command': 'npx',
+                            'args': ['baidu-search-mcp', '--max-result=5', '--fetch-content-count=2', '--max-content-length=2000'],
+                            'env': {},
+                            'isEnabled': False,
+                            'createdAt': current_time,
+                            'updatedAt': current_time
+                        }
+                    ]
+                }
+                
+                # Save default configuration
+                with open(config_path, 'w', encoding='utf-8') as f:
+                    json.dump(default_config, f, indent=2, ensure_ascii=False)
+                
+                app.logger.info('Default MCP configuration created successfully', extra={
+                    'count': len(default_config['mcpServers']),
+                    'path': str(config_path)
+                })
+                
+                return jsonify({
+                    'success': True,
+                    'data': default_config,
+                    'count': len(default_config['mcpServers']),
+                    'configPath': str(config_path)
+                })
+            
+            # Load existing configuration
+            with open(config_path, 'r', encoding='utf-8') as f:
+                configs = json.load(f)
+            
+            app.logger.info(f'Returning {len(configs.get("mcpServers", []))} MCP configurations')
+            
+            return jsonify({
+                'success': True,
+                'data': configs,
+                'count': len(configs.get('mcpServers', [])),
+                'configPath': str(config_path)
+            })
+        
+        except Exception as e:
+            app.logger.error(f'Failed to retrieve MCP configurations: {str(e)}', exc_info=True)
+            return jsonify({
+                'success': False,
+                'error': 'Failed to retrieve MCP configurations',
+                'details': str(e)
+            }), 500
+    
+    # POST request - save MCP configurations
+    app.logger.info('MCP configuration save requested')
+    
+    try:
+        data = request.get_json()
+        
+        if not data:
+            app.logger.warning('No data provided in MCP config save request')
+            return jsonify({
+                'success': False,
+                'error': 'Request body is required'
+            }), 400
+        
+        # Validate required fields
+        if 'mcpServers' not in data:
+            app.logger.warning('mcpServers array missing in request data')
+            return jsonify({
+                'success': False,
+                'error': 'mcpServers array is required'
+            }), 400
+        
+        mcpServers = data.get('mcpServers', [])
+        app.logger.debug(f'Saving {len(mcpServers)} MCP configurations')
+        
+        # Validate each MCP configuration
+        for idx, mcp in enumerate(mcpServers):
+            required_fields = ['id', 'name', 'command', 'args']
+            missing_fields = [field for field in required_fields if field not in mcp or (field != 'args' and not mcp[field])]
+            
+            if missing_fields:
+                app.logger.warning(f'MCP at index {idx} missing required fields: {missing_fields}')
+                return jsonify({
+                    'success': False,
+                    'error': f'MCP at index {idx} is missing required fields: {", ".join(missing_fields)}'
+                }), 400
+            
+            if not isinstance(mcp['args'], list):
+                app.logger.warning(f'MCP at index {idx} has invalid args (must be array)')
+                return jsonify({
+                    'success': False,
+                    'error': f'MCP at index {idx} has invalid args (must be array)'
+                }), 400
+            
+            # Log environment variables if present
+            env_var_count = len(mcp.get('env', {})) if isinstance(mcp.get('env'), dict) else 0
+            app.logger.debug(f'MCP {idx}: {mcp.get("name")} (command: {mcp.get("command")}, env vars: {env_var_count})')
+        
+        # Add timestamps if not present
+        current_time = datetime.now().isoformat()
+        for mcp in mcpServers:
+            if 'updatedAt' not in mcp:
+                mcp['updatedAt'] = current_time
+            if 'createdAt' not in mcp:
+                mcp['createdAt'] = current_time
+        
+        # Determine configuration file path
+        if getattr(sys, 'frozen', False):
+            # Running as packaged executable
+            if sys.platform == 'win32':
+                config_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster'
+            else:
+                config_dir = Path.home() / '.config' / 'AIDocMaster'
+        else:
+            # Running in development
+            config_dir = Path(__file__).parent.parent / 'userData'
+        
+        config_dir.mkdir(parents=True, exist_ok=True)
+        config_path = config_dir / 'mcp-configs.json'
+        
+        # Save to file
+        config_data = {
+            'mcpServers': mcpServers
+        }
+        
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, indent=2, ensure_ascii=False)
+        
+        app.logger.info(f'MCP configurations saved successfully: {len(mcpServers)} servers', extra={
+            'count': len(mcpServers),
+            'path': str(config_path)
+        })
+        
+        return jsonify({
+            'success': True,
+            'message': 'MCP configurations saved successfully',
+            'count': len(mcpServers),
+            'configPath': str(config_path)
+        })
+    
+    except Exception as e:
+        app.logger.error(f'Failed to save MCP configurations: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to save MCP configurations',
+            'details': str(e)
         }), 500
 
 

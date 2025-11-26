@@ -57,6 +57,59 @@ interface ElectronAPI {
     returned_lines?: number;
     log_file?: string;
   }>;
+  loadMCPConfigs: () => Promise<{
+    success: boolean;
+    error?: string;
+    data: {
+      mcpServers: Array<{
+        id: string;
+        name: string;
+        command: string;
+        args: string[];
+        env?: Record<string, string>;
+        isEnabled?: boolean;
+        createdAt?: string;
+        updatedAt?: string;
+      }>;
+    };
+  }>;
+  saveMCPConfigs: (configs: {
+    mcpServers: Array<{
+      id: string;
+      name: string;
+      command: string;
+      args: string[];
+      env?: Record<string, string>;
+      isEnabled?: boolean;
+      createdAt?: string;
+      updatedAt?: string;
+    }>;
+  }) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+  startMCPServer: (id: string, config: {
+    id: string;
+    name: string;
+    command: string;
+    args: string[];
+    env?: Record<string, string>;
+    isEnabled?: boolean;
+  }) => Promise<{
+    success: boolean;
+    error?: string;
+    pid?: number;
+  }>;
+  stopMCPServer: (id: string) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
+  getMCPServerStatus: (id: string) => Promise<{
+    isRunning: boolean;
+    pid?: number;
+    startedAt?: string;
+    name?: string;
+  }>;
 }
 
 interface Window {

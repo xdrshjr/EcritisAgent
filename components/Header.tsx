@@ -77,7 +77,7 @@ const MenuBar = ({ onOpenSettings, tasks, onTaskChange }: MenuBarProps) => {
   };
 
   const handleConfigMenuItemClick = () => {
-    logger.info('Config menu item clicked: Model Config', undefined, 'MenuBar');
+    logger.info('Config menu item clicked: Basic Config', undefined, 'MenuBar');
     onOpenSettings();
     setOpenMenu(null);
   };
@@ -155,7 +155,7 @@ const MenuBar = ({ onOpenSettings, tasks, onTaskChange }: MenuBarProps) => {
             <button
               onClick={handleConfigMenuItemClick}
               className="w-full px-4 py-2 text-left text-sm text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              aria-label="Model Config"
+              aria-label="Basic Config"
             >
               {dict.header.menu.modelConfig}
             </button>

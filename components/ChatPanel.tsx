@@ -11,6 +11,7 @@ import { flushSync } from 'react-dom';
 import { Loader2, Trash2, Bot, Trash } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
+import MCPToolSelector from './MCPToolSelector';
 import { logger } from '@/lib/logger';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
@@ -18,11 +19,13 @@ import type { ChatMessage as ChatMessageType } from '@/lib/chatClient';
 import { syncModelConfigsToCookies } from '@/lib/modelConfigSync';
 import { buildApiUrl } from '@/lib/apiConfig';
 import { loadModelConfigs, getDefaultModel, type ModelConfig } from '@/lib/modelConfig';
+import type { MCPConfig } from '@/lib/mcpConfig';
 
 export interface Message extends ChatMessageType {
   id: string;
   timestamp: Date;
   isCleared?: boolean;
+  mcpExecutionSteps?: any[]; // MCP execution steps for this message
 }
 
 interface ChatPanelProps {
@@ -45,6 +48,8 @@ const ChatPanel = ({
   const [availableModels, setAvailableModels] = useState<ModelConfig[]>([]);
   const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
   const [isLoadingModels, setIsLoadingModels] = useState(true);
+  const [mcpEnabled, setMcpEnabled] = useState(false);
+  const [enabledMCPTools, setEnabledMCPTools] = useState<MCPConfig[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -214,16 +219,37 @@ const ChatPanel = ({
       const apiUrl = await buildApiUrl('/api/chat');
       logger.debug('Using API URL for chat', { apiUrl }, 'ChatPanel');
 
-      // Prepare request body with selected model ID
+      // Prepare request body with selected model ID and MCP tools
       const requestBody = {
         messages: apiMessages,
         modelId: selectedModel?.id || null,
+        mcpEnabled: mcpEnabled && enabledMCPTools.length > 0,
+        mcpTools: mcpEnabled ? enabledMCPTools.map(t => ({
+          id: t.id,
+          name: t.name,
+          command: t.command,
+          args: t.args,
+          env: t.env || {},  // Include environment variables
+        })) : [],
       };
 
-      logger.info('Sending chat request with model selection', {
+      logger.info('Sending chat request with model selection and MCP tools', {
         modelId: selectedModel?.id || 'default',
         modelName: selectedModel?.name || 'default',
         messageCount: apiMessages.length,
+        mcpEnabled: mcpEnabled && enabledMCPTools.length > 0,
+        mcpToolCount: enabledMCPTools.length,
+        mcpMasterEnabled: mcpEnabled,
+        enabledToolsCount: enabledMCPTools.length,
+        toolDetails: enabledMCPTools.map(t => ({ name: t.name, id: t.id })),
+      }, 'ChatPanel');
+
+      // Debug: Log the actual request body being sent
+      logger.debug('Request body to be sent', {
+        requestBody: JSON.stringify(requestBody),
+        requestBodyKeys: Object.keys(requestBody),
+        mcpEnabledInBody: requestBody.mcpEnabled,
+        mcpToolsInBody: requestBody.mcpTools,
       }, 'ChatPanel');
 
       // Call streaming API
@@ -282,6 +308,7 @@ const ChatPanel = ({
       const progressLogInterval = 3000; // Log progress every 3 seconds
       const maxParseErrors = 10; // Maximum allowed parse errors before failing
       const streamStartTime = Date.now();
+      const mcpSteps: any[] = []; // Store MCP execution steps
       
       logger.debug('Stream reader initialized', {
         conversationId,
@@ -363,6 +390,50 @@ const ChatPanel = ({
                 const jsonStr = trimmedLine.slice(6);
                 const data = JSON.parse(jsonStr);
                 
+                // Handle MCP-specific events
+                if (data.type === 'mcp_reasoning') {
+                  logger.info('MCP reasoning received', {
+                    reasoning: data.reasoning,
+                  }, 'ChatPanel');
+                  mcpSteps.push({
+                    type: 'reasoning',
+                    reasoning: data.reasoning,
+                    timestamp: new Date(),
+                  });
+                } else if (data.type === 'mcp_tool_call') {
+                  logger.info('MCP tool call started', {
+                    toolName: data.tool_name,
+                    parameters: data.parameters,
+                  }, 'ChatPanel');
+                  mcpSteps.push({
+                    type: 'tool_call',
+                    toolName: data.tool_name,
+                    parameters: data.parameters,
+                    status: data.status || 'running',
+                    timestamp: new Date(),
+                  });
+                } else if (data.type === 'mcp_tool_result') {
+                  logger.info('MCP tool result received', {
+                    toolName: data.tool_name,
+                    status: data.status,
+                  }, 'ChatPanel');
+                  mcpSteps.push({
+                    type: 'tool_result',
+                    toolName: data.tool_name,
+                    result: data.result,
+                    status: data.status,
+                    error: data.error,
+                    timestamp: new Date(),
+                  });
+                } else if (data.type === 'mcp_final_answer') {
+                  logger.info('MCP generating final answer', undefined, 'ChatPanel');
+                  mcpSteps.push({
+                    type: 'final_answer',
+                    timestamp: new Date(),
+                  });
+                }
+                
+                // Handle regular chat content
                 const chunk = data.choices?.[0]?.delta?.content;
                 if (chunk) {
                   const wasEmpty = assistantContent.length === 0;
@@ -376,6 +447,7 @@ const ChatPanel = ({
                       conversationId,
                       currentMessagesVisible: messages.length,
                       userMessagePresent: messages.some(m => m.role === 'user'),
+                      hasMCPSteps: mcpSteps.length > 0,
                     }, 'ChatPanel');
                   }
                   
@@ -390,6 +462,7 @@ const ChatPanel = ({
                       contentLength: assistantContent.length,
                       chunkNumber: chunkCount,
                       messagesInView: messages.length,
+                      mcpStepsCount: mcpSteps.length,
                     }, 'ChatPanel');
                   }
                   
@@ -402,6 +475,7 @@ const ChatPanel = ({
                       parseErrors: parseErrorCount,
                       elapsed: `${now - streamStartTime}ms`,
                       averageChunkSize: Math.round(assistantContent.length / chunkCount),
+                      mcpStepsCount: mcpSteps.length,
                     }, 'ChatPanel');
                     lastProgressLog = now;
                   }
@@ -409,6 +483,7 @@ const ChatPanel = ({
                   logger.debug('Stream finished', {
                     finishReason: data.choices[0].finish_reason,
                     contentLength: assistantContent.length,
+                    mcpStepsCount: mcpSteps.length,
                   }, 'ChatPanel');
                 }
               } catch (parseError) {
@@ -462,6 +537,7 @@ const ChatPanel = ({
           role: 'assistant',
           content: assistantContent,
           timestamp: new Date(),
+          mcpExecutionSteps: mcpSteps.length > 0 ? mcpSteps : undefined,
         };
 
         // CRITICAL FIX: Use latestMessagesMap which contains the user message
@@ -492,6 +568,8 @@ const ChatPanel = ({
           userMessagesCount: updatedMessages.filter(m => m.role === 'user').length,
           assistantMessagesCount: updatedMessages.filter(m => m.role === 'assistant').length,
           lastUserMessage: updatedMessages.filter(m => m.role === 'user').slice(-1)[0]?.content?.substring(0, 50),
+          mcpStepsCount: mcpSteps.length,
+          usedMCP: mcpSteps.length > 0,
         }, 'ChatPanel');
       }
 
@@ -628,6 +706,28 @@ const ChatPanel = ({
     }
   };
 
+  const handleMCPStateChange = (enabled: boolean, tools: MCPConfig[]) => {
+    logger.info('MCP state change callback triggered', {
+      enabled,
+      toolCount: tools.length,
+      toolNames: tools.map(t => t.name),
+      toolDetails: tools.map(t => ({ 
+        name: t.name, 
+        id: t.id, 
+        isEnabled: t.isEnabled,
+        command: t.command 
+      })),
+    }, 'ChatPanel');
+    
+    setMcpEnabled(enabled);
+    setEnabledMCPTools(tools);
+    
+    logger.info('MCP state updated in ChatPanel', {
+      mcpEnabled: enabled,
+      enabledMCPToolsCount: tools.length,
+    }, 'ChatPanel');
+  };
+
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Messages Area */}
@@ -648,6 +748,7 @@ const ChatPanel = ({
                 role={message.role as 'user' | 'assistant'}
                 content={message.content}
                 timestamp={message.timestamp}
+                mcpExecutionSteps={message.mcpExecutionSteps}
               />
             ))}
 
@@ -676,10 +777,10 @@ const ChatPanel = ({
         )}
       </div>
 
-      {/* Model Selector and Clear Buttons */}
+      {/* Model Selector, MCP Tools, and Clear Buttons */}
       <div className="px-6 py-3 border-t border-border/50 bg-background/50 flex items-center justify-between gap-4">
-        {/* Model Selector - Left */}
-        <div className="flex items-center gap-2">
+        {/* Model Selector and MCP Tools - Left */}
+        <div className="flex items-center gap-3">
           <label htmlFor="model-selector" className="text-sm text-muted-foreground font-medium whitespace-nowrap">
             {dict.chat.modelSelector}:
           </label>
@@ -701,6 +802,12 @@ const ChatPanel = ({
               ))
             )}
           </select>
+
+          {/* MCP Tool Selector */}
+          <MCPToolSelector
+            disabled={isLoading}
+            onMCPStateChange={handleMCPStateChange}
+          />
         </div>
 
         {/* Clear Buttons - Right */}

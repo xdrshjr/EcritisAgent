@@ -11,15 +11,17 @@ import { Bot, User } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import MCPToolExecutionDisplay from './MCPToolExecutionDisplay';
 import 'highlight.js/styles/github-dark.css';
 
 export interface ChatMessageProps {
   role: 'user' | 'assistant';
   content: string;
   timestamp?: Date;
+  mcpExecutionSteps?: any[];
 }
 
-const ChatMessage = ({ role, content, timestamp }: ChatMessageProps) => {
+const ChatMessage = ({ role, content, timestamp, mcpExecutionSteps }: ChatMessageProps) => {
   const isUser = role === 'user';
 
   const handleFormatTimestamp = (date: Date): string => {
@@ -69,6 +71,14 @@ const ChatMessage = ({ role, content, timestamp }: ChatMessageProps) => {
           isUser ? 'items-end' : 'items-start'
         }`}
       >
+        {/* MCP Execution Steps (for assistant messages only) */}
+        {!isUser && mcpExecutionSteps && mcpExecutionSteps.length > 0 && (
+          <MCPToolExecutionDisplay
+            steps={mcpExecutionSteps}
+            isComplete={true}
+          />
+        )}
+
         <div
           className={`px-4 py-3 shadow-sm transition-all hover:shadow-md ${
             isUser

@@ -24,7 +24,12 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = await request.json();
-    const { messages, modelId } = body as { messages: ChatMessage[]; modelId?: string | null };
+    const { messages, modelId, mcpEnabled, mcpTools } = body as { 
+      messages: ChatMessage[]; 
+      modelId?: string | null;
+      mcpEnabled?: boolean;
+      mcpTools?: any[];
+    };
 
     // Validate messages
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -47,6 +52,8 @@ export async function POST(request: NextRequest) {
       messageCount: messages.length,
       lastMessageRole: messages[messages.length - 1]?.role,
       modelId: modelId || 'default',
+      mcpEnabled: mcpEnabled || false,
+      mcpToolCount: mcpTools?.length || 0,
     }, 'API:Chat');
 
     // Build Flask backend URL
@@ -56,12 +63,16 @@ export async function POST(request: NextRequest) {
       url: flaskUrl,
       messageCount: messages.length,
       modelId: modelId || 'default',
+      mcpEnabled: mcpEnabled || false,
+      mcpToolCount: mcpTools?.length || 0,
     }, 'API:Chat');
 
     // Prepare request body for Flask backend
     const flaskRequestBody = {
       messages,
       ...(modelId && { modelId }), // Only include modelId if it's provided
+      ...(mcpEnabled !== undefined && { mcpEnabled }), // Include MCP enabled flag
+      ...(mcpTools && { mcpTools }), // Include MCP tools array
     };
 
     // Forward request to Flask backend

@@ -23,13 +23,23 @@ import {
   type ModelConfigList,
 } from '@/lib/modelConfig';
 import { syncModelConfigsToCookies } from '@/lib/modelConfigSync';
+import {
+  loadMCPConfigs,
+  addMCPConfig,
+  updateMCPConfig,
+  deleteMCPConfig,
+  toggleMCPEnabled,
+  saveMCPConfigs,
+  type MCPConfig,
+  type MCPConfigList,
+} from '@/lib/mcpConfig';
 
 interface SettingsDialogProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type SettingTab = 'models';
+type SettingTab = 'models' | 'mcp';
 
 const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
   const [activeTab, setActiveTab] = useState<SettingTab>('models');
@@ -54,6 +64,18 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
   // Drag and drop state
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
+  // MCP state
+  const [mcpServers, setMCPServers] = useState<MCPConfig[]>([]);
+  const [mcpFormName, setMCPFormName] = useState('');
+  const [mcpFormCommand, setMCPFormCommand] = useState('');
+  const [mcpFormArgs, setMCPFormArgs] = useState('');
+  const [mcpFormEnv, setMCPFormEnv] = useState(''); // JSON string of environment variables
+  const [isMCPFormVisible, setIsMCPFormVisible] = useState(false);
+  const [editingMCPId, setEditingMCPId] = useState<string | null>(null);
+  const [isMCPEditMode, setIsMCPEditMode] = useState(false);
+  const [mcpStartingIds, setMCPStartingIds] = useState<Set<string>>(new Set());
+  const [mcpJsonPreview, setMCPJsonPreview] = useState<string>(''); // JSON preview for viewing
+
   useEffect(() => {
     logger.component('SettingsDialog', 'mounted', { isOpen });
   }, []);
@@ -62,6 +84,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
     if (isOpen) {
       logger.info('Settings dialog opened', undefined, 'SettingsDialog');
       handleLoadModels();
+      handleLoadMCPServers();
     }
   }, [isOpen]);
 
@@ -465,6 +488,295 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
     logger.debug('Changes reverted to saved state', undefined, 'SettingsDialog');
   };
 
+  // MCP Handlers
+  const handleLoadMCPServers = async () => {
+    logger.info('Loading MCP server configurations', undefined, 'SettingsDialog');
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const configList: MCPConfigList = await loadMCPConfigs();
+      setMCPServers(configList.mcpServers);
+      
+      logger.success('MCP server configurations loaded', {
+        count: configList.mcpServers.length,
+      }, 'SettingsDialog');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load MCP servers';
+      logger.error('Failed to load MCP server configurations', { error: errorMessage }, 'SettingsDialog');
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddMCPServer = async () => {
+    logger.info('Adding new MCP server', { name: mcpFormName }, 'SettingsDialog');
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      // Parse args from comma-separated string
+      const args = mcpFormArgs.split(',').map(arg => arg.trim()).filter(arg => arg.length > 0);
+
+      // Parse environment variables from JSON string
+      let env: Record<string, string> = {};
+      if (mcpFormEnv.trim()) {
+        try {
+          env = JSON.parse(mcpFormEnv);
+          if (typeof env !== 'object' || Array.isArray(env)) {
+            throw new Error('Environment variables must be a JSON object');
+          }
+          logger.debug('Parsed environment variables', { count: Object.keys(env).length }, 'SettingsDialog');
+        } catch (parseError) {
+          throw new Error(`Invalid environment variables JSON: ${parseError instanceof Error ? parseError.message : 'Parse error'}`);
+        }
+      }
+
+      const result = await addMCPConfig({
+        name: mcpFormName.trim(),
+        command: mcpFormCommand.trim(),
+        args,
+        env,
+      });
+
+      if (result.success && result.mcp) {
+        logger.success('MCP server added successfully', {
+          id: result.mcp.id,
+          name: result.mcp.name,
+          hasEnvVars: Object.keys(env).length > 0,
+        }, 'SettingsDialog');
+
+        setSuccess('MCP server added successfully!');
+        handleResetMCPForm();
+        
+        await handleLoadMCPServers();
+      } else {
+        throw new Error(result.error || 'Failed to add MCP server');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add MCP server';
+      logger.error('Failed to add MCP server', { error: errorMessage }, 'SettingsDialog');
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdateMCPServer = async () => {
+    if (!editingMCPId) {
+      logger.warn('No MCP server ID for update', undefined, 'SettingsDialog');
+      return;
+    }
+
+    logger.info('Updating MCP server', { id: editingMCPId, name: mcpFormName }, 'SettingsDialog');
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      // Parse args from comma-separated string
+      const args = mcpFormArgs.split(',').map(arg => arg.trim()).filter(arg => arg.length > 0);
+
+      // Parse environment variables from JSON string
+      let env: Record<string, string> = {};
+      if (mcpFormEnv.trim()) {
+        try {
+          env = JSON.parse(mcpFormEnv);
+          if (typeof env !== 'object' || Array.isArray(env)) {
+            throw new Error('Environment variables must be a JSON object');
+          }
+          logger.debug('Parsed environment variables for update', { count: Object.keys(env).length }, 'SettingsDialog');
+        } catch (parseError) {
+          throw new Error(`Invalid environment variables JSON: ${parseError instanceof Error ? parseError.message : 'Parse error'}`);
+        }
+      }
+
+      const result = await updateMCPConfig(editingMCPId, {
+        name: mcpFormName.trim(),
+        command: mcpFormCommand.trim(),
+        args,
+        env,
+      });
+
+      if (result.success) {
+        logger.success('MCP server updated successfully', {
+          id: editingMCPId,
+          name: mcpFormName,
+          hasEnvVars: Object.keys(env).length > 0,
+        }, 'SettingsDialog');
+
+        setSuccess('MCP server updated successfully!');
+        handleResetMCPForm();
+        
+        await handleLoadMCPServers();
+      } else {
+        throw new Error(result.error || 'Failed to update MCP server');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update MCP server';
+      logger.error('Failed to update MCP server', { error: errorMessage, id: editingMCPId }, 'SettingsDialog');
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEditMCPServer = (mcp: MCPConfig) => {
+    logger.info('Entering MCP edit mode', { id: mcp.id, name: mcp.name }, 'SettingsDialog');
+    
+    setEditingMCPId(mcp.id);
+    setIsMCPEditMode(true);
+    setMCPFormName(mcp.name);
+    setMCPFormCommand(mcp.command);
+    setMCPFormArgs(mcp.args.join(', '));
+    
+    // Set environment variables as formatted JSON string
+    if (mcp.env && Object.keys(mcp.env).length > 0) {
+      setMCPFormEnv(JSON.stringify(mcp.env, null, 2));
+    } else {
+      setMCPFormEnv('');
+    }
+    
+    setIsMCPFormVisible(true);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleSubmitMCPForm = () => {
+    if (isMCPEditMode) {
+      handleUpdateMCPServer();
+    } else {
+      handleAddMCPServer();
+    }
+  };
+
+  const handleResetMCPForm = () => {
+    logger.debug('Resetting MCP form', undefined, 'SettingsDialog');
+    
+    setMCPFormName('');
+    setMCPFormCommand('');
+    setMCPFormArgs('');
+    setMCPFormEnv('');
+    setIsMCPFormVisible(false);
+    setEditingMCPId(null);
+    setIsMCPEditMode(false);
+  };
+
+  const handleDeleteMCPServer = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete the MCP server "${name}"?`)) {
+      logger.debug('Delete MCP server cancelled by user', { id, name }, 'SettingsDialog');
+      return;
+    }
+
+    logger.info('Deleting MCP server', { id, name }, 'SettingsDialog');
+    setIsLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const result = await deleteMCPConfig(id);
+
+      if (result.success) {
+        logger.success('MCP server deleted successfully', { id, name }, 'SettingsDialog');
+        setSuccess('MCP server deleted successfully!');
+        
+        await handleLoadMCPServers();
+      } else {
+        throw new Error(result.error || 'Failed to delete MCP server');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete MCP server';
+      logger.error('Failed to delete MCP server', { error: errorMessage, id }, 'SettingsDialog');
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleToggleMCPEnabled = async (id: string, name: string) => {
+    logger.info('Toggling MCP server enabled status', { id, name }, 'SettingsDialog');
+    
+    // Add to starting set
+    setMCPStartingIds(prev => new Set(prev).add(id));
+    setError('');
+    setSuccess('');
+
+    try {
+      logger.debug('Calling toggleMCPEnabled API', { id, name }, 'SettingsDialog');
+      const result = await toggleMCPEnabled(id);
+
+      if (result.success) {
+        logger.success('MCP server toggled successfully', {
+          id,
+          name,
+          isEnabled: result.isEnabled,
+        }, 'SettingsDialog');
+        
+        setSuccess(`MCP server "${name}" ${result.isEnabled ? 'started' : 'stopped'} successfully!`);
+        
+        // Reload MCP servers to reflect the updated status
+        logger.debug('Reloading MCP servers after toggle', { id }, 'SettingsDialog');
+        await handleLoadMCPServers();
+        
+        logger.info('MCP server list reloaded successfully', { id }, 'SettingsDialog');
+      } else {
+        throw new Error(result.error || 'Failed to toggle MCP server');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to toggle MCP server';
+      logger.error('Failed to toggle MCP server', { error: errorMessage, id, name }, 'SettingsDialog');
+      setError(errorMessage);
+      
+      // Reload to ensure UI is in sync with actual state
+      logger.debug('Reloading MCP servers after error to sync state', { id }, 'SettingsDialog');
+      await handleLoadMCPServers();
+    } finally {
+      // Remove from starting set
+      setMCPStartingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+    }
+  };
+
+  const handleShowAddMCPForm = () => {
+    logger.debug('Showing add MCP server form', undefined, 'SettingsDialog');
+    setIsMCPEditMode(false);
+    setEditingMCPId(null);
+    setIsMCPFormVisible(true);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleCancelMCPForm = () => {
+    logger.debug('Canceling MCP form', { isMCPEditMode }, 'SettingsDialog');
+    handleResetMCPForm();
+    setError('');
+  };
+
+  const handleShowJSONPreview = (mcp: MCPConfig) => {
+    logger.info('Showing JSON preview for MCP', { id: mcp.id, name: mcp.name }, 'SettingsDialog');
+    
+    const jsonConfig = {
+      mcpServers: {
+        [mcp.name]: {
+          command: mcp.command,
+          args: mcp.args,
+          ...(mcp.env && Object.keys(mcp.env).length > 0 ? { env: mcp.env } : {})
+        }
+      }
+    };
+    
+    setMCPJsonPreview(JSON.stringify(jsonConfig, null, 2));
+  };
+
+  const handleCloseJSONPreview = () => {
+    setMCPJsonPreview('');
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -495,6 +807,16 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
               }`}
             >
               Models Configuration
+            </button>
+            <button
+              onClick={() => setActiveTab('mcp')}
+              className={`px-3 py-3 text-left text-sm font-medium border-b-2 border-border transition-colors ${
+                activeTab === 'mcp'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-foreground hover:bg-secondary'
+              }`}
+            >
+              MCP Config
             </button>
           </div>
 
@@ -766,9 +1088,295 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                 )}
               </div>
             )}
+
+            {/* MCP Config Tab Content */}
+            {activeTab === 'mcp' && (
+              <div className="flex-1 flex flex-col overflow-hidden p-4 relative">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-foreground">MCP Servers</h3>
+                  {!isMCPFormVisible && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleShowAddMCPForm}
+                        disabled={isLoading}
+                        className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        aria-label="Add MCP Server"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span className="font-medium">Add MCP Server</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Add/Edit MCP Server Form */}
+                {isMCPFormVisible && (
+                  <div className="mb-4 p-4 bg-card border-4 border-border shadow-sm">
+                    <h4 className="text-md font-bold text-foreground mb-3">
+                      {isMCPEditMode ? 'Edit MCP Server' : 'Add New MCP Server'}
+                    </h4>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">
+                          MCP Server Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={mcpFormName}
+                          onChange={(e) => setMCPFormName(e.target.value)}
+                          placeholder="e.g., tavily-ai-tavily-mcp"
+                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                          disabled={isLoading}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">
+                          Command *
+                        </label>
+                        <input
+                          type="text"
+                          value={mcpFormCommand}
+                          onChange={(e) => setMCPFormCommand(e.target.value)}
+                          placeholder="e.g., npx"
+                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                          disabled={isLoading}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">
+                          Arguments * (comma-separated)
+                        </label>
+                        <input
+                          type="text"
+                          value={mcpFormArgs}
+                          onChange={(e) => setMCPFormArgs(e.target.value)}
+                          placeholder="e.g., -y, tavily-mcp@latest"
+                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                          disabled={isLoading}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Separate arguments with commas. Example: -y, tavily-mcp@latest
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">
+                          Environment Variables (Optional, JSON format)
+                        </label>
+                        <textarea
+                          value={mcpFormEnv}
+                          onChange={(e) => setMCPFormEnv(e.target.value)}
+                          placeholder='{"TAVILY_API_KEY": "your-api-key-here"}'
+                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary font-mono text-sm"
+                          disabled={isLoading}
+                          rows={4}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Enter environment variables as JSON object. Example: {`{"API_KEY": "sk-xxx", "DEBUG": "true"}`}
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2 pt-2">
+                        <button
+                          onClick={handleSubmitMCPForm}
+                          disabled={
+                            isLoading ||
+                            !mcpFormName.trim() ||
+                            !mcpFormCommand.trim() ||
+                            !mcpFormArgs.trim()
+                          }
+                          className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          <Save className="w-4 h-4" />
+                          <span className="font-medium">
+                            {isMCPEditMode ? 'Update MCP Server' : 'Save MCP Server'}
+                          </span>
+                        </button>
+                        <button
+                          onClick={handleCancelMCPForm}
+                          disabled={isLoading}
+                          className="px-4 py-2 bg-muted text-foreground border-2 border-border hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* MCP Server List */}
+                <div className="flex-1 overflow-y-auto">
+                  {isLoading && mcpServers.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Loading MCP servers...
+                    </div>
+                  ) : mcpServers.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No MCP servers configured. Add your first MCP server to get started.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {mcpServers.map((mcp) => {
+                        const isStarting = mcpStartingIds.has(mcp.id);
+                        return (
+                          <div
+                            key={mcp.id}
+                            className={`p-4 bg-card border-4 border-border shadow-sm hover:shadow-md transition-all ${
+                              !mcp.isEnabled ? 'opacity-60' : ''
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              {/* MCP Info */}
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h4 className="text-md font-bold text-foreground">
+                                    {mcp.name}
+                                  </h4>
+                                  {mcp.isEnabled && !isStarting && (
+                                    <span className="px-2 py-0.5 bg-green-600 text-white text-xs font-medium border border-border flex items-center gap-1">
+                                      <Power className="w-3 h-3" />
+                                      Running
+                                    </span>
+                                  )}
+                                  {isStarting && (
+                                    <span className="px-2 py-0.5 bg-yellow-600 text-white text-xs font-medium border border-border flex items-center gap-1">
+                                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                      Starting...
+                                    </span>
+                                  )}
+                                  {!mcp.isEnabled && !isStarting && (
+                                    <span className="px-2 py-0.5 bg-muted text-muted-foreground text-xs font-medium border border-border">
+                                      Stopped
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                <div className="space-y-1 text-sm text-muted-foreground">
+                                  <div>
+                                    <span className="font-medium">Command:</span> {mcp.command}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Arguments:</span> {mcp.args.join(' ')}
+                                  </div>
+                                  {mcp.env && Object.keys(mcp.env).length > 0 && (
+                                    <div>
+                                      <span className="font-medium">Environment Variables:</span> {Object.keys(mcp.env).length} configured
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Action Buttons - Right Side */}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleShowJSONPreview(mcp)}
+                                  disabled={isLoading}
+                                  className="px-3 py-2 bg-secondary text-secondary-foreground border-2 border-border hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium"
+                                  aria-label="View JSON Configuration"
+                                  title="View JSON Configuration"
+                                >
+                                  JSON
+                                </button>
+                                <button
+                                  onClick={() => handleEditMCPServer(mcp)}
+                                  disabled={isLoading || isMCPFormVisible || isStarting}
+                                  className="p-2 bg-blue-600 text-white border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                  aria-label="Edit MCP Server"
+                                  title="Edit MCP Server"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteMCPServer(mcp.id, mcp.name)}
+                                  disabled={isLoading || isMCPFormVisible || mcp.isEnabled || isStarting}
+                                  className="p-2 bg-destructive text-destructive-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                  aria-label="Delete MCP Server"
+                                  title={mcp.isEnabled ? "Stop MCP server before deleting" : "Delete MCP Server"}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                                
+                                {/* Start/Stop Button */}
+                                <button
+                                  onClick={() => handleToggleMCPEnabled(mcp.id, mcp.name)}
+                                  disabled={isLoading || isMCPFormVisible || isStarting}
+                                  className={`px-3 py-2 border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 ${
+                                    mcp.isEnabled
+                                      ? 'bg-red-600 text-white'
+                                      : 'bg-green-600 text-white'
+                                  }`}
+                                  aria-label={mcp.isEnabled ? 'Stop MCP Server' : 'Start MCP Server'}
+                                  title={mcp.isEnabled ? 'Stop' : 'Start'}
+                                >
+                                  {isStarting ? (
+                                    <>
+                                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                      <span className="text-xs font-medium">Starting</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Power className="w-4 h-4" />
+                                      <span className="text-xs font-medium">
+                                        {mcp.isEnabled ? 'Stop' : 'Start'}
+                                      </span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* JSON Preview Modal */}
+      {mcpJsonPreview && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-70">
+          <div className="bg-background border-4 border-border shadow-lg w-[600px] max-h-[70%] flex flex-col">
+            {/* Header */}
+            <div className="h-12 bg-primary border-b-4 border-border flex items-center justify-between px-4">
+              <h3 className="text-lg font-bold text-primary-foreground">MCP JSON Configuration</h3>
+              <button
+                onClick={handleCloseJSONPreview}
+                className="w-8 h-8 flex items-center justify-center hover:bg-primary-foreground hover:bg-opacity-20 transition-colors"
+                aria-label="Close JSON Preview"
+              >
+                <X className="w-5 h-5 text-primary-foreground" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <p className="text-sm text-muted-foreground mb-3">
+                Copy this configuration to use in your MCP client configuration file:
+              </p>
+              <pre className="bg-muted p-4 rounded border-2 border-border text-sm font-mono overflow-x-auto">
+                {mcpJsonPreview}
+              </pre>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(mcpJsonPreview);
+                  setSuccess('JSON configuration copied to clipboard!');
+                  setTimeout(() => setSuccess(''), 2000);
+                }}
+                className="mt-4 px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all flex items-center gap-2"
+              >
+                <span className="font-medium">Copy to Clipboard</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -347,7 +347,43 @@ app.on('activate', () => {
 app.on('before-quit', async () => {
   logger.info('Application preparing to quit');
 
-  // Stop Flask backend first
+  // Stop all MCP servers
+  if (mcpProcesses.size > 0) {
+    logger.info('Stopping all MCP servers', {
+      count: mcpProcesses.size,
+    });
+
+    for (const [id, mcpData] of mcpProcesses.entries()) {
+      try {
+        logger.info('Stopping MCP server', {
+          id,
+          name: mcpData.config.name,
+        });
+        mcpData.process.kill('SIGTERM');
+      } catch (error) {
+        logger.error('Error stopping MCP server', {
+          id,
+          error: error.message,
+        });
+      }
+    }
+
+    // Wait for graceful shutdown
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    // Force kill any remaining processes
+    for (const [id, mcpData] of mcpProcesses.entries()) {
+      if (!mcpData.process.killed) {
+        logger.warn('Force killing MCP server', { id });
+        mcpData.process.kill('SIGKILL');
+      }
+    }
+
+    mcpProcesses.clear();
+    logger.success('All MCP servers stopped');
+  }
+
+  // Stop Flask backend
   if (flaskBackend) {
     logger.info('Stopping Flask backend');
     try {
@@ -413,10 +449,27 @@ process.on('unhandledRejection', (reason, promise) => {
 const MODEL_CONFIG_FILE = 'model-configs.json';
 
 /**
+ * MCP Configuration File Path
+ */
+const MCP_CONFIG_FILE = 'mcp-configs.json';
+
+/**
+ * MCP Server Processes
+ */
+const mcpProcesses = new Map();
+
+/**
  * Get model configuration file path
  */
 function getModelConfigPath() {
   return path.join(app.getPath('userData'), MODEL_CONFIG_FILE);
+}
+
+/**
+ * Get MCP configuration file path
+ */
+function getMCPConfigPath() {
+  return path.join(app.getPath('userData'), MCP_CONFIG_FILE);
 }
 
 /**
@@ -561,6 +614,321 @@ ipcMain.handle('save-model-configs', async (event, configs) => {
       error: error.message,
     };
   }
+});
+
+/**
+ * IPC Handler: Load MCP configurations from file system
+ */
+ipcMain.handle('load-mcp-configs', async () => {
+  logger.info('IPC: load-mcp-configs called');
+  
+  try {
+    const configPath = getMCPConfigPath();
+    logger.debug('Loading MCP configs from file', { path: configPath });
+
+    // Check if file exists
+    if (!fs.existsSync(configPath)) {
+      logger.info('MCP config file does not exist, creating default config');
+      
+      // Create default MCP configuration
+      const defaultConfig = {
+        mcpServers: [
+          {
+            id: `mcp_${Date.now()}`,
+            name: 'tavily-ai-tavily-mcp',
+            command: 'npx',
+            args: ['-y', 'tavily-mcp@latest'],
+            env: {
+              // TAVILY_API_KEY: 'your-api-key-here' // Example: Uncomment and set your API key
+            },
+            isEnabled: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          {
+            id: `mcp_${Date.now() + 1}`,
+            name: 'caiyili-baidu-search-mcp',
+            command: 'npx',
+            args: ['baidu-search-mcp', '--max-result=5', '--fetch-content-count=2', '--max-content-length=2000'],
+            env: {},
+            isEnabled: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      };
+
+      // Ensure directory exists
+      const configDir = path.dirname(configPath);
+      if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+      }
+
+      // Write default config
+      fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
+      
+      logger.success('Default MCP configuration created', {
+        count: defaultConfig.mcpServers.length,
+      });
+
+      return {
+        success: true,
+        data: defaultConfig,
+      };
+    }
+
+    // Read file
+    const fileContent = fs.readFileSync(configPath, 'utf-8');
+    const configs = JSON.parse(fileContent);
+
+    logger.success('MCP configurations loaded successfully', {
+      count: configs.mcpServers?.length || 0,
+    });
+
+    return {
+      success: true,
+      data: configs,
+    };
+  } catch (error) {
+    logger.error('Failed to load MCP configurations', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    return {
+      success: false,
+      error: error.message,
+      data: { mcpServers: [] },
+    };
+  }
+});
+
+/**
+ * IPC Handler: Save MCP configurations to file system
+ */
+ipcMain.handle('save-mcp-configs', async (event, configs) => {
+  logger.info('IPC: save-mcp-configs called', {
+    mcpCount: configs.mcpServers?.length || 0,
+  });
+
+  try {
+    const configPath = getMCPConfigPath();
+    logger.debug('Saving MCP configs to file', { path: configPath });
+
+    // Ensure directory exists
+    const configDir = path.dirname(configPath);
+    if (!fs.existsSync(configDir)) {
+      logger.debug('Creating config directory', { dir: configDir });
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+
+    // Write file with pretty formatting
+    const jsonContent = JSON.stringify(configs, null, 2);
+    fs.writeFileSync(configPath, jsonContent, 'utf-8');
+
+    logger.success('MCP configurations saved successfully', {
+      path: configPath,
+      count: configs.mcpServers?.length || 0,
+      size: `${jsonContent.length} bytes`,
+    });
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    logger.error('Failed to save MCP configurations', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+});
+
+/**
+ * IPC Handler: Start MCP server
+ */
+ipcMain.handle('start-mcp-server', async (event, id, mcpConfig) => {
+  logger.info('IPC: start-mcp-server called', {
+    id,
+    name: mcpConfig.name,
+    command: mcpConfig.command,
+  });
+
+  try {
+    // Check if already running
+    if (mcpProcesses.has(id)) {
+      logger.warn('MCP server already running', { id });
+      return {
+        success: false,
+        error: 'MCP server is already running',
+      };
+    }
+
+    const { spawn } = require('child_process');
+
+    // Prepare environment variables
+    const processEnv = { ...process.env };
+    
+    // Add MCP-specific environment variables if configured
+    if (mcpConfig.env && typeof mcpConfig.env === 'object') {
+      Object.assign(processEnv, mcpConfig.env);
+      logger.debug('Adding environment variables to MCP process', {
+        id,
+        envVarCount: Object.keys(mcpConfig.env).length,
+        envVarKeys: Object.keys(mcpConfig.env),
+      });
+    }
+
+    // Spawn MCP process
+    logger.debug('Spawning MCP process', {
+      id,
+      command: mcpConfig.command,
+      args: mcpConfig.args,
+      hasCustomEnv: mcpConfig.env && Object.keys(mcpConfig.env).length > 0,
+    });
+
+    const mcpProcess = spawn(mcpConfig.command, mcpConfig.args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: true,
+      env: processEnv, // Pass environment variables to the process
+    });
+
+    // Store process
+    mcpProcesses.set(id, {
+      process: mcpProcess,
+      config: mcpConfig,
+      startedAt: new Date().toISOString(),
+    });
+
+    // Handle process output
+    mcpProcess.stdout.on('data', (data) => {
+      logger.debug(`MCP [${id}] stdout`, { output: data.toString() });
+    });
+
+    mcpProcess.stderr.on('data', (data) => {
+      logger.warn(`MCP [${id}] stderr`, { output: data.toString() });
+    });
+
+    // Handle process exit
+    mcpProcess.on('exit', (code, signal) => {
+      logger.info(`MCP server exited [${id}]`, { code, signal });
+      mcpProcesses.delete(id);
+    });
+
+    mcpProcess.on('error', (error) => {
+      logger.error(`MCP server error [${id}]`, {
+        error: error.message,
+      });
+      mcpProcesses.delete(id);
+    });
+
+    logger.success('MCP server started successfully', {
+      id,
+      name: mcpConfig.name,
+      pid: mcpProcess.pid,
+    });
+
+    return {
+      success: true,
+      pid: mcpProcess.pid,
+    };
+  } catch (error) {
+    logger.error('Failed to start MCP server', {
+      id,
+      error: error.message,
+      stack: error.stack,
+    });
+
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+});
+
+/**
+ * IPC Handler: Stop MCP server
+ */
+ipcMain.handle('stop-mcp-server', async (event, id) => {
+  logger.info('IPC: stop-mcp-server called', { id });
+
+  try {
+    const mcpData = mcpProcesses.get(id);
+
+    if (!mcpData) {
+      logger.warn('MCP server not running', { id });
+      return {
+        success: false,
+        error: 'MCP server is not running',
+      };
+    }
+
+    const { process: mcpProcess, config } = mcpData;
+
+    // Kill process
+    logger.debug('Killing MCP process', {
+      id,
+      pid: mcpProcess.pid,
+    });
+
+    mcpProcess.kill('SIGTERM');
+
+    // Wait a bit for graceful shutdown
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // Force kill if still running
+    if (!mcpProcess.killed) {
+      logger.warn('MCP process did not exit gracefully, force killing', { id });
+      mcpProcess.kill('SIGKILL');
+    }
+
+    // Remove from map
+    mcpProcesses.delete(id);
+
+    logger.success('MCP server stopped successfully', {
+      id,
+      name: config.name,
+    });
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    logger.error('Failed to stop MCP server', {
+      id,
+      error: error.message,
+      stack: error.stack,
+    });
+
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+});
+
+/**
+ * IPC Handler: Get MCP server status
+ */
+ipcMain.handle('get-mcp-server-status', async (event, id) => {
+  const mcpData = mcpProcesses.get(id);
+
+  if (!mcpData) {
+    return {
+      isRunning: false,
+    };
+  }
+
+  return {
+    isRunning: true,
+    pid: mcpData.process.pid,
+    startedAt: mcpData.startedAt,
+    name: mcpData.config.name,
+  };
 });
 
 logger.info('Electron main process initialized');

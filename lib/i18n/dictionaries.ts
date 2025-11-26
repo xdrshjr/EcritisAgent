@@ -17,7 +17,7 @@ const en = {
       task: 'Task',
       config: 'Config',
       info: 'Info',
-      modelConfig: 'Model Config',
+      modelConfig: 'Basic Config',
       comingSoon: 'Coming soon...',
     },
     language: {
@@ -160,7 +160,7 @@ const zh = {
       task: '任务',
       config: '配置',
       info: '信息',
-      modelConfig: '模型配置',
+      modelConfig: '基础配置',
       comingSoon: '即将推出...',
     },
     language: {

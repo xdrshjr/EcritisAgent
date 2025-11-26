@@ -275,6 +275,156 @@ const electronAPI = {
       };
     }
   },
+
+  /**
+   * Load MCP configurations from file system
+   */
+  loadMCPConfigs: async () => {
+    try {
+      logger.info('Loading MCP configurations');
+      const result = await ipcRenderer.invoke('load-mcp-configs');
+      
+      if (result.success) {
+        logger.info('MCP configurations loaded successfully', {
+          count: result.data.mcpServers?.length || 0,
+        });
+      } else {
+        logger.error('Failed to load MCP configurations', {
+          error: result.error,
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('Exception while loading MCP configurations', {
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: error.message,
+        data: { mcpServers: [] },
+      };
+    }
+  },
+
+  /**
+   * Save MCP configurations to file system
+   */
+  saveMCPConfigs: async (configs) => {
+    try {
+      logger.info('Saving MCP configurations', {
+        count: configs.mcpServers?.length || 0,
+      });
+      
+      const result = await ipcRenderer.invoke('save-mcp-configs', configs);
+      
+      if (result.success) {
+        logger.info('MCP configurations saved successfully');
+      } else {
+        logger.error('Failed to save MCP configurations', {
+          error: result.error,
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('Exception while saving MCP configurations', {
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
+
+  /**
+   * Start MCP server
+   */
+  startMCPServer: async (id, mcpConfig) => {
+    try {
+      logger.info('Starting MCP server', {
+        id,
+        name: mcpConfig.name,
+      });
+      
+      const result = await ipcRenderer.invoke('start-mcp-server', id, mcpConfig);
+      
+      if (result.success) {
+        logger.info('MCP server started successfully', {
+          id,
+          pid: result.pid,
+        });
+      } else {
+        logger.error('Failed to start MCP server', {
+          id,
+          error: result.error,
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('Exception while starting MCP server', {
+        id,
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
+
+  /**
+   * Stop MCP server
+   */
+  stopMCPServer: async (id) => {
+    try {
+      logger.info('Stopping MCP server', { id });
+      
+      const result = await ipcRenderer.invoke('stop-mcp-server', id);
+      
+      if (result.success) {
+        logger.info('MCP server stopped successfully', { id });
+      } else {
+        logger.error('Failed to stop MCP server', {
+          id,
+          error: result.error,
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('Exception while stopping MCP server', {
+        id,
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
+
+  /**
+   * Get MCP server status
+   */
+  getMCPServerStatus: async (id) => {
+    try {
+      logger.debug('Getting MCP server status', { id });
+      const status = await ipcRenderer.invoke('get-mcp-server-status', id);
+      logger.debug('MCP server status retrieved', { id, status });
+      return status;
+    } catch (error) {
+      logger.error('Failed to get MCP server status', {
+        id,
+        error: error.message,
+      });
+      return {
+        isRunning: false,
+      };
+    }
+  },
 };
 
 /**

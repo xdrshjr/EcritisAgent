@@ -1,0 +1,34 @@
+{
+  "mcpServers": [
+    {
+      "args": [
+        "-y",
+        "tavily-mcp@latest"
+      ],
+      "command": "npx",
+      "createdAt": "2024-11-26T00:00:00.000Z",
+      "env": {
+        "TAVILY_API_KEY": "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"
+      },
+      "id": "mcp_1732597200000",
+      "isEnabled": true,
+      "name": "tavily-ai-tavily-mcp",
+      "updatedAt": "2025-11-26T10:06:17.065Z"
+    },
+    {
+      "args": [
+        "baidu-search-mcp",
+        "--max-result=5",
+        "--fetch-content-count=2",
+        "--max-content-length=2000"
+      ],
+      "command": "npx",
+      "createdAt": "2024-11-26T00:00:00.000Z",
+      "env": {},
+      "id": "mcp_1732597200001",
+      "isEnabled": false,
+      "name": "caiyili-baidu-search-mcp",
+      "updatedAt": "2025-11-26T09:14:19.465Z"
+    }
+  ]
+}
