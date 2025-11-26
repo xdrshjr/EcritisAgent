@@ -1362,33 +1362,59 @@ def get_agents():
     Returns:
         JSON array of agent descriptors
     """
+    app.logger.info('[Agents API] GET request received for agent list')
+    
     try:
+        app.logger.debug('[Agents API] Attempting to import agent_router module', extra={
+            'sys_path_preview': sys.path[:3],
+            'backend_dir': backend_dir,
+        })
+        
         from agent.agent_router import get_available_agents
+        
+        app.logger.debug('[Agents API] Successfully imported get_available_agents function')
         
         agents = get_available_agents()
         
-        app.logger.info('[Agents] Agent list retrieved', extra={
+        app.logger.info('[Agents API] Agent list retrieved successfully', extra={
             'agent_count': len(agents),
             'agent_types': [a['type'] for a in agents],
+            'agent_names': [a['name'] for a in agents],
         })
         
-        return jsonify({
+        response_data = {
             'agents': agents,
             'count': len(agents),
+        }
+        
+        app.logger.debug('[Agents API] Sending response', extra={
+            'response_keys': list(response_data.keys()),
+            'agent_count': len(agents),
         })
         
+        return jsonify(response_data)
+        
     except ImportError as import_error:
-        app.logger.error('[Agents] Failed to import agent router', extra={
-            'error': str(import_error)
+        app.logger.error('[Agents API] Failed to import agent router module', extra={
+            'error': str(import_error),
+            'error_type': type(import_error).__name__,
+            'sys_path': sys.path,
+            'backend_dir': backend_dir,
+            'agent_dir_exists': os.path.exists(os.path.join(backend_dir, 'agent')),
+            'agent_router_exists': os.path.exists(os.path.join(backend_dir, 'agent', 'agent_router.py')),
         }, exc_info=True)
+        
         return jsonify({
             'error': 'Agent router not available',
             'details': str(import_error)
         }), 500
+        
     except Exception as error:
-        app.logger.error('[Agents] Failed to get agent list', extra={
-            'error': str(error)
+        app.logger.error('[Agents API] Failed to get agent list', extra={
+            'error': str(error),
+            'error_type': type(error).__name__,
         }, exc_info=True)
+        
         return jsonify({
             'error': 'Failed to retrieve agent list',
             'details': str(error)

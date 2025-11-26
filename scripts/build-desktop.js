@@ -138,22 +138,44 @@ function ensureDirectory(dirPath) {
 }
 
 /**
- * Clean directory
+ * Clean directory with retry logic for locked files
  */
-function cleanDirectory(dirPath) {
+function cleanDirectory(dirPath, retries = 3, delay = 1000) {
   const fullPath = path.resolve(dirPath);
   logger.info(`Cleaning directory: ${fullPath}`);
   
-  if (fs.existsSync(fullPath)) {
-    try {
-      fs.rmSync(fullPath, { recursive: true, force: true });
-      logger.success(`Directory cleaned: ${fullPath}`);
-    } catch (error) {
-      logger.error(`Failed to clean directory: ${fullPath}`, error);
-      throw error;
-    }
-  } else {
+  if (!fs.existsSync(fullPath)) {
     logger.info(`Directory does not exist, skipping clean: ${fullPath}`);
+    return;
+  }
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      fs.rmSync(fullPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+      logger.success(`Directory cleaned: ${fullPath}`);
+      return;
+    } catch (error) {
+      if (error.code === 'EBUSY' || error.code === 'ENOTEMPTY' || error.code === 'EPERM') {
+        if (attempt < retries) {
+          logger.warn(`Directory is locked (attempt ${attempt}/${retries}), retrying in ${delay}ms...`);
+          logger.info('💡 Tip: Close the application if it\'s running');
+          
+          // Wait before retry
+          const start = Date.now();
+          while (Date.now() - start < delay) {
+            // Busy wait
+          }
+        } else {
+          logger.error(`Failed to clean directory after ${retries} attempts: ${fullPath}`, error);
+          logger.warn('⚠️  The application may be running. Please close it and try again.');
+          throw error;
+        }
+      } else {
+        // Other errors, throw immediately
+        logger.error(`Failed to clean directory: ${fullPath}`, error);
+        throw error;
+      }
+    }
   }
 }
 
@@ -417,9 +439,27 @@ async function main() {
     
     // Step 2: Clean previous builds
     logger.step('Cleaning Previous Builds');
-    cleanDirectory('out');
-    cleanDirectory('dist');
-    cleanDirectory('.next');
+    
+    try {
+      cleanDirectory('out');
+      cleanDirectory('dist');
+      cleanDirectory('.next');
+    } catch (error) {
+      if (error.code === 'EBUSY' || error.code === 'ENOTEMPTY' || error.code === 'EPERM') {
+        logger.error('❌ Cannot clean build directories - files are locked');
+        logger.info('');
+        logger.info('📋 Please follow these steps:');
+        logger.info('   1. Close the AIDocMaster application if it\'s running');
+        logger.info('   2. Close any file explorer windows in the dist/ directory');
+        logger.info('   3. Wait a few seconds for processes to fully exit');
+        logger.info('   4. Run the build command again');
+        logger.info('');
+        logger.info('💡 Tip: Check Task Manager for any running "AIDocMaster" or "electron" processes');
+        throw error;
+      } else {
+        throw error;
+      }
+    }
     
     // Step 3: Bundle Python runtime
     await bundlePythonRuntime();

@@ -25,8 +25,10 @@ export interface TodoItem {
 }
 
 export interface AgentStatus {
-  phase: 'planning' | 'executing' | 'summarizing' | 'complete' | 'error' | 'intent' | 'parameterizing' | 'outlining' | 'writing' | 'delivering';
+  phase: 'planning' | 'executing' | 'summarizing' | 'complete' | 'error' | 'intent' | 'parameterizing' | 'outlining' | 'writing' | 'delivering' | 'routing';
   message: string;
+  selectedAgent?: string;
+  routingConfidence?: number;
   todoList?: TodoItem[];
   currentStep?: number;
   totalSteps?: number;
@@ -92,6 +94,8 @@ const AgentStatusPanel = ({ status, isActive, defaultCollapsed = false }: AgentS
 
   const getPhaseIcon = () => {
     switch (status.phase) {
+      case 'routing':
+        return <Brain className="w-5 h-5 text-cyan-500 animate-pulse" />;
       case 'intent':
         return <Brain className="w-5 h-5 text-blue-500 animate-pulse" />;
       case 'parameterizing':
@@ -118,6 +122,8 @@ const AgentStatusPanel = ({ status, isActive, defaultCollapsed = false }: AgentS
 
   const getPhaseLabel = () => {
     switch (status.phase) {
+      case 'routing':
+        return 'Routing';
       case 'intent':
         return 'Intent';
       case 'parameterizing':

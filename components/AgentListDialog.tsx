@@ -41,27 +41,64 @@ const AgentListDialog = ({ isOpen, onClose }: AgentListDialogProps) => {
     setError(null);
 
     try {
+      // Build API URL
       const apiUrl = await buildApiUrl('/api/agents');
-      logger.debug('Fetching agents from API', { apiUrl }, 'AgentListDialog');
+      logger.info('Built API URL for agents endpoint', { apiUrl }, 'AgentListDialog');
+
+      // Check if we're in Electron mode
+      const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron();
+      logger.debug('Environment check', { isElectron }, 'AgentListDialog');
+
+      // Make fetch request
+      logger.debug('Sending fetch request to agents endpoint', { 
+        url: apiUrl,
+        method: 'GET',
+      }, 'AgentListDialog');
 
       const response = await fetch(apiUrl);
 
+      logger.debug('Received response from agents endpoint', { 
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries()),
+      }, 'AgentListDialog');
+
       if (!response.ok) {
-        throw new Error(`Failed to load agents: ${response.statusText}`);
+        const errorText = await response.text();
+        logger.error('Agent endpoint returned error status', { 
+          status: response.status,
+          statusText: response.statusText,
+          responseBody: errorText.substring(0, 200),
+        }, 'AgentListDialog');
+        throw new Error(`Failed to load agents: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
+      logger.debug('Parsed JSON response from agents endpoint', { 
+        dataKeys: Object.keys(data),
+        agentCount: data.agents?.length,
+      }, 'AgentListDialog');
+
       const agentList = data.agents || [];
 
       logger.info('Agents loaded successfully', {
         count: agentList.length,
         types: agentList.map((a: AgentCapability) => a.type),
+        names: agentList.map((a: AgentCapability) => a.name),
       }, 'AgentListDialog');
 
       setAgents(agentList);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      logger.error('Failed to load agents', { error: errorMessage }, 'AgentListDialog');
+      const errorStack = err instanceof Error ? err.stack : undefined;
+      
+      logger.error('Failed to load agents', { 
+        error: errorMessage,
+        errorType: err instanceof Error ? err.constructor.name : typeof err,
+        stack: errorStack,
+      }, 'AgentListDialog');
+      
       setError(errorMessage);
     } finally {
       setIsLoading(false);

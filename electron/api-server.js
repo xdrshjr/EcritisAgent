@@ -262,6 +262,37 @@ class APIRouteHandlers {
     this.logger.info('Logs request received', { queryParams });
     this.proxyToFlask('/api/logs', 'GET', null, res, queryParams);
   }
+
+  /**
+   * Handle GET /api/agents
+   */
+  async handleAgentsRequest(res) {
+    this.logger.info('Agents list request received');
+    this.proxyToFlask('/api/agents', 'GET', null, res);
+  }
+
+  /**
+   * Handle POST /api/agent-route
+   */
+  async handleAgentRouteRequest(reqBody, res) {
+    this.logger.info('Agent route request received', {
+      hasRequest: !!reqBody?.request,
+      hasContent: !!reqBody?.content,
+      requestPreview: reqBody?.request?.substring(0, 50),
+    });
+    this.proxyToFlask('/api/agent-route', 'POST', reqBody, res);
+  }
+
+  /**
+   * Handle POST /api/auto-writer-agent
+   */
+  async handleAutoWriterAgentRequest(reqBody, res) {
+    this.logger.info('Auto writer agent request received', {
+      hasPrompt: !!reqBody?.prompt,
+      promptPreview: reqBody?.prompt?.substring(0, 50),
+    });
+    this.proxyToFlask('/api/auto-writer-agent', 'POST', reqBody, res);
+  }
 }
 
 /**
@@ -376,6 +407,35 @@ class ElectronAPIServer {
         if (method === 'GET') {
           await this.routeHandlers.handleLogsRequest(queryString, res);
         } else {
+          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+        }
+      } else if (normalizedPath === '/api/agents') {
+        if (method === 'GET') {
+          this.logger.info('Handling GET /api/agents request');
+          await this.routeHandlers.handleAgentsRequest(res);
+        } else {
+          this.logger.warn('Method not allowed for /api/agents', { method });
+          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+        }
+      } else if (normalizedPath === '/api/agent-route') {
+        if (method === 'POST') {
+          this.logger.info('Handling POST /api/agent-route request');
+          const body = await this.parseRequestBody(req);
+          await this.routeHandlers.handleAgentRouteRequest(body, res);
+        } else {
+          this.logger.warn('Method not allowed for /api/agent-route', { method });
+          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+        }
+      } else if (normalizedPath === '/api/auto-writer-agent') {
+        if (method === 'POST') {
+          this.logger.info('Handling POST /api/auto-writer-agent request');
+          const body = await this.parseRequestBody(req);
+          await this.routeHandlers.handleAutoWriterAgentRequest(body, res);
+        } else {
+          this.logger.warn('Method not allowed for /api/auto-writer-agent', { method });
           res.writeHead(405, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Method not allowed' }));
         }

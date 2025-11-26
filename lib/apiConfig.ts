@@ -13,18 +13,29 @@ import { logger } from './logger';
  * Get API base URL based on environment
  */
 export const getApiBaseUrl = async (): Promise<string> => {
+  logger.debug('getApiBaseUrl called', undefined, 'APIConfig');
+
   // Check if running in Electron
   const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron();
+  logger.debug('Environment check', { 
+    isElectron, 
+    hasElectronAPI: typeof window !== 'undefined' && !!window.electronAPI,
+  }, 'APIConfig');
 
   if (!isElectron || !window.electronAPI) {
     // Browser mode - use relative paths
-    logger.debug('Running in browser mode, using relative API paths', undefined, 'APIConfig');
+    logger.info('Running in browser mode, using relative API paths', undefined, 'APIConfig');
     return '';
   }
 
   // Electron mode - check if packaged or dev
   try {
+    logger.debug('Requesting API server port from Electron', undefined, 'APIConfig');
     const apiServerPort = await window.electronAPI.getApiServerPort();
+    logger.debug('Received API server port from Electron', { 
+      port: apiServerPort,
+      hasPort: !!apiServerPort,
+    }, 'APIConfig');
 
     if (apiServerPort) {
       // Packaged mode with API server
@@ -45,6 +56,7 @@ export const getApiBaseUrl = async (): Promise<string> => {
   } catch (error) {
     logger.error('Error getting API server port, using relative paths', {
       error: error instanceof Error ? error.message : 'Unknown error',
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
     }, 'APIConfig');
     return '';
   }
@@ -52,21 +64,32 @@ export const getApiBaseUrl = async (): Promise<string> => {
 
 /**
  * Build full API URL for a given endpoint
- * Ensures trailing slash for consistency with Next.js trailingSlash config
+ * In packaged mode (Electron), do NOT add trailing slash as the API server normalizes paths
+ * In dev mode (Next.js), add trailing slash to match Next.js trailingSlash config
  */
 export const buildApiUrl = async (endpoint: string): Promise<string> => {
-  const baseUrl = await getApiBaseUrl();
+  logger.debug('buildApiUrl called', { endpoint }, 'APIConfig');
   
-  // Ensure endpoint has trailing slash to match Next.js trailingSlash: true config
-  // This prevents 308 redirects in dev mode
-  const normalizedEndpoint = endpoint.endsWith('/') ? endpoint : `${endpoint}/`;
+  const baseUrl = await getApiBaseUrl();
+  logger.debug('Got base URL', { baseUrl }, 'APIConfig');
+  
+  const isElectronPackaged = baseUrl.includes('localhost:') && baseUrl !== 'http://localhost:3000';
+  
+  // In packaged Electron mode, do NOT add trailing slash
+  // The Electron API server normalizes paths by removing trailing slashes
+  // In Next.js dev mode, add trailing slash to match trailingSlash: true config
+  const normalizedEndpoint = isElectronPackaged 
+    ? endpoint  // Keep as-is for Electron API server
+    : (endpoint.endsWith('/') ? endpoint : `${endpoint}/`); // Add slash for Next.js
+  
   const url = `${baseUrl}${normalizedEndpoint}`;
   
-  logger.debug('Built API URL', {
+  logger.info('Built API URL', {
     endpoint,
     normalizedEndpoint,
     baseUrl,
     fullUrl: url,
+    isElectronPackaged,
   }, 'APIConfig');
   
   return url;
