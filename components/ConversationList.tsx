@@ -215,24 +215,16 @@ const ConversationList = ({
                         <p className="text-sm font-medium truncate">
                           {conversation.title}
                         </p>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          {getConversationTypeLabel(conversation) && (
-                            <>
-                              <span className="text-xs opacity-70 font-medium">
-                                {getConversationTypeLabel(conversation)}
-                              </span>
-                              <span className="text-xs opacity-70">•</span>
-                            </>
-                          )}
-                          <span className="text-xs opacity-70">
-                            {formatTimestamp(conversation.timestamp)}
-                          </span>
-                          <span className="text-xs opacity-70">
-                            •
-                          </span>
-                          <span className="text-xs opacity-70">
-                            {conversation.messageCount} msg
-                          </span>
+                        <div className="mt-1 overflow-hidden">
+                          <p className="text-xs opacity-70 truncate">
+                            {[
+                              getConversationTypeLabel(conversation),
+                              formatTimestamp(conversation.timestamp),
+                              `${conversation.messageCount} msg`
+                            ]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </p>
                         </div>
                       </div>
                     </div>
