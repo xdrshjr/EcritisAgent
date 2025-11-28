@@ -11,7 +11,7 @@ import { MessageSquare, Plus, Trash2, Bot, Sparkles } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
-import NewConversationDialog, { type ConversationType } from './NewConversationDialog';
+import NewConversationDialog from './NewConversationDialog';
 
 export type ConversationType = 'basic' | 'chatbot' | 'agent';
 
@@ -203,7 +203,7 @@ const ConversationList = ({
                     onKeyDown={(event) => handleKeyDown(event, conversation.id)}
                     tabIndex={0}
                     aria-label={`Conversation: ${conversation.title}`}
-                    className={`flex-1 px-3 py-2 text-left border-2 transition-all ${
+                    className={`flex-1 min-w-0 px-3 py-2 text-left border-2 transition-all ${
                       isActive
                         ? 'bg-primary text-primary-foreground border-border shadow-md'
                         : 'bg-card text-card-foreground border-border hover:bg-accent hover:text-accent-foreground shadow-sm hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none'
@@ -247,7 +247,7 @@ const ConversationList = ({
                     }
                     tabIndex={0}
                     aria-label={`${dict.chat.deleteConversationAriaLabel}: ${conversation.title}`}
-                    className={`px-2 py-2 border-2 transition-all flex items-center justify-center ${
+                    className={`flex-shrink-0 px-2 py-2 border-2 transition-all flex items-center justify-center ${
                       isActive
                         ? 'bg-primary text-primary-foreground border-border shadow-md hover:bg-primary/90'
                         : 'bg-card text-muted-foreground border-border shadow-sm hover:bg-destructive/10 hover:text-destructive hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none'
