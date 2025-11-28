@@ -217,7 +217,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
   }
 
   return (
-    <div className={cn('h-full flex flex-col overflow-hidden', className)}>
+    <div className={cn('h-full flex flex-col overflow-hidden p-2 chat-bot-manager-container', className)}>
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         <h2 className="text-lg font-semibold">{dict.settings.chatBots}</h2>

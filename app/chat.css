@@ -419,3 +419,8 @@ textarea {
   padding-bottom: 0.5rem !important;  /* 8px - half of original 16px */
 }
 
+/* ChatBotManager padding fix - ensure padding is not overridden by global reset */
+.chat-bot-manager-container {
+  padding: 0.5rem !important; /* 8px - same as ChatPanel for consistency */
+}
+
