@@ -56,7 +56,7 @@ const ChatInput = ({ onSend, disabled = false, placeholder = 'Type your message.
   };
 
   return (
-    <div className="flex items-end gap-2 p-4 border-t border-border bg-background">
+    <div className="flex items-end gap-2 px-3 py-4 border-t border-border bg-background">
       <textarea
         ref={inputRef}
         value={message}

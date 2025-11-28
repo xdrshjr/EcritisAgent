@@ -106,6 +106,13 @@ const ChatPanel = ({
       conversationId,
       messagesInConversation: conversationId ? (messagesMap.get(conversationId)?.length || 0) : 0,
     });
+    logger.debug('ChatPanel padding configuration', {
+      containerPadding: 'p-2 (8px with chat-panel-container class and !important in CSS)',
+      messagesAreaPadding: 'px-3 pt-3 pb-2 (12px/12px/8px with chat-panel-messages class and !important in CSS)',
+      toolbarPadding: 'px-3 (12px)',
+      inputPadding: 'px-3 py-4 (12px/16px)',
+      note: 'Using CSS classes with !important to override global reset styles. Padding reduced to half size.',
+    }, 'ChatPanel');
   }, [conversationId]);
 
   // Load available models on mount
@@ -894,9 +901,9 @@ const ChatPanel = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div className="h-full flex flex-col bg-background p-2 chat-panel-container">
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-1">
+      <div className="flex-1 overflow-y-auto px-3 pt-3 pb-2 space-y-1 chat-panel-messages">
         {messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             <div className="text-center">
@@ -957,7 +964,7 @@ const ChatPanel = ({
       </div>
 
       {/* Model Selector, MCP Tools, and Clear Buttons */}
-      <div className="px-6 py-3 border-t border-border/50 bg-background/50 flex items-center justify-between gap-4">
+      <div className="px-3 py-3 border-t border-border/50 bg-background/50 flex items-center justify-between gap-4">
         {/* Model Selector and MCP Tools - Left */}
         <div className="flex items-center gap-3">
           <label htmlFor="model-selector" className="text-sm text-muted-foreground font-medium whitespace-nowrap">
