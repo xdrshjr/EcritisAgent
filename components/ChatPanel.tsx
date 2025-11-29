@@ -878,7 +878,7 @@ const ChatPanel = ({
     }
   };
 
-  const handleMCPStateChange = (enabled: boolean, tools: MCPConfig[]) => {
+  const handleMCPStateChange = useCallback((enabled: boolean, tools: MCPConfig[]) => {
     logger.info('MCP state change callback triggered', {
       enabled,
       toolCount: tools.length,
@@ -898,7 +898,7 @@ const ChatPanel = ({
       mcpEnabled: enabled,
       enabledMCPToolsCount: tools.length,
     }, 'ChatPanel');
-  };
+  }, []);
 
   return (
     <div className="h-full flex flex-col bg-background p-2 chat-panel-container">

@@ -10,10 +10,10 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Hammer, ChevronDown, ChevronUp } from 'lucide-react';
 import { logger } from '@/lib/logger';
-import { loadMCPConfigs, toggleMCPEnabled, type MCPConfig } from '@/lib/mcpConfig';
+import { loadMCPConfigs, toggleMCPEnabled, getMCPConfigsUpdatedEventName, type MCPConfig } from '@/lib/mcpConfig';
 
 export interface MCPToolSelectorProps {
   disabled?: boolean;
@@ -27,58 +27,77 @@ const MCPToolSelector = ({ disabled = false, onMCPStateChange }: MCPToolSelector
   const [isLoading, setIsLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Load MCP configurations
+  const loadTools = useCallback(async () => {
+    setIsLoading(true);
+    logger.info('Loading MCP tools for selector', undefined, 'MCPToolSelector');
+    
+    try {
+      const configList = await loadMCPConfigs();
+      const tools = configList.mcpServers || [];
+      
+      logger.info('MCP tools loaded', {
+        totalTools: tools.length,
+        enabledTools: tools.filter(t => t.isEnabled).length,
+      }, 'MCPToolSelector');
+      
+      setMcpTools(tools);
+      
+      // Set master toggle based on whether any tools are enabled
+      const hasEnabledTools = tools.some(t => t.isEnabled);
+      const enabledTools = tools.filter(t => t.isEnabled);
+      
+      logger.info('MCP state determined', {
+        totalTools: tools.length,
+        enabledToolsCount: enabledTools.length,
+        hasEnabledTools,
+        toolStates: tools.map(t => ({ name: t.name, isEnabled: t.isEnabled })),
+      }, 'MCPToolSelector');
+      
+      setMcpMasterEnabled(hasEnabledTools);
+      
+      // Notify parent of state
+      if (onMCPStateChange) {
+        logger.info('Notifying parent of MCP state', {
+          masterEnabled: hasEnabledTools,
+          enabledToolsCount: enabledTools.length,
+          enabledToolNames: enabledTools.map(t => t.name),
+        }, 'MCPToolSelector');
+        onMCPStateChange(hasEnabledTools, enabledTools);
+      } else {
+        logger.warn('onMCPStateChange callback not provided', undefined, 'MCPToolSelector');
+      }
+    } catch (error) {
+      logger.error('Failed to load MCP tools', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }, 'MCPToolSelector');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [onMCPStateChange]);
+
   // Load MCP configurations on mount
   useEffect(() => {
-    const loadTools = async () => {
-      setIsLoading(true);
-      logger.info('Loading MCP tools for selector', undefined, 'MCPToolSelector');
-      
-      try {
-        const configList = await loadMCPConfigs();
-        const tools = configList.mcpServers || [];
-        
-        logger.info('MCP tools loaded', {
-          totalTools: tools.length,
-          enabledTools: tools.filter(t => t.isEnabled).length,
-        }, 'MCPToolSelector');
-        
-        setMcpTools(tools);
-        
-        // Set master toggle based on whether any tools are enabled
-        const hasEnabledTools = tools.some(t => t.isEnabled);
-        const enabledTools = tools.filter(t => t.isEnabled);
-        
-        logger.info('MCP initial state determined', {
-          totalTools: tools.length,
-          enabledToolsCount: enabledTools.length,
-          hasEnabledTools,
-          toolStates: tools.map(t => ({ name: t.name, isEnabled: t.isEnabled })),
-        }, 'MCPToolSelector');
-        
-        setMcpMasterEnabled(hasEnabledTools);
-        
-        // Notify parent of initial state
-        if (onMCPStateChange) {
-          logger.info('Notifying parent of initial MCP state', {
-            masterEnabled: hasEnabledTools,
-            enabledToolsCount: enabledTools.length,
-            enabledToolNames: enabledTools.map(t => t.name),
-          }, 'MCPToolSelector');
-          onMCPStateChange(hasEnabledTools, enabledTools);
-        } else {
-          logger.warn('onMCPStateChange callback not provided during initialization', undefined, 'MCPToolSelector');
-        }
-      } catch (error) {
-        logger.error('Failed to load MCP tools', {
-          error: error instanceof Error ? error.message : 'Unknown error',
-        }, 'MCPToolSelector');
-      } finally {
-        setIsLoading(false);
-      }
+    loadTools();
+  }, [loadTools]);
+
+  // Listen for MCP configuration updates
+  useEffect(() => {
+    const eventName = getMCPConfigsUpdatedEventName();
+    logger.debug('Setting up MCP configs updated event listener', { eventName }, 'MCPToolSelector');
+    
+    const handleConfigUpdate = () => {
+      logger.info('MCP configuration updated event received, reloading tools', undefined, 'MCPToolSelector');
+      loadTools();
     };
     
-    loadTools();
-  }, []);
+    window.addEventListener(eventName, handleConfigUpdate);
+    
+    return () => {
+      logger.debug('Removing MCP configs updated event listener', { eventName }, 'MCPToolSelector');
+      window.removeEventListener(eventName, handleConfigUpdate);
+    };
+  }, [loadTools]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

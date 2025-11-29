@@ -6,9 +6,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bot } from 'lucide-react';
+import { Bot, Settings as SettingsIcon } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import ChatBotManager from './ChatBotManager';
+import MCPSettingsPanel from './MCPSettingsPanel';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -17,7 +18,7 @@ interface SettingsContainerProps {
   className?: string;
 }
 
-type SettingsSection = 'chat-bots';
+type SettingsSection = 'chat-bots' | 'mcp';
 
 interface SettingsMenuItem {
   id: SettingsSection;
@@ -39,6 +40,11 @@ const SettingsContainer = ({ className }: SettingsContainerProps) => {
       id: 'chat-bots',
       label: dict.settings.chatBots,
       icon: <Bot className="w-4 h-4" />,
+    },
+    {
+      id: 'mcp',
+      label: dict.settings.mcp,
+      icon: <SettingsIcon className="w-4 h-4" />,
     },
   ];
 
@@ -90,6 +96,7 @@ const SettingsContainer = ({ className }: SettingsContainerProps) => {
       {/* Right Content Area - 75% */}
       <main className="flex-1 h-full overflow-hidden">
         {activeSection === 'chat-bots' && <ChatBotManager className="h-full" />}
+        {activeSection === 'mcp' && <MCPSettingsPanel className="h-full" />}
       </main>
     </div>
   );

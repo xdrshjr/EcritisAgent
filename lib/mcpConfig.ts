@@ -23,6 +23,41 @@ export interface MCPConfigList {
 }
 
 const MCP_CONFIG_KEY = 'docaimaster_mcp_configs';
+const MCP_CONFIGS_UPDATED_EVENT = 'mcp-configs-updated';
+
+/**
+ * Get the event name for MCP configs updated event
+ */
+export const getMCPConfigsUpdatedEventName = (): string => {
+  return MCP_CONFIGS_UPDATED_EVENT;
+};
+
+/**
+ * Emit a browser event to notify listeners that MCP configs have changed
+ * Safe in Electron and browser environments; no-op on server
+ */
+const emitMCPConfigsUpdatedEvent = (configs: MCPConfigList): void => {
+  if (typeof window === 'undefined') {
+    logger.debug('Skipping MCP configs updated event emit on non-browser environment', undefined, 'MCPConfig');
+    return;
+  }
+
+  try {
+    const detail = {
+      mcpServersCount: configs.mcpServers.length,
+      enabledCount: configs.mcpServers.filter(m => m.isEnabled).length,
+    };
+
+    logger.info('Emitting MCP configuration updated event', detail, 'MCPConfig');
+
+    const event = new CustomEvent(MCP_CONFIGS_UPDATED_EVENT, { detail });
+    window.dispatchEvent(event);
+  } catch (error) {
+    logger.error('Failed to emit MCP configuration updated event', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 'MCPConfig');
+  }
+};
 
 /**
  * Check if running in Electron environment
@@ -112,14 +147,9 @@ export const loadMCPConfigs = async (): Promise<MCPConfigList> => {
   try {
     let configList: MCPConfigList;
     
-    // First, try to load from Python backend
-    const backendConfigs = await tryLoadFromPythonBackend();
-    if (backendConfigs && backendConfigs.mcpServers.length > 0) {
-      logger.info('Using MCP configurations from Python backend', {
-        count: backendConfigs.mcpServers.length,
-      }, 'MCPConfig');
-      configList = backendConfigs;
-    } else if (isElectron()) {
+    // Priority: Electron IPC > Python backend > localStorage
+    // In Electron environment, prefer Electron IPC to avoid unnecessary API calls
+    if (isElectron()) {
       // Use Electron IPC to load from file system
       logger.debug('Loading MCP configs from Electron file system', undefined, 'MCPConfig');
       const result = await (window as any).electronAPI.loadMCPConfigs();
@@ -130,25 +160,45 @@ export const loadMCPConfigs = async (): Promise<MCPConfigList> => {
         }, 'MCPConfig');
         configList = result.data;
       } else {
-        logger.warn('Failed to load MCP configs from Electron, using defaults', {
+        logger.warn('Failed to load MCP configs from Electron, trying Python backend', {
           error: result.error,
         }, 'MCPConfig');
-        configList = getDefaultMCPConfigs();
+        
+        // Fallback to Python backend if Electron IPC fails
+        const backendConfigs = await tryLoadFromPythonBackend();
+        if (backendConfigs && backendConfigs.mcpServers.length > 0) {
+          logger.info('Using MCP configurations from Python backend (fallback)', {
+            count: backendConfigs.mcpServers.length,
+          }, 'MCPConfig');
+          configList = backendConfigs;
+        } else {
+          logger.info('No configs from backend, using defaults', undefined, 'MCPConfig');
+          configList = getDefaultMCPConfigs();
+        }
       }
     } else {
-      // Use localStorage for browser
-      logger.debug('Loading MCP configs from localStorage', undefined, 'MCPConfig');
-      const stored = localStorage.getItem(MCP_CONFIG_KEY);
-      
-      if (stored) {
-        const parsed = JSON.parse(stored) as MCPConfigList;
-        logger.success('MCP configurations loaded from localStorage', {
-          count: parsed.mcpServers.length,
+      // Browser environment: try Python backend first, then localStorage
+      const backendConfigs = await tryLoadFromPythonBackend();
+      if (backendConfigs && backendConfigs.mcpServers.length > 0) {
+        logger.info('Using MCP configurations from Python backend', {
+          count: backendConfigs.mcpServers.length,
         }, 'MCPConfig');
-        configList = parsed;
+        configList = backendConfigs;
       } else {
-        logger.info('No stored MCP configurations found, using defaults', undefined, 'MCPConfig');
-        configList = getDefaultMCPConfigs();
+        // Use localStorage for browser
+        logger.debug('Loading MCP configs from localStorage', undefined, 'MCPConfig');
+        const stored = localStorage.getItem(MCP_CONFIG_KEY);
+        
+        if (stored) {
+          const parsed = JSON.parse(stored) as MCPConfigList;
+          logger.success('MCP configurations loaded from localStorage', {
+            count: parsed.mcpServers.length,
+          }, 'MCPConfig');
+          configList = parsed;
+        } else {
+          logger.info('No stored MCP configurations found, using defaults', undefined, 'MCPConfig');
+          configList = getDefaultMCPConfigs();
+        }
       }
     }
 
@@ -203,10 +253,13 @@ export const loadMCPConfigs = async (): Promise<MCPConfigList> => {
       }));
 
       // Save the updated configuration to ensure persistence
+      // Use a flag to prevent event emission during load to avoid infinite loops
       logger.debug('Saving MCP configurations with all servers disabled', {
         totalCount: configList.mcpServers.length,
       }, 'MCPConfig');
-      const saveResult = await saveMCPConfigs(configList);
+      
+      // Save without emitting event to prevent infinite loops during initialization
+      const saveResult = await saveMCPConfigsWithoutEvent(configList);
       
       if (saveResult.success) {
         logger.success('MCP configurations saved with all servers disabled', {
@@ -305,6 +358,64 @@ const syncToPythonBackend = async (configs: MCPConfigList): Promise<void> => {
 };
 
 /**
+ * Save MCP configurations to storage without emitting event
+ * Used internally to prevent infinite loops during initialization
+ */
+const saveMCPConfigsWithoutEvent = async (configs: MCPConfigList): Promise<{ success: boolean; error?: string }> => {
+  logger.info('Saving MCP configurations (silent mode)', {
+    count: configs.mcpServers.length,
+  }, 'MCPConfig');
+
+  try {
+    let saveResult: { success: boolean; error?: string } = { success: false };
+    
+    if (isElectron()) {
+      // Use Electron IPC to save to file system
+      logger.debug('Saving MCP configs to Electron file system (silent)', undefined, 'MCPConfig');
+      const result = await (window as any).electronAPI.saveMCPConfigs(configs);
+      
+      if (result.success) {
+        logger.success('MCP configurations saved to Electron (silent)', {
+          count: configs.mcpServers.length,
+        }, 'MCPConfig');
+      } else {
+        logger.error('Failed to save MCP configs to Electron', {
+          error: result.error,
+        }, 'MCPConfig');
+      }
+      
+      saveResult = result;
+    } else {
+      // Use localStorage for browser
+      logger.debug('Saving MCP configs to localStorage (silent)', undefined, 'MCPConfig');
+      localStorage.setItem(MCP_CONFIG_KEY, JSON.stringify(configs));
+      
+      logger.success('MCP configurations saved to localStorage (silent)', {
+        count: configs.mcpServers.length,
+      }, 'MCPConfig');
+      
+      saveResult = { success: true };
+    }
+    
+    // Additionally sync to Python backend (but don't emit event)
+    syncToPythonBackend(configs).catch(err => {
+      logger.debug('Background sync to Python backend failed (non-critical)', {
+        error: err instanceof Error ? err.message : 'Unknown error',
+      }, 'MCPConfig');
+    });
+    
+    // Don't emit event in silent mode
+    return saveResult;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Failed to save MCP configurations', {
+      error: errorMessage,
+    }, 'MCPConfig');
+    return { success: false, error: errorMessage };
+  }
+};
+
+/**
  * Save MCP configurations to storage
  */
 export const saveMCPConfigs = async (configs: MCPConfigList): Promise<{ success: boolean; error?: string }> => {
@@ -349,6 +460,11 @@ export const saveMCPConfigs = async (configs: MCPConfigList): Promise<{ success:
         error: err instanceof Error ? err.message : 'Unknown error',
       }, 'MCPConfig');
     });
+    
+    // Emit event to notify listeners
+    if (saveResult.success) {
+      emitMCPConfigsUpdatedEvent(configs);
+    }
     
     return saveResult;
   } catch (error) {
@@ -684,5 +800,86 @@ export const generateMCPJsonConfig = (mcp: MCPConfig): string => {
   }
 
   return JSON.stringify(config, null, 2);
+};
+
+/**
+ * Parse MCP configuration from JSON format
+ * Converts JSON structure to MCPConfigList
+ */
+export const parseMCPConfigFromJson = (json: any): MCPConfigList => {
+  logger.info('Parsing MCP configuration from JSON', undefined, 'MCPConfig');
+
+  try {
+    if (!json || typeof json !== 'object') {
+      throw new Error('Invalid JSON structure');
+    }
+
+    if (!json.mcpServers || typeof json.mcpServers !== 'object') {
+      throw new Error('mcpServers field is required and must be an object');
+    }
+
+    const mcpServers: MCPConfig[] = [];
+    const currentTime = new Date().toISOString();
+
+    for (const [name, config] of Object.entries(json.mcpServers)) {
+      if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+        logger.warn('Skipping invalid MCP server config', { name }, 'MCPConfig');
+        continue;
+      }
+
+      const mcpConfig = config as any;
+
+      // Validate required fields
+      if (!mcpConfig.command || typeof mcpConfig.command !== 'string') {
+        logger.warn('Skipping MCP server with invalid command', { name }, 'MCPConfig');
+        continue;
+      }
+
+      if (!mcpConfig.args || !Array.isArray(mcpConfig.args)) {
+        logger.warn('Skipping MCP server with invalid args', { name }, 'MCPConfig');
+        continue;
+      }
+
+      // Build MCP config
+      const mcp: MCPConfig = {
+        id: generateMCPId(),
+        name: name,
+        command: mcpConfig.command,
+        args: mcpConfig.args.map((arg: any) => String(arg)),
+        env: mcpConfig.env && typeof mcpConfig.env === 'object' && !Array.isArray(mcpConfig.env)
+          ? Object.fromEntries(
+              Object.entries(mcpConfig.env).map(([key, value]) => [key, String(value)])
+            )
+          : undefined,
+        isEnabled: false, // New configs are disabled by default
+        createdAt: currentTime,
+        updatedAt: currentTime,
+      };
+
+      // Validate the config
+      const validation = validateMCPConfig(mcp);
+      if (!validation.valid) {
+        logger.warn('Skipping invalid MCP config', { name, error: validation.error }, 'MCPConfig');
+        continue;
+      }
+
+      mcpServers.push(mcp);
+      logger.debug('Parsed MCP server config', { name, command: mcp.command }, 'MCPConfig');
+    }
+
+    logger.success('MCP configuration parsed successfully', {
+      count: mcpServers.length,
+    }, 'MCPConfig');
+
+    return {
+      mcpServers,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Failed to parse MCP configuration from JSON', {
+      error: errorMessage,
+    }, 'MCPConfig');
+    throw new Error(`Failed to parse MCP configuration: ${errorMessage}`);
+  }
 };
 
