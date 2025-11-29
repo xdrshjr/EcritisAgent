@@ -462,6 +462,13 @@ def chat():
         mcp_enabled = data.get('mcpEnabled', False)  # Check if MCP is enabled
         mcp_tools = data.get('mcpTools', [])  # Get enabled MCP tools
         
+        # Debug: Log extracted system prompt
+        app.logger.debug('Extracted system prompt from request', extra={
+            'hasSystemPrompt': bool(system_prompt),
+            'systemPromptLength': len(system_prompt) if system_prompt else 0,
+            'systemPromptPreview': system_prompt[:100] + '...' if system_prompt and len(system_prompt) > 100 else system_prompt if system_prompt else None,
+        })
+        
         # Debug: Log extracted MCP data
         app.logger.debug('Extracted MCP configuration from request', extra={
             'mcpEnabled_raw': data.get('mcpEnabled'),
@@ -521,9 +528,10 @@ def chat():
         default_system_prompt = 'You are a helpful AI assistant for DocAIMaster, an AI-powered document editing and validation tool. You help users with document-related questions, provide guidance on using the tool, and assist with document editing tasks. Be concise, friendly, and professional.'
         system_content = system_prompt if system_prompt else default_system_prompt
         
-        app.logger.debug('System message prepared', extra={
+        app.logger.info('System message prepared', extra={
             'usingCustomPrompt': bool(system_prompt),
             'systemPromptLength': len(system_content),
+            'systemPromptPreview': system_content[:150] + '...' if len(system_content) > 150 else system_content,
         })
         
         system_message = {
@@ -750,6 +758,38 @@ def chat():
                             app.logger.info('[MCP] MCP tool execution workflow completed, proceeding to LLM for final answer generation')
                         else:
                             app.logger.info('[MCP] LLM analysis determined no tools needed for this query')
+                
+                # Log final prompts that will be sent to LLM
+                final_messages = payload.get('messages', [])
+                system_prompts = [msg.get('content', '') for msg in final_messages if msg.get('role') == 'system']
+                user_prompts = [msg.get('content', '') for msg in final_messages if msg.get('role') == 'user']
+                
+                app.logger.info('=' * 80)
+                app.logger.info('[LLM Request] Final prompts to be sent to LLM')
+                app.logger.info('=' * 80)
+                
+                # Log system prompts
+                if system_prompts:
+                    for idx, system_prompt in enumerate(system_prompts, 1):
+                        app.logger.info(f'[LLM Request] System Prompt #{idx} (length: {len(system_prompt)}):')
+                        app.logger.info(f'[LLM Request] {system_prompt}')
+                else:
+                    app.logger.warning('[LLM Request] No system prompt found in messages')
+                
+                # Log user prompts
+                if user_prompts:
+                    app.logger.info(f'[LLM Request] User Prompts (total: {len(user_prompts)}):')
+                    for idx, user_prompt in enumerate(user_prompts, 1):
+                        app.logger.info(f'[LLM Request] User Prompt #{idx} (length: {len(user_prompt)}):')
+                        app.logger.info(f'[LLM Request] {user_prompt}')
+                else:
+                    app.logger.warning('[LLM Request] No user prompts found in messages')
+                
+                app.logger.info('=' * 80)
+                app.logger.info(f'[LLM Request] Total messages count: {len(final_messages)}')
+                app.logger.info(f'[LLM Request] Model: {payload.get("model", "unknown")}')
+                app.logger.info(f'[LLM Request] Endpoint: {endpoint}')
+                app.logger.info('=' * 80)
                 
                 app.logger.info('Starting LLM API streaming request')
                 
