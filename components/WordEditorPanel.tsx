@@ -12,7 +12,7 @@ import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
-import Image from '@tiptap/extension-image';
+import { EnhancedImage } from '@/lib/imageExtension';
 import { Highlight } from '@/lib/highlightExtension';
 import { highlightTextInEditor, clearAllHighlights, getSeverityColor, scrollToHighlightByIssueId } from '@/lib/highlightUtils';
 import { 
@@ -33,6 +33,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import ImageInsertDialog from './ImageInsertDialog';
+import ImageEditorPanel from './ImageEditorPanel';
 import { logger } from '@/lib/logger';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
@@ -67,6 +68,9 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
   const [dragActive, setDragActive] = useState(false);
   const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string }>>([]);
   const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
+  const [selectedImageNode, setSelectedImageNode] = useState<{ pos: number; attrs: { src: string; alt?: string; width?: number | string; height?: number | string; align?: 'left' | 'center' | 'right' } } | null>(null);
+  const [imageElementPosition, setImageElementPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const editorContentRef = useRef<HTMLDivElement>(null);
 
   // Generate default placeholder content
   const getDefaultEditorContent = () => {
@@ -141,7 +145,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
       }),
       TextStyle,
       Color,
-      Image.configure({
+      EnhancedImage.configure({
         inline: true,
         allowBase64: true,
         HTMLAttributes: {
@@ -164,11 +168,77 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
         class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-xl focus:outline-none max-w-none p-6 min-h-full',
       },
       handleClick: (view, pos, event) => {
-        // Check if clicking on a highlight mark
         const { state } = view;
         const { doc } = state;
-        const clickedNode = doc.nodeAt(pos);
         
+        // Check if clicking directly on an image node
+        const clickedNode = doc.nodeAt(pos);
+        if (clickedNode && clickedNode.type.name === 'image') {
+          logger.info('Image clicked', { pos, src: clickedNode.attrs.src?.substring(0, 50) }, 'WordEditorPanel');
+          const imageData = {
+            pos,
+            attrs: {
+              src: clickedNode.attrs.src,
+              alt: clickedNode.attrs.alt,
+              width: clickedNode.attrs.width,
+              height: clickedNode.attrs.height,
+              align: clickedNode.attrs.align || 'center',
+            },
+          };
+          setSelectedImageNode(imageData);
+          // Find the image element in DOM and get its position
+          setTimeout(() => {
+            updateImageElementPosition(clickedNode.attrs.src);
+          }, 0);
+          // Set selection to the image node
+          const tr = state.tr;
+          tr.setSelection(state.selection.constructor.near(doc.resolve(pos)));
+          view.dispatch(tr);
+          return true;
+        }
+        
+        // Also check if clicking on an image element in the DOM
+        const target = event.target as HTMLElement;
+        if (target && (target.tagName === 'IMG' || target.closest('img'))) {
+          const imgElement = target.tagName === 'IMG' ? target : target.closest('img') as HTMLImageElement;
+          if (imgElement && imgElement.classList.contains('editor-image')) {
+            // Find the image node in the document
+            let foundPos = -1;
+            let foundNode = null;
+            
+            doc.descendants((node, nodePos) => {
+              if (node.type.name === 'image' && node.attrs.src === imgElement.src) {
+                foundNode = node;
+                foundPos = nodePos;
+                return false;
+              }
+            });
+            
+            if (foundNode && foundPos !== -1) {
+              logger.info('Image clicked (via DOM)', { pos: foundPos, src: foundNode.attrs.src?.substring(0, 50) }, 'WordEditorPanel');
+              const imageData = {
+                pos: foundPos,
+                attrs: {
+                  src: foundNode.attrs.src,
+                  alt: foundNode.attrs.alt,
+                  width: foundNode.attrs.width,
+                  height: foundNode.attrs.height,
+                  align: foundNode.attrs.align || 'center',
+                },
+              };
+              setSelectedImageNode(imageData);
+              // Get image element position
+              updateImageElementPosition(imgElement);
+              // Set selection to the image node
+              const tr = state.tr;
+              tr.setSelection(state.selection.constructor.near(doc.resolve(foundPos)));
+              view.dispatch(tr);
+              return true;
+            }
+          }
+        }
+        
+        // Check if clicking on a highlight mark
         if (clickedNode && clickedNode.marks) {
           const highlightMark = clickedNode.marks.find(mark => mark.type.name === 'highlight');
           
@@ -178,6 +248,12 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
             onHighlightClick?.(issueId, chunkIndex);
             return true;
           }
+        }
+        
+        // Clear image selection if clicking elsewhere
+        if (selectedImageNode) {
+          setSelectedImageNode(null);
+          setImageElementPosition(null);
         }
         
         return false;
@@ -328,6 +404,86 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
       editor?.destroy();
     };
   }, [editor]);
+
+  // Update image element position for positioning the editor panel
+  const updateImageElementPosition = useCallback((srcOrElement: string | HTMLImageElement) => {
+    if (!editorContentRef.current) {
+      return;
+    }
+
+    let imgElement: HTMLImageElement | null = null;
+
+    if (typeof srcOrElement === 'string') {
+      // Find by src
+      const images = editorContentRef.current.querySelectorAll('.editor-image, img');
+      images.forEach((img) => {
+        if (img instanceof HTMLImageElement && img.src === srcOrElement) {
+          imgElement = img;
+        }
+      });
+    } else {
+      imgElement = srcOrElement;
+    }
+
+    if (imgElement && editorContentRef.current) {
+      const editorRect = editorContentRef.current.getBoundingClientRect();
+      const imgRect = imgElement.getBoundingClientRect();
+      
+      setImageElementPosition({
+        top: imgRect.top - editorRect.top + editorContentRef.current.scrollTop - 64, // 64px for panel height + margin
+        left: imgRect.left - editorRect.left + (imgRect.width / 2),
+        width: imgRect.width,
+      });
+      
+      logger.debug('Image element position updated', {
+        top: imgRect.top - editorRect.top,
+        left: imgRect.left - editorRect.left,
+        width: imgRect.width,
+      }, 'WordEditorPanel');
+    }
+  }, []);
+
+  // Add edit icon to images on mount and update
+  useEffect(() => {
+    if (!editor || !editorContentRef.current) {
+      return;
+    }
+
+    const addEditIconsToImages = () => {
+      const images = editorContentRef.current?.querySelectorAll('.editor-image, img');
+      images?.forEach((img) => {
+        if (!img.hasAttribute('data-edit-icon-added')) {
+          img.setAttribute('data-edit-icon-added', 'true');
+          img.setAttribute('title', 'Click to edit image');
+          logger.debug('Edit icon indicator added to image', undefined, 'WordEditorPanel');
+        }
+      });
+    };
+
+    // Add icons initially
+    addEditIconsToImages();
+
+    // Handler for editor update events
+    const handleUpdate = () => {
+      setTimeout(addEditIconsToImages, 100);
+      // Update image position if an image is selected
+      if (selectedImageNode) {
+        setTimeout(() => {
+          updateImageElementPosition(selectedImageNode.attrs.src);
+        }, 100);
+      }
+    };
+
+    // Add icons when editor updates
+    editor.on('update', handleUpdate);
+
+    return () => {
+      // Remove event listener
+      if (editor && typeof editor.off === 'function') {
+        editor.off('update', handleUpdate);
+      }
+    };
+  }, [editor, selectedImageNode, updateImageElementPosition]);
 
   useEffect(() => {
     // Notify parent when editor is ready and has content
@@ -569,11 +725,114 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
     logger.info('Inserting image into editor', { imageUrl: imageUrl.substring(0, 100) }, 'WordEditorPanel');
     
-    // Insert image at current cursor position
-    editor.chain().focus().setImage({ src: imageUrl }).run();
+    // Insert image at current cursor position with default alignment
+    editor.chain().focus().setImage({ src: imageUrl, align: 'center' }).run();
     
     logger.success('Image inserted successfully', undefined, 'WordEditorPanel');
   }, [editor]);
+
+  // Handle image editing functions
+  const handleImageZoomIn = useCallback(() => {
+    if (!editor || !selectedImageNode) {
+      return;
+    }
+
+    const currentWidth = selectedImageNode.attrs.width;
+    const numericWidth = typeof currentWidth === 'number' 
+      ? currentWidth 
+      : typeof currentWidth === 'string' && !currentWidth.endsWith('%')
+        ? parseInt(currentWidth, 10) || 300
+        : 300;
+    
+    const newWidth = Math.min(numericWidth + 50, 2000);
+    editor.chain().focus().updateImage({ width: newWidth }).run();
+    
+    // Update selected image node
+    const updatedNode = {
+      ...selectedImageNode,
+      attrs: {
+        ...selectedImageNode.attrs,
+        width: newWidth,
+      },
+    };
+    setSelectedImageNode(updatedNode);
+    
+    // Update position after image size changes
+    setTimeout(() => {
+      updateImageElementPosition(selectedImageNode.attrs.src);
+    }, 50);
+    
+    logger.debug('Image zoomed in', { width: newWidth, pos: selectedImageNode.pos }, 'WordEditorPanel');
+  }, [editor, selectedImageNode, updateImageElementPosition]);
+
+  const handleImageZoomOut = useCallback(() => {
+    if (!editor || !selectedImageNode) {
+      return;
+    }
+
+    const currentWidth = selectedImageNode.attrs.width;
+    const numericWidth = typeof currentWidth === 'number' 
+      ? currentWidth 
+      : typeof currentWidth === 'string' && !currentWidth.endsWith('%')
+        ? parseInt(currentWidth, 10) || 300
+        : 300;
+    
+    const newWidth = Math.max(numericWidth - 50, 50);
+    editor.chain().focus().updateImage({ width: newWidth }).run();
+    
+    // Update selected image node
+    const updatedNode = {
+      ...selectedImageNode,
+      attrs: {
+        ...selectedImageNode.attrs,
+        width: newWidth,
+      },
+    };
+    setSelectedImageNode(updatedNode);
+    
+    // Update position after image size changes
+    setTimeout(() => {
+      updateImageElementPosition(selectedImageNode.attrs.src);
+    }, 50);
+    
+    logger.debug('Image zoomed out', { width: newWidth, pos: selectedImageNode.pos }, 'WordEditorPanel');
+  }, [editor, selectedImageNode, updateImageElementPosition]);
+
+  const handleImageAlignChange = useCallback((align: 'left' | 'center' | 'right') => {
+    if (!editor || !selectedImageNode) {
+      return;
+    }
+
+    editor.chain().focus().updateImage({ align }).run();
+    
+    // Update selected image node
+    const updatedNode = {
+      ...selectedImageNode,
+      attrs: {
+        ...selectedImageNode.attrs,
+        align,
+      },
+    };
+    setSelectedImageNode(updatedNode);
+    
+    // Update position after alignment changes
+    setTimeout(() => {
+      updateImageElementPosition(selectedImageNode.attrs.src);
+    }, 50);
+    
+    logger.info('Image alignment changed', { align, pos: selectedImageNode.pos }, 'WordEditorPanel');
+  }, [editor, selectedImageNode, updateImageElementPosition]);
+
+  const handleImageDelete = useCallback(() => {
+    if (!editor || !selectedImageNode) {
+      return;
+    }
+
+    logger.info('Deleting image', { pos: selectedImageNode.pos, src: selectedImageNode.attrs.src?.substring(0, 50) }, 'WordEditorPanel');
+    editor.chain().focus().deleteImage().run();
+    setSelectedImageNode(null);
+    logger.success('Image deleted successfully', undefined, 'WordEditorPanel');
+  }, [editor, selectedImageNode]);
 
   const handleOpenImageDialog = useCallback(() => {
     logger.info('Opening image insert dialog', undefined, 'WordEditorPanel');
@@ -790,11 +1049,18 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
       {/* Editor Content */}
       <div 
+        ref={editorContentRef}
         className={`flex-1 overflow-auto relative ${dragActive ? 'ring-4 ring-primary' : ''}`}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
+        onClick={(e) => {
+          // Clear image selection if clicking on editor content (not on image)
+          if (e.target instanceof HTMLElement && !e.target.closest('.editor-image') && !e.target.closest('.image-editor-panel')) {
+            setSelectedImageNode(null);
+          }
+        }}
       >
         {/* Drag and Drop Hint Overlay - Only shows when dragging */}
         {dragActive && (
@@ -812,6 +1078,22 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
         )}
 
         <EditorContent editor={editor} className="h-full" />
+
+        {/* Image Editor Panel - Shows when image is selected */}
+        {selectedImageNode && imageElementPosition && (
+          <ImageEditorPanel
+            imageNode={selectedImageNode}
+            onZoomIn={handleImageZoomIn}
+            onZoomOut={handleImageZoomOut}
+            onAlignChange={handleImageAlignChange}
+            onDelete={handleImageDelete}
+            onClose={() => {
+              setSelectedImageNode(null);
+              setImageElementPosition(null);
+            }}
+            position={imageElementPosition}
+          />
+        )}
       </div>
 
       {/* Hidden File Input */}

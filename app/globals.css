@@ -339,6 +339,40 @@ body {
   margin: 1em auto;
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.ProseMirror .editor-image:hover,
+.ProseMirror img:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Image edit indicator - shows on hover */
+.ProseMirror .editor-image::after,
+.ProseMirror img::after {
+  content: '✎';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  color: var(--foreground);
+}
+
+.ProseMirror .editor-image:hover::after,
+.ProseMirror img:hover::after {
+  opacity: 1;
 }
 
 .ProseMirror .editor-image[data-inline="true"],
@@ -346,6 +380,64 @@ body {
   display: inline-block;
   margin: 0 0.25em;
   vertical-align: middle;
+}
+
+/* Image alignment styles */
+.ProseMirror .editor-image[data-align="left"],
+.ProseMirror img[data-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.ProseMirror .editor-image[data-align="center"],
+.ProseMirror img[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.ProseMirror .editor-image[data-align="right"],
+.ProseMirror img[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+/* Image editor panel styles */
+.image-editor-panel {
+  animation: fadeIn 0.2s ease-out;
+  min-width: fit-content;
+  max-width: 90%;
+  margin: 0 auto;
+}
+
+/* Image edit button overlay */
+.ProseMirror .editor-image-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.ProseMirror .editor-image-wrapper:hover .image-edit-button {
+  opacity: 1;
+}
+
+.image-edit-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 6px;
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.image-edit-button:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 /* Highlight mark styles for document validation */
