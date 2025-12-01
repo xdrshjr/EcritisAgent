@@ -2222,6 +2222,7 @@ def image_service_search():
         data = request.get_json() or {}
         search_query = data.get('query', '')
         per_page = data.get('perPage', 3)
+        page = data.get('page', 1)
         service_id = data.get('serviceId')
         
         if not search_query or not isinstance(search_query, str) or not search_query.strip():
@@ -2239,9 +2240,18 @@ def image_service_search():
         except (ValueError, TypeError):
             per_page = 3
         
+        # Validate page
+        try:
+            page = int(page)
+            if page < 1:
+                page = 1
+        except (ValueError, TypeError):
+            page = 1
+        
         app.logger.info(f'[ImageService] Processing image search request', extra={
             'query': search_query,
             'perPage': per_page,
+            'page': page,
             'serviceId': service_id or 'default'
         })
         
@@ -2328,13 +2338,15 @@ def image_service_search():
             search_params = {
                 'query': search_query.strip(),
                 'per_page': per_page,
+                'page': page,
                 'client_id': selected_api_key
             }
             
             app.logger.debug(f'[ImageService] Calling Unsplash API', extra={
                 'url': unsplash_api_url,
                 'query': search_query,
-                'perPage': per_page
+                'perPage': per_page,
+                'page': page
             })
             
             response = requests.get(unsplash_api_url, params=search_params, timeout=10)
@@ -2350,16 +2362,20 @@ def image_service_search():
             
             result_data = response.json()
             results = result_data.get('results', [])
+            total = result_data.get('total', 0)
+            total_pages = result_data.get('total_pages', 1)
             
             app.logger.info(f'[ImageService] Unsplash search completed', extra={
                 'query': search_query,
                 'resultCount': len(results),
-                'total': result_data.get('total', 0)
+                'total': total,
+                'totalPages': total_pages,
+                'currentPage': page
             })
             
             # Format results
             images = []
-            for idx, photo in enumerate(results[:per_page]):
+            for idx, photo in enumerate(results):
                 image_data = {
                     'id': photo.get('id', f'unsplash_{idx}'),
                     'url': photo.get('urls', {}).get('regular', photo.get('urls', {}).get('small', '')),
@@ -2371,13 +2387,18 @@ def image_service_search():
             duration = (datetime.now() - start_time).total_seconds()
             app.logger.info(f'[ImageService] Image search completed in {duration:.2f}s', extra={
                 'query': search_query,
-                'imageCount': len(images)
+                'imageCount': len(images),
+                'page': page,
+                'totalPages': total_pages
             })
             
             return jsonify({
                 'success': True,
                 'images': images,
                 'count': len(images),
+                'total': total,
+                'totalPages': total_pages,
+                'page': page,
                 'query': search_query,
                 'service': selected_service.get('name')
             })

@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@tiptap/extension-color": "^3.10.5",
+    "@tiptap/extension-image": "^3.11.1",
     "@tiptap/extension-text-align": "^3.10.5",
     "@tiptap/extension-text-style": "^3.10.5",
     "@tiptap/extension-underline": "^3.10.5",

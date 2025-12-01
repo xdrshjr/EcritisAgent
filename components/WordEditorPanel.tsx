@@ -5,13 +5,14 @@
 
 'use client';
 
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
+import Image from '@tiptap/extension-image';
 import { Highlight } from '@/lib/highlightExtension';
 import { highlightTextInEditor, clearAllHighlights, getSeverityColor, scrollToHighlightByIssueId } from '@/lib/highlightUtils';
 import { 
@@ -29,7 +30,9 @@ import {
   Undo,
   Redo,
   Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
+import ImageInsertDialog from './ImageInsertDialog';
 import { logger } from '@/lib/logger';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
@@ -63,6 +66,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
   const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string }>>([]);
+  const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
 
   // Generate default placeholder content
   const getDefaultEditorContent = () => {
@@ -137,6 +141,13 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
       }),
       TextStyle,
       Color,
+      Image.configure({
+        inline: true,
+        allowBase64: true,
+        HTMLAttributes: {
+          class: 'editor-image',
+        },
+      }),
       Highlight.configure({
         multicolor: true,
         HTMLAttributes: {},
@@ -550,6 +561,30 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
     onModelChange?.(modelId);
   };
 
+  const handleInsertImage = useCallback((imageUrl: string) => {
+    if (!editor) {
+      logger.warn('Editor not initialized, cannot insert image', undefined, 'WordEditorPanel');
+      return;
+    }
+
+    logger.info('Inserting image into editor', { imageUrl: imageUrl.substring(0, 100) }, 'WordEditorPanel');
+    
+    // Insert image at current cursor position
+    editor.chain().focus().setImage({ src: imageUrl }).run();
+    
+    logger.success('Image inserted successfully', undefined, 'WordEditorPanel');
+  }, [editor]);
+
+  const handleOpenImageDialog = useCallback(() => {
+    logger.info('Opening image insert dialog', undefined, 'WordEditorPanel');
+    setIsImageDialogOpen(true);
+  }, []);
+
+  const handleCloseImageDialog = useCallback(() => {
+    logger.info('Closing image insert dialog', undefined, 'WordEditorPanel');
+    setIsImageDialogOpen(false);
+  }, []);
+
   if (!editor) {
     return <div className="flex items-center justify-center h-full">Loading editor...</div>;
   }
@@ -711,6 +746,18 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
             <Redo className="w-4 h-4" />
           </button>
 
+          {/* Insert Image Button */}
+          <div className="w-px h-6 bg-border mx-2" />
+          <button
+            onClick={handleOpenImageDialog}
+            className="px-3 py-2 border-2 border-border bg-card transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm flex items-center gap-2"
+            aria-label={dict.docValidation.editorToolbar.insertImage}
+            title={dict.docValidation.editorToolbar.insertImage}
+          >
+            <ImageIcon className="w-4 h-4" />
+            <span className="text-sm font-medium">{dict.docValidation.editorToolbar.insertImage}</span>
+          </button>
+
           {/* Model Selector */}
           {availableModels.length > 0 && (
             <>
@@ -774,6 +821,13 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
         accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         onChange={handleFileInputChange}
         className="hidden"
+      />
+
+      {/* Image Insert Dialog */}
+      <ImageInsertDialog
+        isOpen={isImageDialogOpen}
+        onClose={handleCloseImageDialog}
+        onInsertImage={handleInsertImage}
       />
     </div>
   );
