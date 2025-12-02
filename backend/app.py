@@ -566,6 +566,7 @@ def chat():
             app.logger.info('[MCP] MCP tools enabled for this chat request', extra={
                 'tool_count': len(mcp_tools),
                 'tool_names': [t['name'] for t in mcp_tools],
+                'note': 'All MCP tools are available. LLM will analyze user query and decide which tools to call.',
             })
         
         # Make streaming request to LLM API
@@ -630,7 +631,11 @@ def chat():
                             llm_for_analysis = None
                         
                         # Analyze if tools are needed using LLM
-                        app.logger.info('[MCP] Calling LLM to analyze user intent and select tools')
+                        app.logger.info('[MCP] Calling LLM to analyze user intent and select tools', extra={
+                            'available_tool_count': len(tool_descriptions),
+                            'available_tools': [t['name'] for t in tool_descriptions],
+                            'user_message_preview': last_user_message[:100] if last_user_message else '',
+                        })
                         
                         tool_calls_to_make = analyze_user_query_for_tools(
                             last_user_message,

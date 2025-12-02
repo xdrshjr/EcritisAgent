@@ -6,14 +6,14 @@
         "tavily-mcp@latest"
       ],
       "command": "npx",
-      "createdAt": "2025-11-29T13:58:39.857Z",
+      "createdAt": "2025-12-02T12:29:47.956Z",
       "env": {
         "TAVILY_API_KEY": "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"
       },
-      "id": "mcp_1764424719857_pcd2fpr",
+      "id": "mcp_1764678587956_1xap7v2",
       "isEnabled": false,
       "name": "tavily-ai-tavily-mcp",
-      "updatedAt": "2025-11-29T21:58:52.089040"
+      "updatedAt": "2025-12-02T20:32:41.366274"
     },
     {
       "args": [
@@ -23,11 +23,11 @@
         "--max-content-length=2000"
       ],
       "command": "npx",
-      "createdAt": "2025-11-29T13:58:39.857Z",
-      "id": "mcp_1764424719858_0molw9z",
+      "createdAt": "2025-12-02T12:29:47.956Z",
+      "id": "mcp_1764678587956_t6z7pcj",
       "isEnabled": false,
       "name": "caiyili-baidu-search-mcp",
-      "updatedAt": "2025-11-29T13:58:39.857Z"
+      "updatedAt": "2025-12-02T12:29:48.063Z"
     }
   ]
 }

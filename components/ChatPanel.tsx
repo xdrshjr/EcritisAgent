@@ -327,6 +327,7 @@ const ChatPanel = ({
         mcpMasterEnabled: mcpEnabled,
         enabledToolsCount: enabledMCPTools.length,
         toolDetails: enabledMCPTools.map(t => ({ name: t.name, id: t.id })),
+        note: mcpEnabled ? 'All MCP tools are available. LLM will decide which tools to call based on user query.' : 'MCP tools disabled',
         conversationId,
         conversationType: conversation?.type || 'basic',
         hasSystemPrompt: !!systemPrompt,

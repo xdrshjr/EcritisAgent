@@ -1,22 +1,23 @@
 /**
  * MCP Settings Panel Component
- * Provides UI for configuring MCP servers via JSON and managing MCP tools
+ * Provides UI for configuring MCP servers via JSON and viewing MCP tools
  * Features:
  * - JSON configuration input area
- * - MCP tools list with individual toggles
+ * - MCP tools list (read-only display)
+ * - Auto-enable all MCP servers after configuration save
  * - Real-time updates after configuration save
  */
 
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Save, Power, PowerOff, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Save, Power, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import {
   loadMCPConfigs,
   saveMCPConfigs,
-  toggleMCPEnabled,
   parseMCPConfigFromJson,
+  toggleMCPEnabled,
   type MCPConfig,
   type MCPConfigList,
 } from '@/lib/mcpConfig';
@@ -38,7 +39,6 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
-  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
 
   // Load MCP configurations on mount
   useEffect(() => {
@@ -140,13 +140,73 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
         count: configList.mcpServers.length,
       }, 'MCPSettingsPanel');
 
-      setSuccess(dict.settings.mcpSaveSuccess);
+      // Automatically enable all MCP servers after saving configuration
+      logger.info('Auto-enabling all MCP servers after configuration save', {
+        totalCount: configList.mcpServers.length,
+      }, 'MCPSettingsPanel');
+
+      const enableResults: Array<{ id: string; name: string; success: boolean; error?: string }> = [];
+      
+      for (const mcp of configList.mcpServers) {
+        // Only enable if not already enabled
+        if (mcp.isEnabled) {
+          logger.debug('MCP server already enabled, skipping', { id: mcp.id, name: mcp.name }, 'MCPSettingsPanel');
+          enableResults.push({ id: mcp.id, name: mcp.name, success: true });
+          continue;
+        }
+
+        try {
+          logger.debug('Enabling MCP server', { id: mcp.id, name: mcp.name }, 'MCPSettingsPanel');
+          const toggleResult = await toggleMCPEnabled(mcp.id);
+          
+          if (toggleResult.success && toggleResult.isEnabled) {
+            logger.success('MCP server enabled successfully', {
+              id: mcp.id,
+              name: mcp.name,
+              isEnabled: toggleResult.isEnabled,
+            }, 'MCPSettingsPanel');
+            enableResults.push({ id: mcp.id, name: mcp.name, success: true });
+          } else {
+            logger.error('Failed to enable MCP server', {
+              id: mcp.id,
+              name: mcp.name,
+              error: toggleResult.error || 'Toggle returned disabled state',
+            }, 'MCPSettingsPanel');
+            enableResults.push({ id: mcp.id, name: mcp.name, success: false, error: toggleResult.error || 'Failed to enable' });
+          }
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+          logger.error('Exception while enabling MCP server', {
+            id: mcp.id,
+            name: mcp.name,
+            error: errorMessage,
+          }, 'MCPSettingsPanel');
+          enableResults.push({ id: mcp.id, name: mcp.name, success: false, error: errorMessage });
+        }
+      }
+
+      const successCount = enableResults.filter(r => r.success).length;
+      const failCount = enableResults.filter(r => !r.success).length;
+
+      logger.info('MCP servers auto-enable completed', {
+        totalCount: configList.mcpServers.length,
+        successCount,
+        failCount,
+        failedServers: enableResults.filter(r => !r.success).map(r => ({ name: r.name, error: r.error })),
+      }, 'MCPSettingsPanel');
+
+      if (failCount > 0) {
+        const failedNames = enableResults.filter(r => !r.success).map(r => r.name).join(', ');
+        setSuccess(`${dict.settings.mcpSaveSuccess}. ${successCount} server(s) enabled. ${failCount} server(s) failed to enable: ${failedNames}`);
+      } else {
+        setSuccess(`${dict.settings.mcpSaveSuccess}. All ${successCount} server(s) enabled automatically.`);
+      }
       
       // Reload configurations to update tool list
       await handleLoadMCPConfigs();
       
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(''), 3000);
+      // Clear success message after 5 seconds (longer for more detailed message)
+      setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : dict.settings.mcpSaveError;
       logger.error('Failed to save MCP configuration', {
@@ -158,52 +218,6 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
     }
   };
 
-  // Handle toggle MCP tool enabled/disabled
-  const handleToggleTool = async (toolId: string) => {
-    logger.info('Toggling MCP tool', { toolId }, 'MCPSettingsPanel');
-    
-    setTogglingIds(prev => new Set(prev).add(toolId));
-    setError('');
-    setSuccess('');
-
-    try {
-      const result = await toggleMCPEnabled(toolId);
-      
-      if (result.success) {
-        logger.success('MCP tool toggled successfully', {
-          toolId,
-          isEnabled: result.isEnabled,
-        }, 'MCPSettingsPanel');
-        
-        // Update local state
-        setMcpTools(prevTools =>
-          prevTools.map(tool =>
-            tool.id === toolId
-              ? { ...tool, isEnabled: result.isEnabled }
-              : tool
-          )
-        );
-      } else {
-        throw new Error(result.error || 'Failed to toggle MCP tool');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to toggle MCP tool';
-      logger.error('Failed to toggle MCP tool', {
-        error: errorMessage,
-        toolId,
-      }, 'MCPSettingsPanel');
-      setError(errorMessage);
-      
-      // Reload to sync state
-      await handleLoadMCPConfigs();
-    } finally {
-      setTogglingIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(toolId);
-        return newSet;
-      });
-    }
-  };
 
   return (
     <div className={cn('h-full flex flex-col overflow-hidden bg-background', className)}>
@@ -265,7 +279,7 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
             {dict.settings.mcpToolList}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {mcpTools.filter(t => t.isEnabled).length} of {mcpTools.length} tools enabled
+            {mcpTools.length} MCP server(s) configured
           </p>
         </div>
 
@@ -281,14 +295,10 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
         ) : (
           <div className="space-y-3">
             {mcpTools.map((tool) => {
-              const isToggling = togglingIds.has(tool.id);
               return (
                 <div
                   key={tool.id}
-                  className={cn(
-                    'p-4 bg-card border-2 border-border rounded-md shadow-sm hover:shadow-md transition-all',
-                    !tool.isEnabled && 'opacity-70'
-                  )}
+                  className="p-4 bg-card border-2 border-border rounded-md shadow-sm hover:shadow-md transition-all"
                 >
                   <div className="flex items-start justify-between gap-4">
                     {/* Tool Info */}
@@ -297,21 +307,15 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
                         <h4 className="text-md font-bold text-foreground truncate">
                           {tool.name}
                         </h4>
-                        {tool.isEnabled && !isToggling && (
+                        {tool.isEnabled && (
                           <span className="px-2 py-0.5 bg-green-600 text-white text-xs font-medium border border-border rounded flex items-center gap-1 flex-shrink-0">
                             <Power className="w-3 h-3" />
                             {dict.settings.mcpToolEnabled}
                           </span>
                         )}
-                        {!tool.isEnabled && !isToggling && (
+                        {!tool.isEnabled && (
                           <span className="px-2 py-0.5 bg-muted text-muted-foreground text-xs font-medium border border-border rounded flex-shrink-0">
                             {dict.settings.mcpToolDisabled}
-                          </span>
-                        )}
-                        {isToggling && (
-                          <span className="px-2 py-0.5 bg-yellow-600 text-white text-xs font-medium border border-border rounded flex items-center gap-1 flex-shrink-0">
-                            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            {tool.isEnabled ? 'Disabling...' : 'Enabling...'}
                           </span>
                         )}
                       </div>
@@ -336,27 +340,6 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
                           </div>
                         )}
                       </div>
-                    </div>
-
-                    {/* Toggle Switch */}
-                    <div className="flex-shrink-0">
-                      <button
-                        onClick={() => handleToggleTool(tool.id)}
-                        disabled={isToggling || isSaving}
-                        className={cn(
-                          'relative inline-flex h-8 w-14 items-center rounded-full border-2 border-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
-                          tool.isEnabled ? 'bg-green-600' : 'bg-muted'
-                        )}
-                        aria-label={tool.isEnabled ? 'Disable MCP tool' : 'Enable MCP tool'}
-                        title={tool.isEnabled ? 'Disable' : 'Enable'}
-                      >
-                        <span
-                          className={cn(
-                            'inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform',
-                            tool.isEnabled ? 'translate-x-7' : 'translate-x-1'
-                          )}
-                        />
-                      </button>
                     </div>
                   </div>
                 </div>
