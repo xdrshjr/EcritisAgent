@@ -671,11 +671,11 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
           dict.settings.imageServiceDeleteConfirmDescription || 
           `Are you sure you want to delete "${serviceToDelete?.name}"? This action cannot be undone.`
         }
-        confirmText={dict.settings.delete || 'Delete'}
-        cancelText={dict.settings.cancel || 'Cancel'}
+        confirmLabel={dict.settings.delete || 'Delete'}
+        cancelLabel={dict.settings.cancel || 'Cancel'}
         onConfirm={() => serviceToDelete && handleDelete(serviceToDelete)}
         onCancel={() => setServiceToDelete(null)}
-        confirmVariant="destructive"
+        isDestructive={true}
       />
     </div>
   );

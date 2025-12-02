@@ -102,21 +102,54 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
     const newWidth = Math.round((baseWidth * newScale) / 100);
     setCurrentWidth(newWidth);
     
-    // Update in editor
-    editor.chain().focus().updateImage({ width: newWidth }).run();
-    logger.debug('Image size updated', { width: newWidth, scale: newScale, nodePos }, 'ImageEditor');
+    // Update in editor using transaction API
+    const { state, dispatch } = editor.view;
+    const { tr } = state;
+    const node = state.doc.nodeAt(nodePos);
+    
+    if (node && node.type.name === 'image') {
+      const newAttrs = {
+        ...node.attrs,
+        width: newWidth,
+      };
+      tr.setNodeMarkup(nodePos, undefined, newAttrs);
+      dispatch(tr);
+      logger.debug('Image size updated', { width: newWidth, scale: newScale, nodePos }, 'ImageEditor');
+    }
   };
 
   const handleAlignChange = (newAlign: 'left' | 'center' | 'right') => {
     setCurrentAlign(newAlign);
-    editor.chain().focus().updateImage({ align: newAlign }).run();
-    logger.info('Image alignment changed', { align: newAlign, nodePos }, 'ImageEditor');
+    
+    // Update in editor using transaction API
+    const { state, dispatch } = editor.view;
+    const { tr } = state;
+    const node = state.doc.nodeAt(nodePos);
+    
+    if (node && node.type.name === 'image') {
+      const newAttrs = {
+        ...node.attrs,
+        align: newAlign,
+      };
+      tr.setNodeMarkup(nodePos, undefined, newAttrs);
+      dispatch(tr);
+      logger.info('Image alignment changed', { align: newAlign, nodePos }, 'ImageEditor');
+    }
   };
 
   const handleDelete = () => {
     logger.info('Deleting image', { nodePos, src: src.substring(0, 50) }, 'ImageEditor');
-    editor.chain().focus().deleteImage().run();
-    setIsEditing(false);
+    
+    // Delete image using transaction API
+    const { state, dispatch } = editor.view;
+    const { tr } = state;
+    const node = state.doc.nodeAt(nodePos);
+    
+    if (node && node.type.name === 'image') {
+      tr.delete(nodePos, nodePos + node.nodeSize);
+      dispatch(tr);
+      setIsEditing(false);
+    }
   };
 
   const handleMaximize = () => {
@@ -152,7 +185,6 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
 
   const imageStyle: React.CSSProperties = {
     width: typeof currentWidth === 'number' ? `${currentWidth}px` : currentWidth,
-    height: typeof currentHeight === 'number' ? `${currentHeight}px` : currentHeight,
     maxWidth: '100%',
     height: 'auto',
     display: 'block',

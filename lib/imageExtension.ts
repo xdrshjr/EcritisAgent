@@ -5,6 +5,7 @@
 
 import Image from '@tiptap/extension-image';
 import { mergeAttributes } from '@tiptap/core';
+import type { Transaction, EditorState } from 'prosemirror-state';
 import { logger } from './logger';
 
 export interface ImageOptions {
@@ -13,35 +14,24 @@ export interface ImageOptions {
   HTMLAttributes: Record<string, unknown>;
 }
 
-declare module '@tiptap/core' {
-  interface Commands<ReturnType> {
-    image: {
-      /**
-       * Set an image with optional attributes
-       */
-      setImage: (options: { 
-        src: string; 
-        alt?: string; 
-        title?: string;
-        width?: number | string;
-        height?: number | string;
-        align?: 'left' | 'center' | 'right';
-      }) => ReturnType;
-      /**
-       * Update image attributes
-       */
-      updateImage: (options: {
-        width?: number | string;
-        height?: number | string;
-        align?: 'left' | 'center' | 'right';
-      }) => ReturnType;
-      /**
-       * Delete current image
-       */
-      deleteImage: () => ReturnType;
-    };
-  }
+export interface SetImageOptions {
+  src: string;
+  alt?: string;
+  title?: string;
+  width?: number | string | null;
+  height?: number | string | null;
+  align?: 'left' | 'center' | 'right';
 }
+
+export interface UpdateImageOptions {
+  width?: number | string;
+  height?: number | string;
+  align?: 'left' | 'center' | 'right';
+}
+
+// Note: Type declarations for custom commands (updateImage, deleteImage) are omitted
+// to avoid conflicts with base @tiptap/extension-image types.
+// The code uses type assertions (as any) where these commands are called.
 
 /**
  * Enhanced Image Extension
@@ -163,7 +153,7 @@ export const EnhancedImage = Image.extend<ImageOptions>({
     return {
       ...this.parent?.(),
       setImage:
-        options =>
+        (options: SetImageOptions) =>
         ({ commands }) => {
           logger.debug('Setting image', { 
             src: options.src?.substring(0, 50),
@@ -184,8 +174,8 @@ export const EnhancedImage = Image.extend<ImageOptions>({
           });
         },
       updateImage:
-        options =>
-        ({ tr, state, dispatch }) => {
+        (options: UpdateImageOptions) =>
+        ({ tr, state, dispatch }: { tr: Transaction; state: EditorState; dispatch?: (tr: Transaction) => void }) => {
           const { selection } = state;
           const { $from } = selection;
           
@@ -241,7 +231,7 @@ export const EnhancedImage = Image.extend<ImageOptions>({
         },
       deleteImage:
         () =>
-        ({ tr, state, dispatch }) => {
+        ({ tr, state, dispatch }: { tr: Transaction; state: EditorState; dispatch?: (tr: Transaction) => void }) => {
           const { selection } = state;
           const { $from } = selection;
           

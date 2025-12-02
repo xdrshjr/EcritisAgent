@@ -12,6 +12,8 @@ import Underline from '@tiptap/extension-underline';
 import TextAlign from '@tiptap/extension-text-align';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
+import { TextSelection } from 'prosemirror-state';
+import type { Node } from 'prosemirror-model';
 import { EnhancedImage } from '@/lib/imageExtension';
 import { Highlight } from '@/lib/highlightExtension';
 import { highlightTextInEditor, clearAllHighlights, getSeverityColor, scrollToHighlightByIssueId } from '@/lib/highlightUtils';
@@ -192,7 +194,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
           }, 0);
           // Set selection to the image node
           const tr = state.tr;
-          tr.setSelection(state.selection.constructor.near(doc.resolve(pos)));
+          tr.setSelection(TextSelection.near(doc.resolve(pos)));
           view.dispatch(tr);
           return true;
         }
@@ -200,30 +202,37 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
         // Also check if clicking on an image element in the DOM
         const target = event.target as HTMLElement;
         if (target && (target.tagName === 'IMG' || target.closest('img'))) {
-          const imgElement = target.tagName === 'IMG' ? target : target.closest('img') as HTMLImageElement;
+          const imgElement = target.tagName === 'IMG' ? (target as HTMLImageElement) : (target.closest('img') as HTMLImageElement);
           if (imgElement && imgElement.classList.contains('editor-image')) {
             // Find the image node in the document
-            let foundPos = -1;
-            let foundNode = null;
-            
-            doc.descendants((node, nodePos) => {
-              if (node.type.name === 'image' && node.attrs.src === imgElement.src) {
-                foundNode = node;
-                foundPos = nodePos;
-                return false;
+            const result: { node: Node; pos: number } | null = (() => {
+              let foundPos = -1;
+              let foundNode: Node | null = null;
+              
+              doc.descendants((node, nodePos) => {
+                if (node.type.name === 'image' && node.attrs.src === imgElement.src) {
+                  foundNode = node;
+                  foundPos = nodePos;
+                  return false;
+                }
+              });
+              
+              if (foundNode && foundPos !== -1) {
+                return { node: foundNode, pos: foundPos };
               }
-            });
+              return null;
+            })();
             
-            if (foundNode && foundPos !== -1) {
-              logger.info('Image clicked (via DOM)', { pos: foundPos, src: foundNode.attrs.src?.substring(0, 50) }, 'WordEditorPanel');
+            if (result) {
+              logger.info('Image clicked (via DOM)', { pos: result.pos, src: result.node.attrs.src?.substring(0, 50) }, 'WordEditorPanel');
               const imageData = {
-                pos: foundPos,
+                pos: result.pos,
                 attrs: {
-                  src: foundNode.attrs.src,
-                  alt: foundNode.attrs.alt,
-                  width: foundNode.attrs.width,
-                  height: foundNode.attrs.height,
-                  align: foundNode.attrs.align || 'center',
+                  src: result.node.attrs.src,
+                  alt: result.node.attrs.alt,
+                  width: result.node.attrs.width,
+                  height: result.node.attrs.height,
+                  align: result.node.attrs.align || 'center',
                 },
               };
               setSelectedImageNode(imageData);
@@ -231,7 +240,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
               updateImageElementPosition(imgElement);
               // Set selection to the image node
               const tr = state.tr;
-              tr.setSelection(state.selection.constructor.near(doc.resolve(foundPos)));
+              tr.setSelection(TextSelection.near(doc.resolve(result.pos)));
               view.dispatch(tr);
               return true;
             }
@@ -726,7 +735,8 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
     logger.info('Inserting image into editor', { imageUrl: imageUrl.substring(0, 100) }, 'WordEditorPanel');
     
     // Insert image at current cursor position with default alignment
-    editor.chain().focus().setImage({ src: imageUrl, align: 'center' }).run();
+    // Type assertion needed because TypeScript doesn't recognize custom align property from EnhancedImage
+    editor.chain().focus().setImage({ src: imageUrl, align: 'center' } as any).run();
     
     logger.success('Image inserted successfully', undefined, 'WordEditorPanel');
   }, [editor]);
@@ -745,7 +755,8 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
         : 300;
     
     const newWidth = Math.min(numericWidth + 50, 2000);
-    editor.chain().focus().updateImage({ width: newWidth }).run();
+    // Type assertion needed because TypeScript doesn't recognize custom updateImage command from EnhancedImage
+    (editor.chain().focus() as any).updateImage({ width: newWidth }).run();
     
     // Update selected image node
     const updatedNode = {
@@ -778,7 +789,8 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
         : 300;
     
     const newWidth = Math.max(numericWidth - 50, 50);
-    editor.chain().focus().updateImage({ width: newWidth }).run();
+    // Type assertion needed because TypeScript doesn't recognize custom updateImage command from EnhancedImage
+    (editor.chain().focus() as any).updateImage({ width: newWidth }).run();
     
     // Update selected image node
     const updatedNode = {
@@ -803,7 +815,8 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
       return;
     }
 
-    editor.chain().focus().updateImage({ align }).run();
+    // Type assertion needed because TypeScript doesn't recognize custom updateImage command from EnhancedImage
+    (editor.chain().focus() as any).updateImage({ align }).run();
     
     // Update selected image node
     const updatedNode = {
@@ -829,7 +842,8 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
     }
 
     logger.info('Deleting image', { pos: selectedImageNode.pos, src: selectedImageNode.attrs.src?.substring(0, 50) }, 'WordEditorPanel');
-    editor.chain().focus().deleteImage().run();
+    // Type assertion needed because TypeScript doesn't recognize custom deleteImage command from EnhancedImage
+    (editor.chain().focus() as any).deleteImage().run();
     setSelectedImageNode(null);
     logger.success('Image deleted successfully', undefined, 'WordEditorPanel');
   }, [editor, selectedImageNode]);
