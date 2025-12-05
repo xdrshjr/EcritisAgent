@@ -182,7 +182,6 @@ class DocumentAgent:
                                         'match_type': best_match.get("match_type"),
                                         'relevance_score': best_match.get("relevance_score"),
                                     })
-                                    # Update the todo item with the correct paragraph_id
                                     refined_todo = {
                                         **todo_item,
                                         "args": {
