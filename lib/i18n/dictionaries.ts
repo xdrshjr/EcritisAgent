@@ -7,11 +7,11 @@ import { Locale } from './config';
 // English translations
 const en = {
   common: {
-    appName: 'DocAIMaster',
+    appName: 'EcritisAgent',
     appDescription: 'AI-powered document editing, modification, and validation tool',
   },
   header: {
-    title: 'DocAIMaster',
+    title: 'EcritisAgent',
     export: 'Export',
     menu: {
       task: 'Task',
@@ -19,6 +19,22 @@ const en = {
       info: 'Info',
       modelConfig: 'Basic Config',
       comingSoon: 'Coming soon...',
+    },
+    info: {
+      title: 'About EcritisAgent',
+      productName: 'Product Name',
+      productNameValue: 'EcritisAgent',
+      shortForm: 'Short form',
+      shortFormValue: 'Ecritis',
+      pronunciation: 'Pronunciation',
+      pronunciationValue: 'eh-KREE-tis AY-jent',
+      nameOrigin: 'Name Origin & Meaning',
+      nameOriginValue: 'French "écrit" (writing/written) + Greek "-is" (process/state) + "Agent" (AI assistant)',
+      translationEssence: 'Translation essence',
+      translationEssenceValue: '"Your intelligent writing agent"',
+      primarySlogan: 'Primary Slogan',
+      primarySloganValue: 'Where Writing Meets Intelligence',
+      close: 'Close',
     },
     language: {
       switchLanguage: 'Switch Language',
@@ -31,10 +47,10 @@ const en = {
     settings: 'Settings',
   },
   footer: {
-    copyright: '© 2025 DocAIMaster. All rights reserved.',
+    copyright: '© 2025 EcritisAgent. All rights reserved.',
   },
   container: {
-    welcomeTitle: 'Welcome to DocAIMaster',
+    welcomeTitle: 'Welcome to EcritisAgent',
     welcomeDescription: 'Your AI-powered document assistant',
   },
   docValidation: {
@@ -270,11 +286,11 @@ const en = {
 // Chinese translations
 const zh = {
   common: {
-    appName: 'DocAIMaster',
+    appName: 'EcritisAgent',
     appDescription: 'AI驱动的文档编辑、修改和验证工具',
   },
   header: {
-    title: 'DocAIMaster',
+    title: 'EcritisAgent',
     export: '导出',
     menu: {
       task: '任务',
@@ -282,6 +298,22 @@ const zh = {
       info: '信息',
       modelConfig: '基础配置',
       comingSoon: '即将推出...',
+    },
+    info: {
+      title: '关于 EcritisAgent',
+      productName: '产品名称',
+      productNameValue: 'EcritisAgent',
+      shortForm: '简称',
+      shortFormValue: 'Ecritis',
+      pronunciation: '发音',
+      pronunciationValue: 'eh-KREE-tis AY-jent',
+      nameOrigin: '名称来源与含义',
+      nameOriginValue: '法语 "écrit"（写作/书面）+ 希腊语 "-is"（过程/状态）+ "Agent"（AI助手）',
+      translationEssence: '翻译精髓',
+      translationEssenceValue: '"您的智能写作助手"',
+      primarySlogan: '主要标语',
+      primarySloganValue: 'Where Writing Meets Intelligence',
+      close: '关闭',
     },
     language: {
       switchLanguage: '切换语言',
@@ -294,10 +326,10 @@ const zh = {
     settings: '设置',
   },
   footer: {
-    copyright: '© 2025 DocAIMaster. 保留所有权利。',
+    copyright: '© 2025 EcritisAgent. 保留所有权利。',
   },
   container: {
-    welcomeTitle: '欢迎使用 DocAIMaster',
+    welcomeTitle: '欢迎使用 EcritisAgent',
     welcomeDescription: '您的AI文档助手',
   },
   docValidation: {

@@ -1,7 +1,7 @@
 {
-  "appId": "com.aidocmaster.app",
-  "productName": "AIDocMaster",
-  "copyright": "Copyright © 2025 AIDocMaster",
+  "appId": "com.ecritisagent.app",
+  "productName": "EcritisAgent",
+  "copyright": "Copyright © 2025 EcritisAgent",
   "directories": {
     "output": "dist",
     "buildResources": "build"
@@ -32,14 +32,14 @@
     ],
     "icon": "app/favicon.ico",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
-    "publisherName": "AIDocMaster"
+    "publisherName": "EcritisAgent"
   },
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "AIDocMaster",
+    "shortcutName": "EcritisAgent",
     "artifactName": "${productName}-${version}-Setup.${ext}",
     "deleteAppDataOnUninstall": false,
     "installerIcon": "app/favicon.ico",

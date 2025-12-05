@@ -13,6 +13,7 @@ import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { cn } from '@/lib/utils';
 import type { Task } from './Taskbar';
+import InfoDialog from './InfoDialog';
 
 interface HeaderProps {
   showExport?: boolean;
@@ -42,6 +43,7 @@ const MenuBar = ({ tasks, onTaskChange }: MenuBarProps) => {
   const { locale } = useLanguage();
   const dict = getDictionary(locale);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
   const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   useEffect(() => {
@@ -67,7 +69,13 @@ const MenuBar = ({ tasks, onTaskChange }: MenuBarProps) => {
 
   const handleMenuClick = (menuId: string) => {
     logger.info('Menu clicked', { menuId, wasOpen: openMenu === menuId }, 'MenuBar');
-    setOpenMenu(openMenu === menuId ? null : menuId);
+    if (menuId === 'info') {
+      logger.info('Info menu clicked, opening info dialog', undefined, 'MenuBar');
+      setIsInfoDialogOpen(true);
+      setOpenMenu(null);
+    } else {
+      setOpenMenu(openMenu === menuId ? null : menuId);
+    }
   };
 
   const handleTaskMenuItemClick = (taskId: string) => {
@@ -145,14 +153,16 @@ const MenuBar = ({ tasks, onTaskChange }: MenuBarProps) => {
           {dict.header.menu.info}
           <ChevronDown className="w-3 h-3" />
         </button>
-        {openMenu === 'info' && (
-          <div className="absolute top-full left-0 mt-1 bg-background border-2 border-border shadow-lg z-50 min-w-[180px]">
-            <div className="px-4 py-2 text-sm text-muted-foreground">
-              {dict.header.menu.comingSoon}
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Info Dialog */}
+      <InfoDialog
+        isOpen={isInfoDialogOpen}
+        onClose={() => {
+          logger.debug('Info dialog closed from MenuBar', undefined, 'MenuBar');
+          setIsInfoDialogOpen(false);
+        }}
+      />
     </div>
   );
 };

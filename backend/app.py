@@ -1,5 +1,5 @@
 """
-Flask Backend for AIDocMaster
+Flask Backend for EcritisAgent
 Handles all LLM API calls with comprehensive logging and error handling
 """
 
@@ -35,9 +35,9 @@ def setup_logging():
     if getattr(sys, 'frozen', False):
         # Running as packaged executable
         if sys.platform == 'win32':
-            log_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster' / 'logs'
+            log_dir = Path(os.environ.get('APPDATA', '')) / 'EcritisAgent' / 'logs'
         else:
-            log_dir = Path.home() / '.config' / 'AIDocMaster' / 'logs'
+            log_dir = Path.home() / '.config' / 'EcritisAgent' / 'logs'
     else:
         # Running in development
         log_dir = Path(__file__).parent / 'logs'
@@ -123,9 +123,9 @@ class ConfigLoader:
         elif getattr(sys, 'frozen', False):
             # Running as packaged executable (non-Electron)
             if sys.platform == 'win32':
-                config_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster'
+                config_dir = Path(os.environ.get('APPDATA', '')) / 'EcritisAgent'
             else:
-                config_dir = Path.home() / '.config' / 'AIDocMaster'
+                config_dir = Path.home() / '.config' / 'EcritisAgent'
             app.logger.info(f'Using packaged app config path: {config_dir}', extra={
                 'source': 'APPDATA or home directory',
                 'path': str(config_dir)
@@ -403,7 +403,7 @@ def health_check():
     app.logger.debug('Health check requested')
     return jsonify({
         'status': 'ok',
-        'service': 'AIDocMaster Flask Backend',
+        'service': 'EcritisAgent Flask Backend',
         'timestamp': datetime.utcnow().isoformat(),
         'log_file': str(log_file_path)
     })
@@ -525,7 +525,7 @@ def chat():
         
         # Prepare system message
         # Use custom system prompt if provided, otherwise use default
-        default_system_prompt = 'You are a helpful AI assistant for DocAIMaster, an AI-powered document editing and validation tool. You help users with document-related questions, provide guidance on using the tool, and assist with document editing tasks. Be concise, friendly, and professional.'
+        default_system_prompt = 'You are a helpful AI assistant for EcritisAgent, an AI-powered document editing and validation tool. You help users with document-related questions, provide guidance on using the tool, and assist with document editing tasks. Be concise, friendly, and professional.'
         system_content = system_prompt if system_prompt else default_system_prompt
         
         app.logger.info('System message prepared', extra={
@@ -2277,9 +2277,9 @@ def mcp_configs():
             elif getattr(sys, 'frozen', False):
                 # Running as packaged executable (non-Electron)
                 if sys.platform == 'win32':
-                    config_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster'
+                    config_dir = Path(os.environ.get('APPDATA', '')) / 'EcritisAgent'
                 else:
-                    config_dir = Path.home() / '.config' / 'AIDocMaster'
+                    config_dir = Path.home() / '.config' / 'EcritisAgent'
             else:
                 # Running in development
                 config_dir = Path(__file__).parent.parent / 'userData'
@@ -2461,9 +2461,9 @@ def mcp_configs():
         elif getattr(sys, 'frozen', False):
             # Running as packaged executable (non-Electron)
             if sys.platform == 'win32':
-                config_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster'
+                config_dir = Path(os.environ.get('APPDATA', '')) / 'EcritisAgent'
             else:
-                config_dir = Path.home() / '.config' / 'AIDocMaster'
+                config_dir = Path.home() / '.config' / 'EcritisAgent'
         else:
             # Running in development
             config_dir = Path(__file__).parent.parent / 'userData'
@@ -2523,9 +2523,9 @@ def image_service_configs():
             elif getattr(sys, 'frozen', False):
                 # Running as packaged executable (non-Electron)
                 if sys.platform == 'win32':
-                    config_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster'
+                    config_dir = Path(os.environ.get('APPDATA', '')) / 'EcritisAgent'
                 else:
-                    config_dir = Path.home() / '.config' / 'AIDocMaster'
+                    config_dir = Path.home() / '.config' / 'EcritisAgent'
             else:
                 # Running in development
                 config_dir = Path(__file__).parent.parent / 'userData'
@@ -2665,9 +2665,9 @@ def image_service_configs():
         elif getattr(sys, 'frozen', False):
             # Running as packaged executable (non-Electron)
             if sys.platform == 'win32':
-                config_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster'
+                config_dir = Path(os.environ.get('APPDATA', '')) / 'EcritisAgent'
             else:
-                config_dir = Path.home() / '.config' / 'AIDocMaster'
+                config_dir = Path.home() / '.config' / 'EcritisAgent'
         else:
             # Running in development
             config_dir = Path(__file__).parent.parent / 'userData'
@@ -2763,9 +2763,9 @@ def image_service_search():
             config_dir = Path(electron_user_data)
         elif getattr(sys, 'frozen', False):
             if sys.platform == 'win32':
-                config_dir = Path(os.environ.get('APPDATA', '')) / 'AIDocMaster'
+                config_dir = Path(os.environ.get('APPDATA', '')) / 'EcritisAgent'
             else:
-                config_dir = Path.home() / '.config' / 'AIDocMaster'
+                config_dir = Path.home() / '.config' / 'EcritisAgent'
         else:
             config_dir = Path(__file__).parent.parent / 'userData'
         
@@ -3038,7 +3038,7 @@ if __name__ == '__main__':
     port = int(os.environ.get('FLASK_PORT', 5000))
     
     app.logger.info('=' * 80)
-    app.logger.info('Starting Flask Backend for AIDocMaster')
+    app.logger.info('Starting Flask Backend for EcritisAgent')
     app.logger.info(f'Port: {port}')
     app.logger.info(f'Environment: {"Production" if getattr(sys, "frozen", False) else "Development"}')
     app.logger.info(f'Python version: {sys.version}')

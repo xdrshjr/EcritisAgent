@@ -1,4 +1,4 @@
-# DocAIMaster
+# EcritisAgent
 
 > AI-powered document editing, modification, and validation tool
 
@@ -9,7 +9,7 @@
 
 ## Overview
 
-DocAIMaster is a sophisticated desktop application built with Next.js and React, designed to provide AI-powered document validation and editing capabilities. The application features a clean, elegant interface inspired by Apple's design language with a modern neo-brutalism aesthetic.
+EcritisAgent is a sophisticated desktop application built with Next.js and React, designed to provide AI-powered document validation and editing capabilities. The application features a clean, elegant interface inspired by Apple's design language with a modern neo-brutalism aesthetic.
 
 ## Features
 
@@ -44,7 +44,7 @@ DocAIMaster is a sophisticated desktop application built with Next.js and React,
 
 ```bash
 git clone <repository-url>
-cd AIDocMaster
+cd EcritisAgent
 ```
 
 2. Install dependencies:
@@ -107,8 +107,8 @@ npm run build:desktop
 ```
 
 Output files will be in the `dist` directory:
-- `AIDocMaster-{version}-Setup.exe` - NSIS installer
-- `AIDocMaster-{version}-Portable.exe` - Portable executable
+- `EcritisAgent-{version}-Setup.exe` - NSIS installer
+- `EcritisAgent-{version}-Portable.exe` - Portable executable
 
 For more details, see [Desktop Packaging Documentation](./docs/features/desktop-packaging.md).
 

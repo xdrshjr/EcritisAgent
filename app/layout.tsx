@@ -15,7 +15,7 @@ const spaceMono = {
 };
 
 export const metadata: Metadata = {
-  title: "DocAIMaster - AI Document Validation Tool",
+  title: "EcritisAgent - AI Document Validation Tool",
   description: "AI-powered document editing, modification, and validation tool",
 };
 

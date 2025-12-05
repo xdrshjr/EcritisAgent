@@ -1,5 +1,5 @@
 """
-MCP Client for AIDocMaster
+MCP Client for EcritisAgent
 Handles communication with MCP (Model Context Protocol) servers
 Executes tool calls and processes results
 """
@@ -345,7 +345,7 @@ class MCPClient:
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
                     "clientInfo": {
-                        "name": "AIDocMaster",
+                        "name": "EcritisAgent",
                         "version": "1.0.0"
                     }
                 }

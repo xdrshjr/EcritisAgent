@@ -125,7 +125,7 @@ function createWindow() {
         // Allow loading local resources in production
         webSecurity: true,
       },
-      title: 'AIDocMaster',
+      title: 'EcritisAgent',
       icon: path.join(__dirname, '../app/favicon.ico'),
       backgroundColor: '#ffffff',
       show: false, // Don't show until ready
