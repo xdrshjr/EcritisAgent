@@ -207,6 +207,34 @@ function verifyRequiredFiles() {
     }
   });
   
+  // Verify build directory and icon file
+  const buildDir = path.resolve('build');
+  const iconFile = path.join(buildDir, 'icon.ico');
+  const sourceIcon = path.resolve('public/logoEcritis.ico');
+  
+  logger.info('Checking build directory and icon file');
+  
+  if (!fs.existsSync(buildDir)) {
+    logger.warn('Build directory does not exist, creating it');
+    fs.mkdirSync(buildDir, { recursive: true });
+    logger.success('Build directory created');
+  }
+  
+  if (!fs.existsSync(iconFile)) {
+    logger.warn('Icon file not found in build directory');
+    
+    if (fs.existsSync(sourceIcon)) {
+      logger.info('Copying icon file from public directory to build directory');
+      fs.copyFileSync(sourceIcon, iconFile);
+      logger.success('Icon file copied to build directory');
+    } else {
+      logger.error(`Source icon file not found: ${sourceIcon}`);
+      missingFiles.push('build/icon.ico');
+    }
+  } else {
+    logger.success('Icon file exists in build directory');
+  }
+  
   if (missingFiles.length > 0) {
     throw new Error(`Missing required files: ${missingFiles.join(', ')}`);
   }

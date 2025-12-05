@@ -112,6 +112,43 @@ function createWindow() {
   logger.info('Window configuration', WINDOW_CONFIG);
 
   try {
+    // Determine icon path based on whether app is packaged or in development
+    let iconPath;
+    if (app.isPackaged) {
+      // In packaged mode, try multiple possible locations
+      // First, try the out directory (where Next.js copies public files)
+      const outIconPath = path.join(app.getAppPath(), '../out/logoEcritis.ico');
+      // Also try relative to __dirname
+      const relativeIconPath = path.join(__dirname, '../out/logoEcritis.ico');
+      
+      if (fs.existsSync(outIconPath)) {
+        iconPath = outIconPath;
+        logger.debug('Using packaged icon path from app path', { iconPath, isPackaged: true });
+      } else if (fs.existsSync(relativeIconPath)) {
+        iconPath = relativeIconPath;
+        logger.debug('Using packaged icon path from relative path', { iconPath, isPackaged: true });
+      } else {
+        // Fallback to app/favicon.ico
+        iconPath = path.join(app.getAppPath(), '../app/favicon.ico');
+        logger.debug('Using fallback icon path in packaged mode', { iconPath, isPackaged: true });
+      }
+    } else {
+      // In development mode, use public directory
+      iconPath = path.join(__dirname, '../public/logoEcritis.ico');
+      logger.debug('Using development icon path', { iconPath, isPackaged: false });
+    }
+
+    // Verify icon file exists
+    if (!fs.existsSync(iconPath)) {
+      logger.warn('Icon file not found at expected path, using fallback', {
+        iconPath,
+        fallback: path.join(__dirname, '../app/favicon.ico'),
+      });
+      iconPath = path.join(__dirname, '../app/favicon.ico');
+    } else {
+      logger.info('Icon file found successfully', { iconPath });
+    }
+
     mainWindow = new BrowserWindow({
       width: WINDOW_CONFIG.DEFAULT_WIDTH,
       height: WINDOW_CONFIG.DEFAULT_HEIGHT,
@@ -125,8 +162,8 @@ function createWindow() {
         // Allow loading local resources in production
         webSecurity: true,
       },
-      title: 'EcritisAgent',
-      icon: path.join(__dirname, '../app/favicon.ico'),
+      title: 'EcritisAgent - Where Writing Meets Intelligence',
+      icon: iconPath,
       backgroundColor: '#ffffff',
       show: false, // Don't show until ready
     });

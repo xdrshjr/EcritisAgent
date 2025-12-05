@@ -30,7 +30,7 @@
         ]
       }
     ],
-    "icon": "app/favicon.ico",
+    "icon": "build/icon.ico",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "publisherName": "EcritisAgent"
   },
@@ -42,9 +42,9 @@
     "shortcutName": "EcritisAgent",
     "artifactName": "${productName}-${version}-Setup.${ext}",
     "deleteAppDataOnUninstall": false,
-    "installerIcon": "app/favicon.ico",
-    "uninstallerIcon": "app/favicon.ico",
-    "installerHeaderIcon": "app/favicon.ico",
+    "installerIcon": "build/icon.ico",
+    "uninstallerIcon": "build/icon.ico",
+    "installerHeaderIcon": "build/icon.ico",
     "displayLanguageSelector": false,
     "language": "2052"
   },

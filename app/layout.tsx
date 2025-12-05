@@ -15,8 +15,16 @@ const spaceMono = {
 };
 
 export const metadata: Metadata = {
-  title: "EcritisAgent - AI Document Validation Tool",
+  title: "EcritisAgent - Where Writing Meets Intelligence",
   description: "AI-powered document editing, modification, and validation tool",
+  icons: {
+    icon: [
+      { url: "/logoEcritis.ico", type: "image/x-icon" },
+    ],
+    shortcut: "/logoEcritis.ico",
+    apple: "/logoEcritis.ico",
+  },
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({
