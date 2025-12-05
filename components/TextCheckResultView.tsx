@@ -23,7 +23,7 @@ interface TextCheckResultViewProps {
     left: number;
   };
   onClose: () => void;
-  editorContainerRef?: React.RefObject<HTMLDivElement>;
+  editorContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 const TextCheckResultView = ({

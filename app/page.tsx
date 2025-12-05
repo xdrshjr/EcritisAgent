@@ -17,6 +17,7 @@ import type { Conversation } from '@/components/ConversationList';
 import type { Message } from '@/components/ChatPanel';
 import type { ValidationResult } from '@/components/AIDocValidationContainer';
 import { loadAIChatState, saveAIChatState } from '@/lib/chatStorage';
+import type { DocumentParagraph } from '@/lib/documentUtils';
 
 export default function Home() {
   const { locale } = useLanguage();
@@ -33,8 +34,8 @@ export default function Home() {
   const [selectedModelId, setSelectedModelId] = useState<string | undefined>(undefined);
   
   // Document content getters/setters for agent
-  const [getDocumentContentFn, setGetDocumentContentFn] = useState<(() => string) | undefined>(undefined);
-  const [updateDocumentContentFn, setUpdateDocumentContentFn] = useState<((content: string) => void) | undefined>(undefined);
+  const [getDocumentContentFn, setGetDocumentContentFn] = useState<(() => string | DocumentParagraph[]) | undefined>(undefined);
+  const [updateDocumentContentFn, setUpdateDocumentContentFn] = useState<((content: string | DocumentParagraph[]) => void) | undefined>(undefined);
   
   // AI Chat state
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -310,7 +311,7 @@ export default function Home() {
     setSelectedModelId(modelId);
   };
   
-  const handleDocumentFunctionsReady = useCallback((getContent: () => string, updateContent: (content: string) => void) => {
+  const handleDocumentFunctionsReady = useCallback((getContent: () => string | DocumentParagraph[], updateContent: (content: string | DocumentParagraph[]) => void) => {
     logger.debug('Document functions received from editor', undefined, 'Home');
     setGetDocumentContentFn(() => getContent);
     setUpdateDocumentContentFn(() => updateContent);

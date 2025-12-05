@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { logger } from '@/lib/logger';
+import { type DocumentParagraph } from '@/lib/documentUtils';
 import WordEditorPanel, { type WordEditorPanelRef } from './WordEditorPanel';
 import ChatDialog from './ChatDialog';
 
@@ -10,7 +11,7 @@ interface AIAutoWriterContainerProps {
   onLeftPanelWidthChange: (width: number) => void;
   onDocumentFunctionsReady?: (
     getContent: () => string,
-    updateContent: (content: string) => void
+    updateContent: (content: string | DocumentParagraph[]) => void
   ) => void;
   onContentChange?: (content: string) => void;
 }
@@ -45,7 +46,7 @@ const AIAutoWriterContainer = ({
     return html;
   }, []);
 
-  const updateEditorContent = useCallback((content: string) => {
+  const updateEditorContent = useCallback((content: string | DocumentParagraph[]) => {
     if (!wordEditorRef.current) {
       logger.error('Word editor ref unavailable while updating content', undefined, 'AIAutoWriterContainer');
       return;
@@ -57,8 +58,18 @@ const AIAutoWriterContainer = ({
       return;
     }
 
-    editor.commands.setContent(content);
-    logger.info('Auto-writer editor content updated from AI chat', { length: content.length }, 'AIAutoWriterContainer');
+    if (Array.isArray(content)) {
+      // Update paragraphs individually
+      logger.info('Auto-writer updating document paragraphs', { paragraphCount: content.length }, 'AIAutoWriterContainer');
+      content.forEach(para => {
+        wordEditorRef.current?.updateParagraph(para.id, para.content);
+      });
+      logger.success('Auto-writer editor paragraphs updated from AI chat', { paragraphCount: content.length }, 'AIAutoWriterContainer');
+    } else {
+      // Legacy: Set HTML content directly
+      editor.commands.setContent(content);
+      logger.info('Auto-writer editor content updated from AI chat', { length: content.length }, 'AIAutoWriterContainer');
+    }
   }, []);
 
   const exposeDocumentFunctions = useCallback(() => {

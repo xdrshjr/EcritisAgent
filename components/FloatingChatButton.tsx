@@ -10,13 +10,14 @@ import { useState, useEffect, useRef } from 'react';
 import { MessageCircle, X } from 'lucide-react';
 import ChatDialog from './ChatDialog';
 import { logger } from '@/lib/logger';
+import type { DocumentParagraph } from '@/lib/documentUtils';
 
 export interface FloatingChatButtonProps {
   title?: string;
   welcomeMessage?: string;
   isVisible?: boolean;
-  getDocumentContent?: () => string;
-  updateDocumentContent?: (content: string) => void;
+  getDocumentContent?: () => string | DocumentParagraph[];
+  updateDocumentContent?: (content: string | DocumentParagraph[]) => void;
 }
 
 const FloatingChatButton = ({ 

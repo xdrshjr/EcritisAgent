@@ -57,9 +57,9 @@ interface AIDocValidationContainerProps {
   onLeftPanelWidthChange: (width: number) => void;
   selectedModelId?: string;
   onSelectedModelIdChange?: (modelId: string) => void;
-  getDocumentContent?: () => string;
-  updateDocumentContent?: (content: string) => void;
-  onDocumentFunctionsReady?: (getContent: () => string, updateContent: (content: string) => void) => void;
+  getDocumentContent?: () => string | DocumentParagraph[];
+  updateDocumentContent?: (content: string | DocumentParagraph[]) => void;
+  onDocumentFunctionsReady?: (getContent: () => string | DocumentParagraph[], updateContent: (content: string | DocumentParagraph[]) => void) => void;
 }
 
 const AIDocValidationContainer = ({ 
