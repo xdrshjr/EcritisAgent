@@ -36,10 +36,14 @@ import {
 } from 'lucide-react';
 import ImageInsertDialog from './ImageInsertDialog';
 import ImageEditorPanel from './ImageEditorPanel';
+import TextSelectionToolbar from './TextSelectionToolbar';
+import RewriteComparisonView from './RewriteComparisonView';
+import TextCheckResultView from './TextCheckResultView';
 import { logger } from '@/lib/logger';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { extractParagraphsFromHTML, paragraphsToHTML, updateParagraph, type DocumentParagraph } from '@/lib/documentUtils';
+import { processText, checkText, type TextProcessingType } from '@/lib/textProcessingApi';
 // @ts-expect-error - mammoth types may not be fully available
 import mammoth from 'mammoth/mammoth.browser';
 
@@ -77,6 +81,37 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
   const [imageElementPosition, setImageElementPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const editorContentRef = useRef<HTMLDivElement>(null);
   const [paragraphs, setParagraphs] = useState<DocumentParagraph[]>([]);
+  
+  // Text selection toolbar state
+  const [textSelection, setTextSelection] = useState<{
+    text: string;
+    from: number;
+    to: number;
+    position: { top: number; left: number };
+  } | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingType, setProcessingType] = useState<TextProcessingType | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  
+  // Text processing comparison state (for rewrite and polish)
+  const [textComparison, setTextComparison] = useState<{
+    originalText: string;
+    processedText: string;
+    type: 'rewrite' | 'polish';
+    position: { top: number; left: number };
+    from: number;
+    to: number;
+  } | null>(null);
+  
+  // Text check result state
+  const [checkResult, setCheckResult] = useState<{
+    issues: Array<{
+      type: 'grammar' | 'spelling' | 'style' | 'other';
+      message: string;
+      suggestion?: string;
+    }>;
+    position: { top: number; left: number };
+  } | null>(null);
 
   // Generate default placeholder content
   const getDefaultEditorContent = () => {
@@ -169,9 +204,82 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
     ],
     content: getDefaultEditorContent(),
     immediatelyRender: false,
-    editorProps: {
+      editorProps: {
       attributes: {
         class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-xl focus:outline-none max-w-none p-6 min-h-full',
+      },
+      handleDOMEvents: {
+        mouseup: (view, event) => {
+          // Show toolbar only after mouse is released (selection completed)
+          if (!editor || !editorContentRef.current) {
+            return false;
+          }
+
+          const { state } = view;
+          const { selection } = state;
+          const { from, to } = selection;
+          
+          // Check if there's a text selection (not empty)
+          if (from !== to) {
+            const selectedText = state.doc.textBetween(from, to, ' ');
+            
+            if (selectedText.trim().length > 0) {
+              try {
+                // Get selection position in viewport
+                const coords = editor.view.coordsAtPos(to); // Use 'to' position (end of selection)
+                const editorRect = editorContentRef.current.getBoundingClientRect();
+                
+                // Calculate toolbar width (approximately 300px for three buttons)
+                const toolbarWidth = 300;
+                
+                // Calculate desired position (center of toolbar)
+                let desiredLeft = coords.right - editorRect.left + 20; // Small offset to the right of selection end
+                
+                // Clamp position to stay within editor boundaries
+                // Since toolbar uses translateX(-50%), left is the center position
+                const minLeft = toolbarWidth / 2; // Minimum left position (half toolbar width from left edge)
+                const maxLeft = editorRect.width - toolbarWidth / 2; // Maximum left position (half toolbar width from right edge)
+                
+                const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
+                
+                const position = {
+                  top: coords.top - editorRect.top + editorContentRef.current.scrollTop - 50,
+                  left: clampedLeft,
+                };
+                
+                setTextSelection({
+                  text: selectedText,
+                  from,
+                  to,
+                  position,
+                });
+                
+                setIsSelecting(false);
+                
+                logger.debug('Text selection completed, showing toolbar', {
+                  textLength: selectedText.length,
+                  textPreview: selectedText.substring(0, 50),
+                  from,
+                  to,
+                  position,
+                }, 'WordEditorPanel');
+              } catch (error) {
+                logger.warn('Failed to get selection position', {
+                  error: error instanceof Error ? error.message : 'Unknown error',
+                }, 'WordEditorPanel');
+                setIsSelecting(false);
+              }
+            } else {
+              setIsSelecting(false);
+              setTextSelection(null);
+            }
+          } else {
+            setIsSelecting(false);
+            setTextSelection(null);
+          }
+          
+          return false; // Don't prevent default behavior
+        },
       },
       handleClick: (view, pos, event) => {
         const { state } = view;
@@ -284,6 +392,37 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
       }, 'WordEditorPanel');
       
       onContentChange?.(html);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      if (!editor || !editorContentRef.current) {
+        return;
+      }
+
+      const { state } = editor;
+      const { selection } = state;
+      const { from, to } = selection;
+      
+      // Only update selection state during selection, but don't show toolbar until mouseup
+      if (from !== to) {
+        const selectedText = state.doc.textBetween(from, to, ' ');
+        
+        if (selectedText.trim().length > 0) {
+          // Mark that we're in selection mode, but don't show toolbar yet
+          setIsSelecting(true);
+          logger.debug('Text selection in progress', {
+            textLength: selectedText.length,
+            textPreview: selectedText.substring(0, 50),
+            from,
+            to,
+          }, 'WordEditorPanel');
+        } else {
+          setIsSelecting(false);
+          setTextSelection(null);
+        }
+      } else {
+        setIsSelecting(false);
+        setTextSelection(null);
+      }
     },
   });
 
@@ -920,6 +1059,378 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
     setIsImageDialogOpen(false);
   }, []);
 
+  // Text processing handlers
+  const handlePolish = useCallback(async () => {
+    if (!editor || !textSelection || isProcessing) {
+      logger.debug('Polish text request skipped', {
+        hasEditor: !!editor,
+        hasTextSelection: !!textSelection,
+        isProcessing,
+      }, 'WordEditorPanel');
+      return;
+    }
+
+    logger.info('Polish text request initiated', {
+      textLength: textSelection.text.length,
+      textPreview: textSelection.text.substring(0, 100),
+      selectionFrom: textSelection.from,
+      selectionTo: textSelection.to,
+      modelId: selectedModelId || 'default',
+    }, 'WordEditorPanel');
+
+    setIsProcessing(true);
+    setProcessingType('polish');
+
+    try {
+      logger.debug('Calling processText API for polish', {
+        textLength: textSelection.text.length,
+        modelId: selectedModelId || 'default',
+      }, 'WordEditorPanel');
+
+      const result = await processText({
+        text: textSelection.text,
+        type: 'polish',
+        modelId: selectedModelId,
+      });
+
+      logger.debug('Polish text API response received', {
+        resultLength: result.result.length,
+      }, 'WordEditorPanel');
+
+      // Calculate position for comparison view
+      logger.debug('Calculating comparison view position for polish', undefined, 'WordEditorPanel');
+      const coords = editor.view.coordsAtPos(textSelection.from);
+      const editorRect = editorContentRef.current?.getBoundingClientRect();
+      
+      let position = { top: 0, left: 0 };
+      if (editorRect && editorContentRef.current) {
+        // Calculate comparison view width (max-w-2xl = 672px)
+        const comparisonWidth = 672;
+        
+        // Calculate desired position (center of comparison view)
+        const desiredLeft = coords.left - editorRect.left + (coords.right - coords.left) / 2;
+        
+        // Clamp position to stay within editor boundaries
+        // Since comparison view uses translateX(-50%), left is the center position
+        const minLeft = comparisonWidth / 2; // Minimum left position (half width from left edge)
+        const maxLeft = editorRect.width - comparisonWidth / 2; // Maximum left position (half width from right edge)
+        
+        const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
+        
+        position = {
+          top: coords.top - editorRect.top + editorContentRef.current.scrollTop + 30,
+          left: clampedLeft,
+        };
+      }
+
+      // Show comparison view
+      setTextComparison({
+        originalText: textSelection.text,
+        processedText: result.result,
+        type: 'polish',
+        position,
+        from: textSelection.from,
+        to: textSelection.to,
+      });
+
+      // Clear selection toolbar
+      setTextSelection(null);
+
+      logger.success('Text polish completed, showing comparison', {
+        originalLength: textSelection.text.length,
+        polishedLength: result.result.length,
+      }, 'WordEditorPanel');
+    } catch (error) {
+      logger.error('Failed to polish text', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        textLength: textSelection.text.length,
+        modelId: selectedModelId || 'default',
+      }, 'WordEditorPanel');
+    } finally {
+      setIsProcessing(false);
+      setProcessingType(null);
+    }
+  }, [editor, textSelection, isProcessing, selectedModelId]);
+
+  const handleRewrite = useCallback(async () => {
+    if (!editor || !textSelection || isProcessing) {
+      logger.debug('Rewrite text request skipped', {
+        hasEditor: !!editor,
+        hasTextSelection: !!textSelection,
+        isProcessing,
+      }, 'WordEditorPanel');
+      return;
+    }
+
+    logger.info('Rewrite text request initiated', {
+      textLength: textSelection.text.length,
+      textPreview: textSelection.text.substring(0, 100),
+      selectionFrom: textSelection.from,
+      selectionTo: textSelection.to,
+      modelId: selectedModelId || 'default',
+    }, 'WordEditorPanel');
+
+    setIsProcessing(true);
+    setProcessingType('rewrite');
+
+    try {
+      logger.debug('Calling processText API for rewrite', {
+        textLength: textSelection.text.length,
+        modelId: selectedModelId || 'default',
+      }, 'WordEditorPanel');
+
+      const result = await processText({
+        text: textSelection.text,
+        type: 'rewrite',
+        modelId: selectedModelId,
+      });
+
+      logger.debug('Rewrite text API response received', {
+        resultLength: result.result.length,
+      }, 'WordEditorPanel');
+
+      // Calculate position for comparison view
+      logger.debug('Calculating comparison view position for rewrite', undefined, 'WordEditorPanel');
+      const coords = editor.view.coordsAtPos(textSelection.from);
+      const editorRect = editorContentRef.current?.getBoundingClientRect();
+      
+      let position = { top: 0, left: 0 };
+      if (editorRect && editorContentRef.current) {
+        // Calculate comparison view width (max-w-2xl = 672px)
+        const comparisonWidth = 672;
+        
+        // Calculate desired position (center of comparison view)
+        const desiredLeft = coords.left - editorRect.left + (coords.right - coords.left) / 2;
+        
+        // Clamp position to stay within editor boundaries
+        // Since comparison view uses translateX(-50%), left is the center position
+        const minLeft = comparisonWidth / 2; // Minimum left position (half width from left edge)
+        const maxLeft = editorRect.width - comparisonWidth / 2; // Maximum left position (half width from right edge)
+        
+        const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
+        
+        position = {
+          top: coords.top - editorRect.top + editorContentRef.current.scrollTop + 30,
+          left: clampedLeft,
+        };
+      }
+
+      // Show comparison view
+      setTextComparison({
+        originalText: textSelection.text,
+        processedText: result.result,
+        type: 'rewrite',
+        position,
+        from: textSelection.from,
+        to: textSelection.to,
+      });
+
+      // Clear selection toolbar
+      setTextSelection(null);
+
+      logger.success('Text rewrite completed, showing comparison', {
+        originalLength: textSelection.text.length,
+        rewrittenLength: result.result.length,
+      }, 'WordEditorPanel');
+    } catch (error) {
+      logger.error('Failed to rewrite text', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        textLength: textSelection.text.length,
+        modelId: selectedModelId || 'default',
+      }, 'WordEditorPanel');
+    } finally {
+      setIsProcessing(false);
+      setProcessingType(null);
+    }
+  }, [editor, textSelection, isProcessing, selectedModelId]);
+
+  const handleCheck = useCallback(async () => {
+    if (!editor || !textSelection || isProcessing) {
+      logger.debug('Check text request skipped', {
+        hasEditor: !!editor,
+        hasTextSelection: !!textSelection,
+        isProcessing,
+      }, 'WordEditorPanel');
+      return;
+    }
+
+    logger.info('Check text request initiated', {
+      textLength: textSelection.text.length,
+      textPreview: textSelection.text.substring(0, 100),
+      selectionFrom: textSelection.from,
+      selectionTo: textSelection.to,
+      modelId: selectedModelId || 'default',
+    }, 'WordEditorPanel');
+
+    setIsProcessing(true);
+    setProcessingType('check');
+
+    try {
+      logger.debug('Calling checkText API', {
+        textLength: textSelection.text.length,
+        modelId: selectedModelId || 'default',
+      }, 'WordEditorPanel');
+
+      const result = await checkText(textSelection.text, selectedModelId);
+
+      logger.debug('Check text API response received', {
+        issueCount: result.issues.length,
+        issuesPreview: result.issues.slice(0, 3).map(issue => ({
+          type: issue.type,
+          messagePreview: issue.message.substring(0, 50),
+        })),
+      }, 'WordEditorPanel');
+
+      logger.success('Text check completed', {
+        issueCount: result.issues.length,
+      }, 'WordEditorPanel');
+
+      // Calculate position for check result view
+      logger.debug('Calculating check result view position', undefined, 'WordEditorPanel');
+      
+      const coords = editor.view.coordsAtPos(textSelection.from);
+      const editorRect = editorContentRef.current?.getBoundingClientRect();
+      
+      let position = { top: 0, left: 0 };
+      if (editorRect && editorContentRef.current) {
+        // Calculate check result view width (max-w-2xl = 672px)
+        const resultViewWidth = 672;
+        
+        // Calculate desired position (center of result view)
+        const desiredLeft = coords.left - editorRect.left + (coords.right - coords.left) / 2;
+        
+        // Clamp position to stay within editor boundaries
+        // Since result view uses translateX(-50%), left is the center position
+        const minLeft = resultViewWidth / 2; // Minimum left position (half width from left edge)
+        const maxLeft = editorRect.width - resultViewWidth / 2; // Maximum left position (half width from right edge)
+        
+        const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
+        
+        position = {
+          top: coords.top - editorRect.top + editorContentRef.current.scrollTop + 30,
+          left: clampedLeft,
+        };
+
+        logger.debug('Check result view position calculated', {
+          position,
+          editorRect: {
+            width: editorRect.width,
+            height: editorRect.height,
+          },
+          coords: {
+            left: coords.left,
+            top: coords.top,
+          },
+        }, 'WordEditorPanel');
+      } else {
+        logger.warn('Could not calculate check result view position', {
+          hasEditorRect: !!editorRect,
+          hasEditorContentRef: !!editorContentRef.current,
+        }, 'WordEditorPanel');
+      }
+
+      // Show check result view
+      logger.debug('Setting check result view', {
+        issueCount: result.issues.length,
+        position,
+      }, 'WordEditorPanel');
+
+      setCheckResult({
+        issues: result.issues,
+        position,
+      });
+
+      // Clear selection toolbar
+      setTextSelection(null);
+
+      logger.debug('Text selection cleared after check', undefined, 'WordEditorPanel');
+    } catch (error) {
+      logger.error('Failed to check text', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        textLength: textSelection.text.length,
+        modelId: selectedModelId || 'default',
+      }, 'WordEditorPanel');
+      
+      // Show error in check result view
+      logger.debug('Preparing error display in check result view', undefined, 'WordEditorPanel');
+      
+      const coords = editor.view.coordsAtPos(textSelection.from);
+      const editorRect = editorContentRef.current?.getBoundingClientRect();
+      
+      let position = { top: 0, left: 0 };
+      if (editorRect && editorContentRef.current) {
+        const resultViewWidth = 672;
+        const desiredLeft = coords.left - editorRect.left + (coords.right - coords.left) / 2;
+        const minLeft = resultViewWidth / 2;
+        const maxLeft = editorRect.width - resultViewWidth / 2;
+        const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
+        
+        position = {
+          top: coords.top - editorRect.top + editorContentRef.current.scrollTop + 30,
+          left: clampedLeft,
+        };
+
+        logger.debug('Error position calculated', { position }, 'WordEditorPanel');
+      }
+      
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      logger.debug('Setting error check result view', {
+        errorMessage: errorMessage.substring(0, 100),
+        position,
+      }, 'WordEditorPanel');
+      
+      setCheckResult({
+        issues: [{
+          type: 'other',
+          message: '检查失败，请稍后重试。',
+          suggestion: errorMessage,
+        }],
+        position,
+      });
+      
+      setTextSelection(null);
+    } finally {
+      logger.debug('Check text operation finished, resetting processing state', undefined, 'WordEditorPanel');
+      setIsProcessing(false);
+      setProcessingType(null);
+    }
+  }, [editor, textSelection, isProcessing, selectedModelId]);
+
+  const handleAcceptTextProcessing = useCallback(() => {
+    if (!editor || !textComparison) {
+      return;
+    }
+
+    logger.info(`Accepting ${textComparison.type}`, undefined, 'WordEditorPanel');
+
+    // Replace original text with processed version
+    editor
+      .chain()
+      .focus()
+      .setTextSelection({ from: textComparison.from, to: textComparison.to })
+      .insertContent(textComparison.processedText)
+      .run();
+
+    logger.success(`${textComparison.type === 'rewrite' ? 'Rewrite' : 'Polish'} accepted and applied`, undefined, 'WordEditorPanel');
+
+    // Clear comparison view
+    setTextComparison(null);
+  }, [editor, textComparison]);
+
+  const handleRejectTextProcessing = useCallback(() => {
+    if (!textComparison) {
+      return;
+    }
+
+    logger.info(`Rejecting ${textComparison.type}`, undefined, 'WordEditorPanel');
+    
+    // Just clear the comparison view, keep original text
+    setTextComparison(null);
+  }, [textComparison]);
+
   if (!editor) {
     return <div className="flex items-center justify-center h-full">Loading editor...</div>;
   }
@@ -1136,6 +1647,17 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
           if (e.target instanceof HTMLElement && !e.target.closest('.editor-image') && !e.target.closest('.image-editor-panel')) {
             setSelectedImageNode(null);
           }
+          // Clear text selection toolbar if clicking outside of it
+          if (e.target instanceof HTMLElement && !e.target.closest('.text-selection-toolbar') && !e.target.closest('.rewrite-comparison-view') && !e.target.closest('.text-check-result-view')) {
+            // Clear selection if clicking on empty space (not during selection)
+            if (!isSelecting) {
+              const selection = window.getSelection();
+              if (!selection || selection.toString().trim().length === 0) {
+                setTextSelection(null);
+                setIsSelecting(false);
+              }
+            }
+          }
         }}
       >
         {/* Drag and Drop Hint Overlay - Only shows when dragging */}
@@ -1168,6 +1690,41 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
               setImageElementPosition(null);
             }}
             position={imageElementPosition}
+          />
+        )}
+
+        {/* Text Selection Toolbar - Shows when text is selected */}
+        {textSelection && !textComparison && (
+          <TextSelectionToolbar
+            position={textSelection.position}
+            onPolish={handlePolish}
+            onRewrite={handleRewrite}
+            onCheck={handleCheck}
+            isProcessing={isProcessing}
+            processingType={processingType}
+            onClose={() => setTextSelection(null)}
+          />
+        )}
+
+        {/* Text Processing Comparison View - Shows after rewrite or polish */}
+        {textComparison && (
+          <RewriteComparisonView
+            originalText={textComparison.originalText}
+            processedText={textComparison.processedText}
+            type={textComparison.type}
+            position={textComparison.position}
+            onAccept={handleAcceptTextProcessing}
+            onReject={handleRejectTextProcessing}
+          />
+        )}
+
+        {/* Text Check Result View - Shows after check */}
+        {checkResult && (
+          <TextCheckResultView
+            issues={checkResult.issues}
+            position={checkResult.position}
+            onClose={() => setCheckResult(null)}
+            editorContainerRef={editorContentRef}
           />
         )}
       </div>
