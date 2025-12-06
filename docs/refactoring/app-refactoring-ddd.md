@@ -132,7 +132,7 @@ backend/
 - [x] 将 `app.py` 中的 `/api/agent-validation` 实现迁移到 `domains/agent/routes.py` ✅ (已完成)
 - [x] 将 `app.py` 中的 `/api/agents` 实现迁移到 `domains/agent/routes.py` ✅ (已完成)
 - [x] 将 `app.py` 中的 `/api/auto-writer-agent` 实现迁移到 `domains/agent/routes.py` ✅ (已完成)
-- [ ] 将 `app.py` 中的 `/api/model-configs` 实现迁移到 `domains/model/routes.py`
+- [x] 将 `app.py` 中的 `/api/model-configs` 实现迁移到 `domains/model/routes.py` ✅ (已完成)
 - [ ] 将 `app.py` 中的 `/api/mcp-configs` 实现迁移到 `domains/mcp/routes.py`
 - [ ] 将 `app.py` 中的 `/api/image-services/configs` 实现迁移到 `domains/image_service/routes.py`
 - [ ] 将 `app.py` 中的 `/api/image-services/search` 实现迁移到 `domains/image_service/routes.py`
@@ -242,6 +242,34 @@ backend/
 - ✅ 错误处理机制保持一致
 - ✅ Agent 模块导入路径处理正确
 
+#### Model Domain 迁移详情 ✅
+
+**完成时间**: 2024-12-19
+
+**迁移内容**:
+- ✅ 将 `/api/model-configs` 路由的完整实现（包括 GET 和 POST 方法）迁移到 `domains/model/routes.py`
+- ✅ 实现了模型配置的获取和保存功能
+- ✅ 支持模型配置的验证（必填字段检查）
+- ✅ 支持自动添加时间戳（createdAt、updatedAt）
+- ✅ 从 `app.py` 中删除了已迁移的路由定义
+- ✅ 通过 Flask `current_app.config` 访问 `config_loader`
+- ✅ 使用模块级别的 logger，所有日志都添加了 `[Model Domain]` 前缀以便识别
+
+**技术实现**:
+- 使用 Flask Blueprint 组织路由
+- 通过 `current_app.config['config_loader']` 访问共享的配置加载器
+- 保持了所有原有的业务逻辑和错误处理
+- 日志记录保持详细，使用 `info`、`debug`、`warning`、`error` 等不同级别
+- 所有日志消息都添加了 `[Model Domain]` 前缀，便于日志过滤和追踪
+- 实现了完整的模型配置验证逻辑，包括必填字段检查和数据格式验证
+
+**验证要点**:
+- ✅ 路由已从 `app.py` 中移除
+- ✅ 功能实现完整，包括模型配置的获取和保存
+- ✅ 日志记录完整且分级合理
+- ✅ 错误处理机制保持一致
+- ✅ 模型配置验证逻辑完整
+
 ### 阶段3: 共享服务提取 ⏳ (待进行)
 
 **计划内容**:
@@ -327,4 +355,5 @@ logger.error('[Domain Name] Error message', exc_info=True)
 - **2024-12-19**: 完成 Chat Domain 的迁移（阶段2的第一个领域）
 - **2024-12-19**: 完成 Document Domain 的迁移（阶段2的第二个领域）
 - **2024-12-19**: 完成 Agent Domain 的迁移（阶段2的第三个领域）
+- **2024-12-19**: 完成 Model Domain 的迁移（阶段2的第四个领域）
 
