@@ -1,0 +1,30 @@
+{
+  "mcpServers": [
+    {
+      "args": [
+        "-y",
+        "tavily-mcp@latest"
+      ],
+      "command": "npx",
+      "createdAt": "2025-12-06T15:42:25.828Z",
+      "id": "mcp_1765035745828_nq5e7vn",
+      "isEnabled": false,
+      "name": "tavily-ai-tavily-mcp",
+      "updatedAt": "2025-12-06T15:42:25.828Z"
+    },
+    {
+      "args": [
+        "baidu-search-mcp",
+        "--max-result=5",
+        "--fetch-content-count=2",
+        "--max-content-length=2000"
+      ],
+      "command": "npx",
+      "createdAt": "2025-12-06T15:42:25.828Z",
+      "id": "mcp_1765035745828_asy6ic0",
+      "isEnabled": false,
+      "name": "caiyili-baidu-search-mcp",
+      "updatedAt": "2025-12-06T23:42:25.879984"
+    }
+  ]
+}
