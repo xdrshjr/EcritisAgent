@@ -274,7 +274,7 @@ const processNode = async (node: Node): Promise<(Paragraph | Table)[] | Paragrap
               width: finalWidth,
               height: finalHeight,
             },
-          }),
+          } as any),
         ],
       });
     }
@@ -342,7 +342,7 @@ const processInlineContent = async (element: HTMLElement): Promise<(TextRun | Im
                 width: finalWidth,
                 height: finalHeight,
               },
-            })
+            } as any)
           );
         } else {
           children.push(
@@ -356,11 +356,12 @@ const processInlineContent = async (element: HTMLElement): Promise<(TextRun | Im
         // Process formatting tags
         const text = childElement.textContent || '';
         if (text.trim().length > 0) {
+          const isUnderline = childElement.tagName === 'U';
           const textRun = new TextRun({
             text,
             bold: childElement.tagName === 'STRONG' || childElement.tagName === 'B',
             italics: childElement.tagName === 'EM' || childElement.tagName === 'I',
-            underline: childElement.tagName === 'U',
+            ...(isUnderline && { underline: { type: 'single' } }),
             strike: childElement.tagName === 'S' || childElement.tagName === 'STRIKE',
           });
           children.push(textRun);
@@ -379,7 +380,7 @@ const processInlineContent = async (element: HTMLElement): Promise<(TextRun | Im
 /**
  * Get alignment from element style or class
  */
-const getAlignment = (element: HTMLElement): AlignmentType => {
+const getAlignment = (element: HTMLElement): typeof AlignmentType[keyof typeof AlignmentType] => {
   const style = element.getAttribute('style') || '';
   const align = element.getAttribute('align') || element.getAttribute('data-align') || '';
   const classList = element.classList;
@@ -403,7 +404,7 @@ const getAlignment = (element: HTMLElement): AlignmentType => {
 /**
  * Get alignment from string
  */
-const getAlignmentFromString = (align: string): AlignmentType => {
+const getAlignmentFromString = (align: string): typeof AlignmentType[keyof typeof AlignmentType] => {
   switch (align.toLowerCase()) {
     case 'left':
       return AlignmentType.LEFT;

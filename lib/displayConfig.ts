@@ -220,13 +220,14 @@ const normalizeDisplayConfig = (config: Partial<DisplayConfig>): DisplayConfig =
 
   // Normalize font size
   if (config.fontSize) {
-    const level = config.fontSize.level;
+    const fontSize = config.fontSize;
+    const level = fontSize.level;
     if (level && level in FONT_SIZE_PRESETS) {
       normalized.fontSize = { ...FONT_SIZE_PRESETS[level] };
-    } else if (config.fontSize.scale && config.fontSize.scale > 0) {
+    } else if (fontSize.scale && fontSize.scale > 0) {
       // If scale is provided but level is invalid, find closest preset
       const closestPreset = Object.values(FONT_SIZE_PRESETS).reduce((prev, curr) => {
-        return Math.abs(curr.scale - config.fontSize.scale) < Math.abs(prev.scale - config.fontSize.scale)
+        return Math.abs(curr.scale - fontSize.scale) < Math.abs(prev.scale - fontSize.scale)
           ? curr
           : prev;
       });
