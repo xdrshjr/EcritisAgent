@@ -501,6 +501,7 @@ const AI_CHAT_STATE_FILE = 'ai-chat-state.json';
 const CHAT_BOT_CONFIG_FILE = 'chat-bot-configs.json';
 const IMAGE_SERVICE_CONFIG_FILE = 'image-service-configs.json';
 const SEARCH_SERVICE_CONFIG_FILE = 'search-service-configs.json';
+const DISPLAY_CONFIG_FILE = 'display-config.json';
 
 /**
  * MCP Server Processes
@@ -547,6 +548,13 @@ function getImageServiceConfigPath() {
  */
 function getSearchServiceConfigPath() {
   return path.join(app.getPath('userData'), SEARCH_SERVICE_CONFIG_FILE);
+}
+
+/**
+ * Get Display configuration file path
+ */
+function getDisplayConfigPath() {
+  return path.join(app.getPath('userData'), DISPLAY_CONFIG_FILE);
 }
 
 /**
@@ -1536,6 +1544,109 @@ ipcMain.handle('save-search-service-configs', async (event, configs) => {
     };
   } catch (error) {
     logger.error('Failed to save search service configurations', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+});
+
+/**
+ * Load display configuration from file system
+ */
+ipcMain.handle('load-display-config', async () => {
+  logger.info('IPC: load-display-config called');
+  
+  try {
+    const configPath = getDisplayConfigPath();
+    logger.debug('Loading display config from file', { path: configPath });
+
+    // Check if file exists
+    if (!fs.existsSync(configPath)) {
+      logger.info('Display config file does not exist, returning default config');
+      return {
+        success: true,
+        data: {
+          fontSize: {
+            level: 'medium',
+            scale: 1.0,
+          },
+        },
+      };
+    }
+
+    // Read file
+    const fileContent = fs.readFileSync(configPath, 'utf-8');
+    const config = JSON.parse(fileContent);
+
+    logger.success('Display configuration loaded successfully', {
+      fontSizeLevel: config.fontSize?.level || 'medium',
+      fontSizeScale: config.fontSize?.scale || 1.0,
+    });
+
+    return {
+      success: true,
+      data: config,
+    };
+  } catch (error) {
+    logger.error('Failed to load display configuration', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    return {
+      success: false,
+      error: error.message,
+      data: {
+        fontSize: {
+          level: 'medium',
+          scale: 1.0,
+        },
+      },
+    };
+  }
+});
+
+/**
+ * Save display configuration to file system
+ */
+ipcMain.handle('save-display-config', async (event, config) => {
+  logger.info('IPC: save-display-config called', {
+    fontSizeLevel: config.fontSize?.level || 'medium',
+    fontSizeScale: config.fontSize?.scale || 1.0,
+  });
+
+  try {
+    const configPath = getDisplayConfigPath();
+    logger.debug('Saving display config to file', { path: configPath });
+
+    // Ensure directory exists
+    const configDir = path.dirname(configPath);
+    if (!fs.existsSync(configDir)) {
+      logger.debug('Creating config directory', { dir: configDir });
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+
+    // Write file with pretty formatting
+    const jsonContent = JSON.stringify(config, null, 2);
+    fs.writeFileSync(configPath, jsonContent, 'utf-8');
+
+    logger.success('Display configuration saved successfully', {
+      path: configPath,
+      fontSizeLevel: config.fontSize?.level || 'medium',
+      fontSizeScale: config.fontSize?.scale || 1.0,
+      size: `${jsonContent.length} bytes`,
+    });
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    logger.error('Failed to save display configuration', {
       error: error.message,
       stack: error.stack,
     });

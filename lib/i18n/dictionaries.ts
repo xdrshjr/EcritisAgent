@@ -316,6 +316,16 @@ const en = {
     searchServiceSearching: 'Searching...',
     searchServiceSearchPlaceholder: 'Enter search query...',
     searchServiceSearchQueryRequired: 'Please enter a search query',
+    display: 'Display',
+    displaySettings: {
+      title: 'Display Settings',
+      fontSize: 'Font Size',
+      fontSizeDescription: 'Adjust the font size to make text more comfortable to read. Changes apply immediately.',
+      fontSizeSaved: 'Font size saved successfully!',
+      preview: 'Preview',
+      previewText: 'This is how your text will appear with the selected font size. The preview updates in real-time as you change the setting.',
+      loading: 'Loading...',
+    },
   },
 };
 
@@ -630,6 +640,16 @@ const zh = {
     searchServiceSearching: '搜索中...',
     searchServiceSearchPlaceholder: '输入搜索关键词...',
     searchServiceSearchQueryRequired: '请输入搜索关键词',
+    display: '显示',
+    displaySettings: {
+      title: '显示设置',
+      fontSize: '字体大小',
+      fontSizeDescription: '调整字体大小以使文本更易于阅读。更改会立即生效。',
+      fontSizeSaved: '字体大小保存成功！',
+      preview: '预览',
+      previewText: '这是您选择的字体大小下文本的显示效果。预览会随着设置的更改而实时更新。',
+      loading: '加载中...',
+    },
   },
 };
 

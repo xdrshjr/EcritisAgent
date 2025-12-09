@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./chat.css";
 import { LanguageProvider } from "@/lib/i18n/LanguageContext";
+import { DisplayProvider } from "@/lib/displayContext";
 
 // Use system fonts for desktop build to avoid Google Fonts fetch issues
 const dmSans = {
@@ -36,7 +37,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${dmSans.variable} ${spaceMono.variable} antialiased`} suppressHydrationWarning>
         <LanguageProvider>
-          {children}
+          <DisplayProvider>
+            {children}
+          </DisplayProvider>
         </LanguageProvider>
       </body>
     </html>

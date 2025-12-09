@@ -673,6 +673,75 @@ const electronAPI = {
       };
     }
   },
+
+  /**
+   * Load display configuration from file system
+   */
+  loadDisplayConfig: async () => {
+    try {
+      logger.info('Loading display configuration');
+      const result = await ipcRenderer.invoke('load-display-config');
+      
+      if (result.success) {
+        logger.info('Display configuration loaded successfully', {
+          fontSizeLevel: result.data?.fontSize?.level || 'medium',
+          fontSizeScale: result.data?.fontSize?.scale || 1.0,
+        });
+      } else {
+        logger.error('Failed to load display configuration', {
+          error: result.error,
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('Exception while loading display configuration', {
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: error.message,
+        data: {
+          fontSize: {
+            level: 'medium',
+            scale: 1.0,
+          },
+        },
+      };
+    }
+  },
+
+  /**
+   * Save display configuration to file system
+   */
+  saveDisplayConfig: async (config) => {
+    try {
+      logger.info('Saving display configuration', {
+        fontSizeLevel: config.fontSize?.level || 'medium',
+        fontSizeScale: config.fontSize?.scale || 1.0,
+      });
+      
+      const result = await ipcRenderer.invoke('save-display-config', config);
+      
+      if (result.success) {
+        logger.info('Display configuration saved successfully');
+      } else {
+        logger.error('Failed to save display configuration', {
+          error: result.error,
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('Exception while saving display configuration', {
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  },
 };
 
 /**

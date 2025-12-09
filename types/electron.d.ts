@@ -264,6 +264,25 @@ interface ElectronAPI {
     success: boolean;
     error?: string;
   }>;
+  loadDisplayConfig: () => Promise<{
+    success: boolean;
+    error?: string;
+    data: {
+      fontSize: {
+        level: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
+        scale: number;
+      };
+    };
+  }>;
+  saveDisplayConfig: (config: {
+    fontSize: {
+      level: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';
+      scale: number;
+    };
+  }) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
 }
 
 interface Window {

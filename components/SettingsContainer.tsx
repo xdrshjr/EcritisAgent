@@ -6,13 +6,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bot, Settings as SettingsIcon, Image as ImageIcon, Cpu, Search as SearchIcon } from 'lucide-react';
+import { Bot, Settings as SettingsIcon, Image as ImageIcon, Cpu, Search as SearchIcon, Monitor } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import ChatBotManager from './ChatBotManager';
 import MCPSettingsPanel from './MCPSettingsPanel';
 import ImageServiceSettingsPanel from './ImageServiceSettingsPanel';
 import SearchServiceSettingsPanel from './SearchServiceSettingsPanel';
 import ModelSettingsPanel from './ModelSettingsPanel';
+import DisplaySettingsPanel from './DisplaySettingsPanel';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -21,7 +22,7 @@ interface SettingsContainerProps {
   className?: string;
 }
 
-type SettingsSection = 'model-settings' | 'chat-bots' | 'mcp' | 'image-services' | 'search-services';
+type SettingsSection = 'model-settings' | 'chat-bots' | 'mcp' | 'image-services' | 'search-services' | 'display';
 
 interface SettingsMenuItem {
   id: SettingsSection;
@@ -63,6 +64,11 @@ const SettingsContainer = ({ className }: SettingsContainerProps) => {
       id: 'search-services',
       label: dict.settings.searchServices || 'Search Services',
       icon: <SearchIcon className="w-4 h-4" />,
+    },
+    {
+      id: 'display',
+      label: dict.settings.display || 'Display',
+      icon: <Monitor className="w-4 h-4" />,
     },
   ];
 
@@ -118,6 +124,7 @@ const SettingsContainer = ({ className }: SettingsContainerProps) => {
         {activeSection === 'mcp' && <MCPSettingsPanel className="h-full" />}
         {activeSection === 'image-services' && <ImageServiceSettingsPanel className="h-full" />}
         {activeSection === 'search-services' && <SearchServiceSettingsPanel className="h-full" />}
+        {activeSection === 'display' && <DisplaySettingsPanel className="h-full" />}
       </main>
     </div>
   );
