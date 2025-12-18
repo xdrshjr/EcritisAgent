@@ -444,7 +444,16 @@ function installDependencies(pythonDir) {
       });
       
       // List critical package directories
-      const criticalPackages = ['flask', 'langchain', 'langchain_openai', 'langchain_core', 'langgraph'];
+      const criticalPackages = [
+        'flask', 
+        'langchain', 
+        'langchain_openai', 
+        'langchain_core', 
+        'langgraph',
+        'PyPDF2',
+        'docx',
+        'pdfplumber'
+      ];
       logger.info('Checking for critical package directories:');
       for (const pkg of criticalPackages) {
         const pkgPath = path.join(sitePackages, pkg);
@@ -513,7 +522,7 @@ function verifyPythonInstallation(pythonDir) {
     logger.success('Flask version', { version: flaskOutput.trim() });
 
     // Check critical dependencies for agent functionality
-    logger.info('Verifying critical dependencies for agent functionality');
+    logger.info('Verifying critical dependencies for application functionality');
     const criticalPackages = [
       'flask',
       'flask_cors', 
@@ -521,7 +530,10 @@ function verifyPythonInstallation(pythonDir) {
       'langchain',
       'langchain_openai',
       'langchain_core',
-      'langgraph'
+      'langgraph',
+      'PyPDF2',
+      'docx',
+      'pdfplumber'
     ];
 
     const missingPackages = [];

@@ -1,6 +1,7 @@
 """
 Chat Domain Routes
 Handles AI chat completion requests with streaming support
+Includes file upload and parsing functionality for document context
 """
 
 import logging
@@ -765,4 +766,211 @@ def chat():
         return jsonify({
             'error': 'Failed to process chat request',
             'details': str(e)
+        }), 500
+
+
+@chat_bp.route('/chat/upload-file', methods=['POST'])
+def upload_and_parse_file():
+    """
+    Upload and parse a document file (PDF or Word) to extract text content
+    The extracted text will be used as context for chat messages
+    
+    Request: multipart/form-data with 'file' field
+    Response: JSON with extracted text and metadata
+    """
+    logger.info('[Chat Domain] File upload request received')
+    
+    try:
+        # Check if file is in request
+        if 'file' not in request.files:
+            logger.warning('[Chat Domain] No file provided in request')
+            return jsonify({
+                'success': False,
+                'error': 'No file provided',
+                'text': '',
+                'metadata': {}
+            }), 400
+        
+        file = request.files['file']
+        
+        # Check if filename is empty
+        if file.filename == '':
+            logger.warning('[Chat Domain] Empty filename provided')
+            return jsonify({
+                'success': False,
+                'error': 'Empty filename',
+                'text': '',
+                'metadata': {}
+            }), 400
+        
+        # Get file details
+        filename = file.filename
+        file_size = 0
+        
+        logger.info(
+            '[Chat Domain] Processing uploaded file',
+            extra={
+                'file_name': filename,
+                'content_type': file.content_type
+            }
+        )
+        
+        # Read file content
+        try:
+            file_content = file.read()
+            file_size = len(file_content)
+            
+            logger.debug(
+                '[Chat Domain] File content read successfully',
+                extra={
+                    'file_name': filename,
+                    'file_size': file_size
+                }
+            )
+        except Exception as read_error:
+            logger.error(
+                '[Chat Domain] Failed to read file content',
+                extra={
+                    'file_name': filename,
+                    'error': str(read_error)
+                },
+                exc_info=True
+            )
+            return jsonify({
+                'success': False,
+                'error': f'Failed to read file: {str(read_error)}',
+                'text': '',
+                'metadata': {'filename': filename}
+            }), 500
+        
+        # Check file size (limit to 10MB)
+        max_file_size = 10 * 1024 * 1024  # 10MB
+        if file_size > max_file_size:
+            logger.warning(
+                '[Chat Domain] File size exceeds limit',
+                extra={
+                    'file_name': filename,
+                    'file_size': file_size,
+                    'max_size': max_file_size
+                }
+            )
+            return jsonify({
+                'success': False,
+                'error': f'File size exceeds limit of {max_file_size / 1024 / 1024}MB',
+                'text': '',
+                'metadata': {
+                    'filename': filename,
+                    'file_size': file_size
+                }
+            }), 400
+        
+        # Parse file using document parser
+        try:
+            from domains.document.parser import document_parser
+            
+            logger.info(
+                '[Chat Domain] Starting file parsing',
+                extra={
+                    'file_name': filename,
+                    'file_size': file_size
+                }
+            )
+            
+            # Check if parser is available
+            if not document_parser.is_available():
+                logger.error(
+                    '[Chat Domain] Document parser libraries not available',
+                    extra={'file_name': filename}
+                )
+                return jsonify({
+                    'success': False,
+                    'error': 'Document parsing libraries not available. Please install required packages.',
+                    'text': '',
+                    'metadata': {'filename': filename}
+                }), 500
+            
+            # Parse the file
+            parse_result = document_parser.parse_file(file_content, filename)
+            
+            if parse_result['success']:
+                logger.info(
+                    '[Chat Domain] File parsed successfully',
+                    extra={
+                        'file_name': filename,
+                        'text_length': len(parse_result['text']),
+                        'metadata': parse_result['metadata']
+                    }
+                )
+                
+                return jsonify({
+                    'success': True,
+                    'text': parse_result['text'],
+                    'metadata': {
+                        **parse_result['metadata'],
+                        'file_size': file_size
+                    },
+                    'error': None
+                }), 200
+            else:
+                logger.error(
+                    '[Chat Domain] File parsing failed',
+                    extra={
+                        'file_name': filename,
+                        'error': parse_result['error']
+                    }
+                )
+                
+                return jsonify({
+                    'success': False,
+                    'error': parse_result['error'],
+                    'text': '',
+                    'metadata': {
+                        **parse_result['metadata'],
+                        'file_size': file_size
+                    }
+                }), 400
+        
+        except ImportError as import_error:
+            logger.error(
+                '[Chat Domain] Failed to import document parser',
+                extra={
+                    'file_name': filename,
+                    'error': str(import_error)
+                },
+                exc_info=True
+            )
+            return jsonify({
+                'success': False,
+                'error': 'Document parser not available',
+                'text': '',
+                'metadata': {'filename': filename}
+            }), 500
+        
+        except Exception as parse_error:
+            logger.error(
+                '[Chat Domain] Error during file parsing',
+                extra={
+                    'file_name': filename,
+                    'error': str(parse_error)
+                },
+                exc_info=True
+            )
+            return jsonify({
+                'success': False,
+                'error': f'Failed to parse file: {str(parse_error)}',
+                'text': '',
+                'metadata': {'filename': filename}
+            }), 500
+    
+    except Exception as e:
+        logger.error(
+            '[Chat Domain] File upload request failed',
+            extra={'error': str(e)},
+            exc_info=True
+        )
+        return jsonify({
+            'success': False,
+            'error': f'File upload failed: {str(e)}',
+            'text': '',
+            'metadata': {}
         }), 500

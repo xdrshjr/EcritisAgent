@@ -10,7 +10,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { Loader2, Trash2, Bot, Trash } from 'lucide-react';
 import ChatMessage from './ChatMessage';
-import ChatInput from './ChatInput';
+import ChatInput, { type UploadedFile } from './ChatInput';
 import ChatStopButton from './ChatStopButton';
 import MCPToolSelector from './MCPToolSelector';
 import NetworkSearchToggle from './NetworkSearchToggle';
@@ -263,7 +263,7 @@ const ChatPanel = ({
     }
   }, [messages, onMessagesChange]);
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, fileContext?: UploadedFile) => {
     if (!content.trim() || isLoading) {
       logger.debug('Message send blocked', { 
         hasContent: !!content.trim(), 
@@ -272,12 +272,20 @@ const ChatPanel = ({
       return;
     }
 
+    // User message only shows the question, not the file content
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content,
+      content: content, // Only show user's question
       timestamp: new Date(),
     };
+
+    if (fileContext) {
+      logger.info('File context will be included in API request', {
+        filename: fileContext.filename,
+        contentLength: fileContext.content.length,
+      }, 'ChatPanel');
+    }
 
     if (!conversationId) {
       logger.error('No active conversation', undefined, 'ChatPanel');
@@ -297,6 +305,10 @@ const ChatPanel = ({
       messageCountAfter: messagesWithUser.length,
       userMessagesCount: messagesWithUser.filter(m => m.role === 'user').length,
       content: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+      hasFileContext: !!fileContext,
+      fileContextFilename: fileContext?.filename,
+      fileContextLength: fileContext?.content.length,
+      note: 'User message shows only question; file context sent separately to API'
     }, 'ChatPanel');
     
     onMessagesMapChange(newMapForUser);
@@ -338,6 +350,19 @@ const ChatPanel = ({
         .filter(msg => !msg.id.startsWith('welcome-') && !msg.isCleared)
         .map(({ role, content }) => ({ role, content }));
       
+      // If file context exists, add it as a system message before the user's question
+      if (fileContext) {
+        apiMessages.push({
+          role: 'system',
+          content: `[Document Context from ${fileContext.filename}]\n\n${fileContext.content}\n\n---\n\nPlease answer the following question based on the document context above.`
+        });
+        logger.debug('Added file context as system message to API request', {
+          filename: fileContext.filename,
+          apiMessagesCount: apiMessages.length + 1
+        }, 'ChatPanel');
+      }
+      
+      // Add user's question
       apiMessages.push({ role: 'user', content });
 
       logger.debug('Prepared API messages', { 

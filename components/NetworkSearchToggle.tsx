@@ -21,7 +21,7 @@ export interface NetworkSearchToggleProps {
 
 const NetworkSearchToggle = ({ 
   disabled = false, 
-  defaultEnabled = true, // Default to enabled
+  defaultEnabled = false, // Default to disabled
   enabled: controlledEnabled,
   onNetworkSearchStateChange 
 }: NetworkSearchToggleProps) => {

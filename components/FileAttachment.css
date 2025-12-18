@@ -1,0 +1,139 @@
+/**
+ * FileAttachment Component Styles
+ * Elegant styling for file upload and attachment display
+ * Coordinated with the overall application design
+ */
+
+/* Fade in animation for file attachment */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* File attachment container */
+.file-attachment-container {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.file-attachment-container:hover {
+  background-color: rgba(var(--muted-rgb), 0.8);
+}
+
+/* File icon styling */
+.file-icon-pdf {
+  color: #ef4444; /* red-500 */
+}
+
+.file-icon-word {
+  color: #3b82f6; /* blue-500 */
+}
+
+.file-icon-default {
+  color: var(--muted-foreground);
+}
+
+/* Remove button hover effect */
+.file-remove-button {
+  transition: all 0.15s ease-in-out;
+}
+
+.file-remove-button:hover {
+  transform: scale(1.1);
+}
+
+.file-remove-button:active {
+  transform: scale(0.95);
+}
+
+/* File upload button styling */
+.file-upload-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.file-upload-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.1);
+  transform: translate(-50%, -50%);
+  transition: width 0.3s ease, height 0.3s ease;
+}
+
+.file-upload-button:active::before {
+  width: 120%;
+  height: 120%;
+}
+
+/* Uploading state animation */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* File info text truncation */
+.file-info-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* File size badge */
+.file-size-badge {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.dark .file-size-badge {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .file-attachment-container {
+    padding: 8px 12px;
+  }
+  
+  .file-info-text {
+    font-size: 0.75rem;
+  }
+}
+
+/* Accessibility improvements */
+.file-upload-button:focus-visible,
+.file-remove-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions */
+button,
+.file-attachment-container {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
