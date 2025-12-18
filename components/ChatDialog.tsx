@@ -1155,7 +1155,7 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
                   }, 'ChatDialog');
                   
                   // Create error data for display
-                  const errorData: ChatErrorData = {
+                  const errorData: ErrorDialogData = {
                     errorCode: data.error_code,
                     statusCode: data.status_code,
                     message: data.message,

@@ -513,7 +513,7 @@ const ChatPanel = ({
         // Check if we have structured error data from backend
         if (backendError.error && backendError.user_message) {
           // Create structured error data for ErrorDialog
-          const structuredErrorData: ChatErrorData = {
+          const structuredErrorData: ErrorDialogData = {
             errorCode: backendError.error,
             statusCode: backendError.status_code || response.status,
             message: backendError.message || `API error: ${response.status}`,
@@ -679,7 +679,7 @@ const ChatPanel = ({
                   }, 'ChatPanel');
                   
                   // Create error data for display
-                  const errorData: ChatErrorData = {
+                  const errorData: ErrorDialogData = {
                     errorCode: data.error_code,
                     statusCode: data.status_code,
                     message: data.message,
