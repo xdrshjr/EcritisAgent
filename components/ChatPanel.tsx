@@ -1356,6 +1356,62 @@ const ChatPanel = ({
     }
   };
 
+  const handleEditMessage = (messageId: string, newContent: string) => {
+    if (!conversationId) {
+      logger.warn('No active conversation to edit message', { messageId }, 'ChatPanel');
+      return;
+    }
+
+    logger.info('Editing message', {
+      messageId,
+      originalLength: messages.find(m => m.id === messageId)?.content.length || 0,
+      newLength: newContent.length,
+    }, 'ChatPanel');
+
+    // Update the message in the current conversation
+    const updatedMessages = messages.map(message => 
+      message.id === messageId 
+        ? { ...message, content: newContent, timestamp: new Date() }
+        : message
+    );
+
+    // Update the messages map
+    const newMessagesMap = new Map(messagesMap);
+    newMessagesMap.set(conversationId, updatedMessages);
+    onMessagesMapChange(newMessagesMap);
+
+    logger.success('Message edited successfully', {
+      messageId,
+      conversationId,
+    }, 'ChatPanel');
+  };
+
+  const handleDeleteMessage = (messageId: string) => {
+    if (!conversationId) {
+      logger.warn('No active conversation to delete message', { messageId }, 'ChatPanel');
+      return;
+    }
+
+    logger.info('Deleting message', {
+      messageId,
+      conversationId,
+    }, 'ChatPanel');
+
+    // Remove the message from the current conversation
+    const updatedMessages = messages.filter(message => message.id !== messageId);
+
+    // Update the messages map
+    const newMessagesMap = new Map(messagesMap);
+    newMessagesMap.set(conversationId, updatedMessages);
+    onMessagesMapChange(newMessagesMap);
+
+    logger.success('Message deleted successfully', {
+      messageId,
+      conversationId,
+      remainingMessages: updatedMessages.length,
+    }, 'ChatPanel');
+  };
+
   const handleClearChat = () => {
     if (!conversationId) {
       logger.error('No active conversation to clear', undefined, 'ChatPanel');
@@ -1486,11 +1542,14 @@ const ChatPanel = ({
             {messages.map((message) => (
               <ChatMessage
                 key={message.id}
+                messageId={message.id}
                 role={message.role as 'user' | 'assistant'}
                 content={message.content}
                 timestamp={message.timestamp}
                 mcpExecutionSteps={message.mcpExecutionSteps}
                 networkSearchExecutionSteps={message.networkSearchExecutionSteps}
+                onEditMessage={handleEditMessage}
+                onDeleteMessage={handleDeleteMessage}
               />
             ))}
 

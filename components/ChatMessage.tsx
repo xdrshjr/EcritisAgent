@@ -3,17 +3,19 @@
  * Displays individual chat messages with role-based styling
  * Supports user and assistant messages with proper formatting
  * Renders Markdown content for AI responses
+ * Provides context menu functionality for copy, edit, and delete operations
  */
 
 'use client';
 
-import { useState } from 'react';
-import { Bot, User, Copy, Languages, Loader2, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
+import { useState, useRef, useCallback, useMemo } from 'react';
+import { Bot, User, Copy, Languages, Loader2, ChevronDown, ChevronUp, BookOpen, Edit, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import MCPToolExecutionDisplay from './MCPToolExecutionDisplay';
 import NetworkSearchExecutionDisplay from './NetworkSearchExecutionDisplay';
+import ContextMenu from './ContextMenu';
 import { logger } from '@/lib/logger';
 import { buildApiUrl } from '@/lib/apiConfig';
 import { getDefaultModel } from '@/lib/modelConfig';
@@ -34,9 +36,24 @@ export interface ChatMessageProps {
     content: string;
     score?: number;
   }>; // References for auto-writer agent
+  messageId?: string; // Unique identifier for the message
+  onEditMessage?: (messageId: string, newContent: string) => void; // Callback for editing messages
+  onDeleteMessage?: (messageId: string) => void; // Callback for deleting messages
 }
 
-const ChatMessage = ({ role, content, timestamp, mcpExecutionSteps, networkSearchExecutionSteps, isMcpStreaming = false, isNetworkSearchStreaming = false, references }: ChatMessageProps) => {
+const ChatMessage = ({ 
+  role, 
+  content, 
+  timestamp, 
+  mcpExecutionSteps, 
+  networkSearchExecutionSteps, 
+  isMcpStreaming = false, 
+  isNetworkSearchStreaming = false, 
+  references,
+  messageId,
+  onEditMessage,
+  onDeleteMessage
+}: ChatMessageProps) => {
   const isUser = role === 'user';
   const [showTranslation, setShowTranslation] = useState(false);
   const [translationLines, setTranslationLines] = useState<string[]>([]);
@@ -45,6 +62,13 @@ const ChatMessage = ({ role, content, timestamp, mcpExecutionSteps, networkSearc
   const [copySuccess, setCopySuccess] = useState(false);
   const [codeBlockCopyStates, setCodeBlockCopyStates] = useState<Record<string, boolean>>({});
   const [isReferencesExpanded, setIsReferencesExpanded] = useState(false); // Default collapsed
+  
+  // Context menu state
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const [selectedText, setSelectedText] = useState('');
+  const messageRef = useRef<HTMLDivElement>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(content);
 
   const handleFormatTimestamp = (date: Date): string => {
     const now = new Date();
@@ -284,7 +308,7 @@ const ChatMessage = ({ role, content, timestamp, mcpExecutionSteps, networkSearc
   /**
    * Extract text content from React children (code block content)
    */
-  const extractCodeText = (children: React.ReactNode): string => {
+  const extractCodeText = useCallback((children: React.ReactNode): string => {
     if (typeof children === 'string') {
       return children;
     }
@@ -298,12 +322,12 @@ const ChatMessage = ({ role, content, timestamp, mcpExecutionSteps, networkSearc
       return extractCodeText((children as any).props?.children || '');
     }
     return '';
-  };
+  }, []);
 
   /**
    * Handle copying code block content to clipboard
    */
-  const handleCopyCodeBlock = async (codeText: string, codeBlockId: string, language?: string) => {
+  const handleCopyCodeBlock = useCallback(async (codeText: string, codeBlockId: string, language?: string) => {
     logger.info('Starting code block copy', {
       codeBlockId,
       codeLength: codeText.length,
@@ -341,20 +365,292 @@ const ChatMessage = ({ role, content, timestamp, mcpExecutionSteps, networkSearc
         errorStack: error instanceof Error ? error.stack : undefined,
       }, 'ChatMessage');
     }
-  };
+  }, []);
 
-  const handleKeyDown = (event: React.KeyboardEvent, handler: () => void) => {
+  const handleKeyDown = useCallback((event: React.KeyboardEvent, handler: () => void) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       handler();
     }
-  };
+  }, []);
+
+  // Context menu functionality
+  const handleContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    
+    // Get selected text
+    const selection = window.getSelection();
+    const selectedText = selection?.toString() || '';
+    
+    logger.debug('Context menu triggered', {
+      role: isUser ? 'user' : 'assistant',
+      hasSelection: selectedText.length > 0,
+      selectionLength: selectedText.length,
+      messageId,
+      mouseX: event.clientX,
+      mouseY: event.clientY,
+    }, 'ChatMessage');
+
+    setSelectedText(selectedText);
+    setContextMenuPosition({ x: event.clientX, y: event.clientY });
+  }, [isUser, messageId]);
+
+  const handleCloseContextMenu = useCallback(() => {
+    logger.debug('Context menu closed', undefined, 'ChatMessage');
+    setContextMenuPosition(null);
+    setSelectedText('');
+  }, []);
+
+  const handleCopySelectedText = useCallback(() => {
+    if (selectedText) {
+      navigator.clipboard.writeText(selectedText).then(() => {
+        logger.info('Selected text copied to clipboard', {
+          textLength: selectedText.length,
+          textPreview: selectedText.substring(0, 50) + (selectedText.length > 50 ? '...' : ''),
+        }, 'ChatMessage');
+      }).catch((error) => {
+        logger.error('Failed to copy selected text', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          textLength: selectedText.length,
+        }, 'ChatMessage');
+      });
+    } else {
+      // If no text selected, copy entire message content
+      navigator.clipboard.writeText(content).then(() => {
+        logger.info('Message content copied to clipboard via context menu', {
+          role: isUser ? 'user' : 'assistant',
+          contentLength: content.length,
+          contentPreview: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+        }, 'ChatMessage');
+      }).catch((error) => {
+        logger.error('Failed to copy message content via context menu', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          role: isUser ? 'user' : 'assistant',
+          contentLength: content.length,
+        }, 'ChatMessage');
+      });
+    }
+  }, [selectedText, content, isUser]);
+
+  const handleEditMessage = useCallback(() => {
+    if (messageId && onEditMessage) {
+      logger.info('Starting message edit', {
+        messageId,
+        originalContentLength: content.length,
+      }, 'ChatMessage');
+      setIsEditing(true);
+      setEditContent(content);
+    } else {
+      logger.warn('Edit message requested but no handler available', {
+        hasMessageId: !!messageId,
+        hasEditHandler: !!onEditMessage,
+      }, 'ChatMessage');
+    }
+  }, [messageId, onEditMessage, content]);
+
+  const handleSaveEdit = useCallback(() => {
+    if (messageId && onEditMessage && editContent.trim() !== content.trim()) {
+      logger.info('Saving message edit', {
+        messageId,
+        originalLength: content.length,
+        newLength: editContent.length,
+        contentChanged: editContent.trim() !== content.trim(),
+      }, 'ChatMessage');
+      
+      onEditMessage(messageId, editContent);
+      setIsEditing(false);
+    } else {
+      logger.debug('Message edit cancelled or no changes', {
+        messageId,
+        contentChanged: editContent.trim() !== content.trim(),
+      }, 'ChatMessage');
+      setIsEditing(false);
+    }
+  }, [messageId, onEditMessage, editContent, content]);
+
+  const handleCancelEdit = useCallback(() => {
+    logger.debug('Message edit cancelled', {
+      messageId,
+    }, 'ChatMessage');
+    setIsEditing(false);
+    setEditContent(content);
+  }, [messageId, content]);
+
+  const handleDeleteMessage = useCallback(() => {
+    if (messageId && onDeleteMessage) {
+      logger.info('Deleting message', {
+        messageId,
+        role: isUser ? 'user' : 'assistant',
+        contentLength: content.length,
+      }, 'ChatMessage');
+      
+      onDeleteMessage(messageId);
+    } else {
+      logger.warn('Delete message requested but no handler available', {
+        hasMessageId: !!messageId,
+        hasDeleteHandler: !!onDeleteMessage,
+      }, 'ChatMessage');
+    }
+  }, [messageId, onDeleteMessage, isUser, content]);
+
+  const markdownContent = useMemo(() => (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeHighlight]}
+      components={{
+        code: ({ node, inline, className, children, ...props }: any) => {
+          const match = /language-(\w+)/.exec(className || '');
+          const language = match ? match[1] : undefined;
+          
+          if (inline) {
+            return (
+              <code className="bg-muted/60 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
+                {children}
+              </code>
+            );
+          }
+
+          // Block code - add copy button
+          const codeText = extractCodeText(children);
+          // Generate unique ID for this code block
+          // Use content hash + position to ensure uniqueness and stability
+          const contentHash = codeText.length > 0 
+            ? `${codeText.substring(0, 10).replace(/\s/g, '')}-${codeText.length}`
+            : 'empty';
+          const position = node?.position ? `${node.position.start.line}:${node.position.start.column}` : 'unknown';
+          const codeBlockId = `code-block-${contentHash}-${position}`;
+          const isCopied = codeBlockCopyStates[codeBlockId] || false;
+
+          logger.debug('Rendering code block', {
+            codeBlockId,
+            codeLength: codeText.length,
+            language: language || 'unknown',
+          }, 'ChatMessage');
+
+          return (
+            <div className="relative group/codeblock my-1">
+              <pre className="bg-[#0d1117] rounded-md p-2 overflow-x-auto">
+                <code className={className} {...props}>
+                  {children}
+                </code>
+              </pre>
+              <button
+                onClick={() => handleCopyCodeBlock(codeText, codeBlockId, language)}
+                onKeyDown={(e) => handleKeyDown(e, () => handleCopyCodeBlock(codeText, codeBlockId, language))}
+                className={`absolute bottom-2 right-2 p-1.5 rounded-md transition-all duration-200 opacity-0 group-hover/codeblock:opacity-100 hover:bg-muted/90 text-muted-foreground/80 hover:text-foreground bg-background/80 backdrop-blur-sm border border-border/30 ${
+                  isCopied ? 'bg-green-500/20 opacity-100' : ''
+                } shadow-sm hover:shadow-md z-10`}
+                aria-label="Copy code block"
+                tabIndex={0}
+                title={isCopied ? 'Copied!' : 'Copy code block'}
+              >
+                {isCopied ? (
+                  <span className="text-xs font-semibold">✓</span>
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+          );
+        },
+        a: ({ node, children, ...props }) => (
+          <a
+            {...props}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:text-blue-600 underline underline-offset-2"
+          >
+            {children}
+          </a>
+        ),
+        p: ({ node, children, ...props }) => (
+          <p className="mb-2 last:mb-0" {...props}>
+            {children}
+          </p>
+        ),
+        ul: ({ node, children, ...props }) => (
+          <ul className="list-disc list-outside mb-2 space-y-1 pl-5" {...props}>
+            {children}
+          </ul>
+        ),
+        ol: ({ node, children, ...props }) => (
+          <ol className="list-decimal list-outside mb-2 space-y-1 pl-5" {...props}>
+            {children}
+          </ol>
+        ),
+        h1: ({ node, children, ...props }) => (
+          <h1 className="text-lg font-bold mb-2 mt-2" {...props}>
+            {children}
+          </h1>
+        ),
+        h2: ({ node, children, ...props }) => (
+          <h2 className="text-base font-bold mb-2 mt-2" {...props}>
+            {children}
+          </h2>
+        ),
+        h3: ({ node, children, ...props }) => (
+          <h3 className="text-sm font-bold mb-1 mt-1" {...props}>
+            {children}
+          </h3>
+        ),
+        blockquote: ({ node, children, ...props }) => (
+          <blockquote className="border-l-4 border-gray-400 pl-3 italic my-2" {...props}>
+            {children}
+          </blockquote>
+        ),
+        table: ({ node, children, ...props }) => (
+          <div className="overflow-x-auto my-2">
+            <table className="min-w-full border-collapse border border-gray-300" {...props}>
+              {children}
+            </table>
+          </div>
+        ),
+        th: ({ node, children, ...props }) => (
+          <th className="border border-gray-300 px-2 py-1 bg-gray-100 dark:bg-gray-800 font-semibold" {...props}>
+            {children}
+          </th>
+        ),
+        td: ({ node, children, ...props }) => (
+          <td className="border border-gray-300 px-2 py-1" {...props}>
+            {children}
+          </td>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  ), [content, codeBlockCopyStates, handleCopyCodeBlock, handleKeyDown]);
+
+  // Prepare context menu items
+  const contextMenuItems = [
+    {
+      id: 'copy',
+      label: selectedText ? 'Copy Selected' : 'Copy Message',
+      icon: <Copy className="w-4 h-4" />,
+      action: handleCopySelectedText,
+    },
+    ...(onEditMessage && messageId ? [{
+      id: 'edit',
+      label: 'Edit Message',
+      icon: <Edit className="w-4 h-4" />,
+      action: handleEditMessage,
+      disabled: isEditing,
+    }] : []),
+    ...(onDeleteMessage && messageId ? [{
+      id: 'delete',
+      label: 'Delete Message',
+      icon: <Trash2 className="w-4 h-4 text-red-500" />,
+      action: handleDeleteMessage,
+    }] : []),
+  ];
 
   return (
     <div
+      ref={messageRef}
       className={`flex gap-4 mb-6 animate-fadeIn ${
         isUser ? 'flex-row-reverse' : 'flex-row'
       }`}
+      onContextMenu={handleContextMenu}
     >
       {/* Avatar */}
       <div
@@ -456,141 +752,37 @@ const ChatMessage = ({ role, content, timestamp, mcpExecutionSteps, networkSearc
           )}
           {isUser ? (
             <div className="text-sm leading-relaxed whitespace-pre-wrap break-words px-1 py-1 chat-message-user-content">
-              {content}
+              {isEditing ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full bg-transparent border border-white/30 rounded px-2 py-1 text-sm resize-none focus:outline-none focus:border-white/50"
+                    rows={Math.max(2, editContent.split('\n').length)}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveEdit}
+                      className="px-2 py-1 text-xs bg-white/20 hover:bg-white/30 rounded border border-white/30 transition-colors"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={handleCancelEdit}
+                      className="px-2 py-1 text-xs bg-white/10 hover:bg-white/20 rounded border border-white/30 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>{content}</div>
+              )}
             </div>
           ) : (
             <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert prose-pre:bg-[#0d1117] prose-pre:text-gray-100 prose-code:text-pink-500 prose-code:before:content-[''] prose-code:after:content-[''] px-3 py-2 chat-message-content-wrapper">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-                components={{
-                  // Custom rendering for code blocks
-                  code: ({ node, inline, className, children, ...props }: any) => {
-                    const match = /language-(\w+)/.exec(className || '');
-                    const language = match ? match[1] : undefined;
-                    
-                    if (inline) {
-                      return (
-                        <code className="bg-muted/60 px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
-                          {children}
-                        </code>
-                      );
-                    }
-
-                    // Block code - add copy button
-                    const codeText = extractCodeText(children);
-                    // Generate unique ID for this code block
-                    // Use content hash + timestamp + random to ensure uniqueness
-                    const contentHash = codeText.length > 0 
-                      ? `${codeText.substring(0, 10).replace(/\s/g, '')}-${codeText.length}`
-                      : 'empty';
-                    const codeBlockId = `code-block-${contentHash}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-                    const isCopied = codeBlockCopyStates[codeBlockId] || false;
-
-                    logger.debug('Rendering code block', {
-                      codeBlockId,
-                      codeLength: codeText.length,
-                      language: language || 'unknown',
-                    }, 'ChatMessage');
-
-                    return (
-                      <div className="relative group/codeblock my-1">
-                        <pre className="bg-[#0d1117] rounded-md p-2 overflow-x-auto">
-                          <code className={className} {...props}>
-                            {children}
-                          </code>
-                        </pre>
-                        <button
-                          onClick={() => handleCopyCodeBlock(codeText, codeBlockId, language)}
-                          onKeyDown={(e) => handleKeyDown(e, () => handleCopyCodeBlock(codeText, codeBlockId, language))}
-                          className={`absolute bottom-2 right-2 p-1.5 rounded-md transition-all duration-200 opacity-0 group-hover/codeblock:opacity-100 hover:bg-muted/90 text-muted-foreground/80 hover:text-foreground bg-background/80 backdrop-blur-sm border border-border/30 ${
-                            isCopied ? 'bg-green-500/20 opacity-100' : ''
-                          } shadow-sm hover:shadow-md z-10`}
-                          aria-label="Copy code block"
-                          tabIndex={0}
-                          title={isCopied ? 'Copied!' : 'Copy code block'}
-                        >
-                          {isCopied ? (
-                            <span className="text-xs font-semibold">✓</span>
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      </div>
-                    );
-                  },
-                  // Custom rendering for links
-                  a: ({ node, children, ...props }) => (
-                    <a
-                      {...props}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-500 hover:text-blue-600 underline underline-offset-2"
-                    >
-                      {children}
-                    </a>
-                  ),
-                  // Custom rendering for paragraphs
-                  p: ({ node, children, ...props }) => (
-                    <p className="mb-2 last:mb-0" {...props}>
-                      {children}
-                    </p>
-                  ),
-                  // Custom rendering for lists
-                  ul: ({ node, children, ...props }) => (
-                    <ul className="list-disc list-outside mb-2 space-y-1 pl-5" {...props}>
-                      {children}
-                    </ul>
-                  ),
-                  ol: ({ node, children, ...props }) => (
-                    <ol className="list-decimal list-outside mb-2 space-y-1 pl-5" {...props}>
-                      {children}
-                    </ol>
-                  ),
-                  // Custom rendering for headings
-                  h1: ({ node, children, ...props }) => (
-                    <h1 className="text-lg font-bold mb-2 mt-2" {...props}>
-                      {children}
-                    </h1>
-                  ),
-                  h2: ({ node, children, ...props }) => (
-                    <h2 className="text-base font-bold mb-2 mt-2" {...props}>
-                      {children}
-                    </h2>
-                  ),
-                  h3: ({ node, children, ...props }) => (
-                    <h3 className="text-sm font-bold mb-1 mt-1" {...props}>
-                      {children}
-                    </h3>
-                  ),
-                  // Custom rendering for blockquotes
-                  blockquote: ({ node, children, ...props }) => (
-                    <blockquote className="border-l-4 border-gray-400 pl-3 italic my-2" {...props}>
-                      {children}
-                    </blockquote>
-                  ),
-                  // Custom rendering for tables
-                  table: ({ node, children, ...props }) => (
-                    <div className="overflow-x-auto my-2">
-                      <table className="min-w-full border-collapse border border-gray-300" {...props}>
-                        {children}
-                      </table>
-                    </div>
-                  ),
-                  th: ({ node, children, ...props }) => (
-                    <th className="border border-gray-300 px-2 py-1 bg-gray-100 dark:bg-gray-800 font-semibold" {...props}>
-                      {children}
-                    </th>
-                  ),
-                  td: ({ node, children, ...props }) => (
-                    <td className="border border-gray-300 px-2 py-1" {...props}>
-                      {children}
-                    </td>
-                  ),
-                }}
-              >
-                {content}
-              </ReactMarkdown>
+              {markdownContent}
             </div>
           )}
 
@@ -738,6 +930,13 @@ const ChatMessage = ({ role, content, timestamp, mcpExecutionSteps, networkSearc
           </div>
         )}
       </div>
+      
+      {/* Context Menu */}
+      <ContextMenu
+        items={contextMenuItems}
+        position={contextMenuPosition}
+        onClose={handleCloseContextMenu}
+      />
     </div>
   );
 };
