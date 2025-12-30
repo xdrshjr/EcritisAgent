@@ -30,6 +30,7 @@ export interface Message extends ChatMessageType {
   id: string;
   timestamp: Date;
   isCleared?: boolean;
+  context?: string; // Advanced mode context
   mcpExecutionSteps?: any[]; // MCP execution steps for this message
   networkSearchExecutionSteps?: any[]; // Network search execution steps for this message
 }
@@ -62,6 +63,7 @@ const ChatPanel = ({
   const [mcpEnabled, setMcpEnabled] = useState(false);
   const [enabledMCPTools, setEnabledMCPTools] = useState<MCPConfig[]>([]);
   const [networkSearchEnabled, setNetworkSearchEnabled] = useState(false);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const [streamingNetworkSearchSteps, setStreamingNetworkSearchSteps] = useState<any[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isStopping, setIsStopping] = useState(false);
@@ -371,7 +373,7 @@ const ChatPanel = ({
     }
   }, [messages, onMessagesChange]);
 
-  const handleSendMessage = async (content: string, fileContext?: UploadedFile) => {
+  const handleSendMessage = async (content: string, fileContext?: UploadedFile, context?: string) => {
     if (!content.trim() || isLoading) {
       logger.debug('Message send blocked', { 
         hasContent: !!content.trim(), 
@@ -380,18 +382,25 @@ const ChatPanel = ({
       return;
     }
 
-    // User message only shows the question, not the file content
+    // User message only shows the question, not the file content or hidden context
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
       content: content, // Only show user's question
       timestamp: new Date(),
+      context: context, // Store context in message
     };
 
     if (fileContext) {
       logger.info('File context will be included in API request', {
         filename: fileContext.filename,
         contentLength: fileContext.content.length,
+      }, 'ChatPanel');
+    }
+
+    if (context) {
+      logger.info('Advanced mode context will be included in API request', {
+        contextLength: context.length,
       }, 'ChatPanel');
     }
 
@@ -416,7 +425,9 @@ const ChatPanel = ({
       hasFileContext: !!fileContext,
       fileContextFilename: fileContext?.filename,
       fileContextLength: fileContext?.content.length,
-      note: 'User message shows only question; file context sent separately to API'
+      hasContext: !!context,
+      contextLength: context?.length,
+      note: 'User message shows only question; file context and advanced context sent separately to API'
     }, 'ChatPanel');
     
     onMessagesMapChange(newMapForUser);
@@ -466,6 +477,18 @@ const ChatPanel = ({
         });
         logger.debug('Added file context as system message to API request', {
           filename: fileContext.filename,
+          apiMessagesCount: apiMessages.length + 1
+        }, 'ChatPanel');
+      }
+
+      // If advanced mode context exists, add it as a system message
+      if (context) {
+        apiMessages.push({
+          role: 'system',
+          content: `[Additional Context]\n\n${context}\n\n---\n\nPlease answer the following question based on the additional context above.`
+        });
+        logger.debug('Added advanced mode context as system message to API request', {
+          contextLength: context.length,
           apiMessagesCount: apiMessages.length + 1
         }, 'ChatPanel');
       }
@@ -1546,6 +1569,7 @@ const ChatPanel = ({
                 role={message.role as 'user' | 'assistant'}
                 content={message.content}
                 timestamp={message.timestamp}
+                context={message.context}
                 mcpExecutionSteps={message.mcpExecutionSteps}
                 networkSearchExecutionSteps={message.networkSearchExecutionSteps}
                 onEditMessage={handleEditMessage}
@@ -1654,6 +1678,28 @@ const ChatPanel = ({
 
         {/* Clear Buttons - Right */}
         <div className="flex items-center gap-2">
+          {/* Advanced Mode Toggle */}
+          <div className="flex items-center gap-2 mr-2">
+            <label className="text-xs text-muted-foreground font-medium cursor-pointer select-none" onClick={() => setIsAdvancedMode(!isAdvancedMode)}>
+              Advanced Mode
+            </label>
+            <button
+              onClick={() => setIsAdvancedMode(!isAdvancedMode)}
+              className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                isAdvancedMode ? 'bg-primary' : 'bg-input'
+              }`}
+              role="switch"
+              aria-checked={isAdvancedMode}
+              disabled={isLoading}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                  isAdvancedMode ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+
           <button
             onClick={handleClearChat}
             disabled={messages.length <= 1 || isLoading}
@@ -1683,6 +1729,9 @@ const ChatPanel = ({
         onSend={handleSendMessage}
         disabled={isLoading}
         placeholder={dict.chat.inputPlaceholder}
+        isAdvancedMode={isAdvancedMode}
+        onAdvancedModeChange={setIsAdvancedMode}
+        hideInternalToggle={true}
       />
 
       {/* Error Dialog */}

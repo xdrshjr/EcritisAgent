@@ -41,6 +41,7 @@ export interface ChatDialogProps {
 interface Message extends ChatMessageType {
   id: string;
   timestamp: Date;
+  context?: string; // Advanced mode context
   references?: Array<{
     title: string;
     url: string;
@@ -888,7 +889,7 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
     }
   };
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, fileContext?: any, context?: string) => {
     if (!content.trim() || isLoading || isAgentRunning) {
       logger.debug('Message send blocked', { 
         hasContent: !!content.trim(), 
@@ -905,6 +906,7 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
         role: 'user',
         content,
         timestamp: new Date(),
+        context, // Store context in message
       };
       setMessages(prev => [...prev, userMessage]);
       
@@ -917,6 +919,7 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
       role: 'user',
       content,
       timestamp: new Date(),
+      context, // Store context in message
     };
 
     // Add user message immediately so it's visible
@@ -926,6 +929,8 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
       messageId: userMessage.id,
       messageCount: messages.length + 1,
       content: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+      hasContext: !!context,
+      contextLength: context?.length,
     }, 'ChatDialog');
     
     setIsLoading(true);
@@ -942,6 +947,18 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
         .filter(msg => msg.id !== 'welcome') // Exclude welcome message
         .map(({ role, content }) => ({ role, content }));
       
+      // If advanced mode context exists, add it as a system message
+      if (context) {
+        apiMessages.push({
+          role: 'system',
+          content: `[Additional Context]\n\n${context}\n\n---\n\nPlease answer the following question based on the additional context above.`
+        });
+        logger.debug('Added advanced mode context as system message to API request', {
+          contextLength: context.length,
+          apiMessagesCount: apiMessages.length + 1
+        }, 'ChatDialog');
+      }
+
       apiMessages.push({ role: 'user', content });
 
       // Get appropriate API URL based on environment
@@ -1511,6 +1528,7 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
             role={message.role as 'user' | 'assistant'}
             content={message.content}
             timestamp={message.timestamp}
+            context={message.context}
             references={message.references}
           />
         ))}

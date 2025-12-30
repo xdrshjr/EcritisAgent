@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useRef, KeyboardEvent } from 'react';
+import { useState, useRef, KeyboardEvent, useEffect } from 'react';
 import { Send, Paperclip } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import FileAttachment from './FileAttachment';
@@ -19,17 +19,63 @@ export interface UploadedFile {
 }
 
 export interface ChatInputProps {
-  onSend: (message: string, fileContext?: UploadedFile) => void;
+  onSend: (message: string, fileContext?: UploadedFile, context?: string) => void;
   disabled?: boolean;
   placeholder?: string;
+  isAdvancedMode?: boolean;
+  onAdvancedModeChange?: (isAdvanced: boolean) => void;
+  hideInternalToggle?: boolean;
 }
 
-const ChatInput = ({ onSend, disabled = false, placeholder = 'Type your message...' }: ChatInputProps) => {
+const ChatInput = ({ 
+  onSend, 
+  disabled = false, 
+  placeholder = 'Type your message...',
+  isAdvancedMode: controlledIsAdvancedMode,
+  onAdvancedModeChange,
+  hideInternalToggle = false
+}: ChatInputProps) => {
   const [message, setMessage] = useState('');
+  const [contextInput, setContextInput] = useState('');
+  const [internalIsAdvancedMode, setInternalIsAdvancedMode] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  const isAdvancedMode = controlledIsAdvancedMode !== undefined ? controlledIsAdvancedMode : internalIsAdvancedMode;
+
+  const toggleAdvancedMode = () => {
+    const newValue = !isAdvancedMode;
+    if (onAdvancedModeChange) {
+      onAdvancedModeChange(newValue);
+    }
+    if (controlledIsAdvancedMode === undefined) {
+      setInternalIsAdvancedMode(newValue);
+    }
+  };
+  
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const contextInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Click outside to collapse
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsExpanded(false);
+      }
+    };
+
+    if (isExpanded) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isExpanded]);
 
   const handleSend = () => {
     const trimmedMessage = message.trim();
@@ -40,12 +86,17 @@ const ChatInput = ({ onSend, disabled = false, placeholder = 'Type your message.
 
     logger.debug('Sending chat message', { 
       messageLength: trimmedMessage.length,
-      hasFileContext: !!uploadedFile
+      hasFileContext: !!uploadedFile,
+      isAdvancedMode,
+      hasContext: !!contextInput
     }, 'ChatInput');
     
-    onSend(trimmedMessage, uploadedFile || undefined);
+    onSend(trimmedMessage, uploadedFile || undefined, isAdvancedMode ? contextInput : undefined);
+    
     setMessage('');
+    setContextInput('');
     setUploadedFile(null);
+    setIsExpanded(false);
 
     // Reset textarea height
     if (inputRef.current) {
@@ -180,15 +231,47 @@ const ChatInput = ({ onSend, disabled = false, placeholder = 'Type your message.
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessage(e.target.value);
 
-    // Auto-resize textarea
-    const textarea = e.target;
-    textarea.style.height = 'auto';
-    const newHeight = Math.min(textarea.scrollHeight, 120); // Max 120px
-    textarea.style.height = `${newHeight}px`;
+    // Auto-resize textarea if not expanded advanced mode
+    if (!isExpanded || !isAdvancedMode) {
+      const textarea = e.target;
+      textarea.style.height = 'auto';
+      const newHeight = Math.min(textarea.scrollHeight, 120); // Max 120px
+      textarea.style.height = `${newHeight}px`;
+    }
   };
 
   return (
-    <div className="flex flex-col border-t border-border bg-background">
+    <div 
+      ref={containerRef}
+      className={`flex flex-col border-t border-border bg-background transition-all duration-300 ease-in-out ${
+        isExpanded && isAdvancedMode ? 'h-[30vh]' : 'h-auto'
+      }`}
+    >
+      {/* Advanced Mode Toggle - Only show if not hidden */}
+      {!hideInternalToggle && (
+        <div className="flex items-center justify-end px-3 py-2 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-muted-foreground font-medium cursor-pointer select-none" onClick={toggleAdvancedMode}>
+              Advanced Mode
+            </label>
+            <button
+              onClick={toggleAdvancedMode}
+              className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                isAdvancedMode ? 'bg-primary' : 'bg-input'
+              }`}
+              role="switch"
+              aria-checked={isAdvancedMode}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                  isAdvancedMode ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* File Attachment Display */}
       {uploadedFile && (
         <div className="px-3 pt-3 pb-2 border-b border-border/50">
@@ -201,7 +284,7 @@ const ChatInput = ({ onSend, disabled = false, placeholder = 'Type your message.
       )}
 
       {/* Input Area */}
-      <div className="flex items-end gap-2 px-3 py-4">
+      <div className={`flex gap-2 px-3 py-4 ${isExpanded && isAdvancedMode ? 'flex-1 items-stretch' : 'items-end'}`}>
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
@@ -216,7 +299,7 @@ const ChatInput = ({ onSend, disabled = false, placeholder = 'Type your message.
         <button
           onClick={handleFileButtonClick}
           disabled={disabled || isUploading}
-          className="flex-shrink-0 w-10 h-10 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-muted hover:border-border disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className={`flex-shrink-0 w-10 h-10 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-muted hover:border-border disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${isExpanded && isAdvancedMode ? 'self-end' : ''}`}
           aria-label="Upload document file"
           title="Upload PDF or Word document"
           tabIndex={0}
@@ -224,25 +307,57 @@ const ChatInput = ({ onSend, disabled = false, placeholder = 'Type your message.
           <Paperclip className={`w-4 h-4 ${isUploading ? 'animate-spin' : ''}`} />
         </button>
 
-        {/* Text input */}
-        <textarea
-          ref={inputRef}
-          value={message}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          disabled={disabled}
-          rows={1}
-          className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ maxHeight: '120px' }}
-          aria-label="Chat message input"
-        />
+        {isExpanded && isAdvancedMode ? (
+          <div className="flex-1 flex gap-4 h-full">
+            <div className="flex-1 flex flex-col gap-2">
+               <label className="text-xs text-muted-foreground font-medium">Instruction</label>
+               <textarea
+                   ref={inputRef}
+                   value={message}
+                   onChange={handleChange}
+                   onKeyDown={handleKeyDown}
+                   placeholder="Enter your instruction..."
+                   className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                   disabled={disabled}
+               />
+            </div>
+            <div className="flex-1 flex flex-col gap-2">
+               <label className="text-xs text-muted-foreground font-medium">Context</label>
+               <textarea
+                   ref={contextInputRef}
+                   value={contextInput}
+                   onChange={(e) => setContextInput(e.target.value)}
+                   onKeyDown={handleKeyDown}
+                   placeholder="Enter context..."
+                   className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                   disabled={disabled}
+               />
+            </div>
+          </div>
+        ) : (
+          /* Text input */
+          <textarea
+            ref={inputRef}
+            value={message}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onFocus={() => {
+              if (isAdvancedMode) setIsExpanded(true);
+            }}
+            placeholder={placeholder}
+            disabled={disabled}
+            rows={1}
+            className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ maxHeight: '120px' }}
+            aria-label="Chat message input"
+          />
+        )}
         
         {/* Send button */}
         <button
           onClick={handleSend}
           disabled={disabled || !message.trim()}
-          className="flex-shrink-0 w-10 h-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className={`flex-shrink-0 w-10 h-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${isExpanded && isAdvancedMode ? 'self-end' : ''}`}
           aria-label="Send message"
           tabIndex={0}
         >
@@ -254,4 +369,3 @@ const ChatInput = ({ onSend, disabled = false, placeholder = 'Type your message.
 };
 
 export default ChatInput;
-

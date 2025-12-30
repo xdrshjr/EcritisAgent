@@ -27,9 +27,9 @@ export interface ChatMessageProps {
   content: string;
   timestamp?: Date;
   mcpExecutionSteps?: any[];
-  networkSearchExecutionSteps?: any[];
-  isMcpStreaming?: boolean; // Indicates if MCP steps are still being streamed
-  isNetworkSearchStreaming?: boolean; // Indicates if network search steps are still being streamed
+  networkSearchExecutionSteps?: any[]; // Network search steps
+  isMcpStreaming?: boolean;
+  isNetworkSearchStreaming?: boolean;
   references?: Array<{
     title: string;
     url: string;
@@ -37,6 +37,7 @@ export interface ChatMessageProps {
     score?: number;
   }>; // References for auto-writer agent
   messageId?: string; // Unique identifier for the message
+  context?: string; // Advanced mode context
   onEditMessage?: (messageId: string, newContent: string) => void; // Callback for editing messages
   onDeleteMessage?: (messageId: string) => void; // Callback for deleting messages
 }
@@ -51,6 +52,7 @@ const ChatMessage = ({
   isNetworkSearchStreaming = false, 
   references,
   messageId,
+  context,
   onEditMessage,
   onDeleteMessage
 }: ChatMessageProps) => {
@@ -62,6 +64,7 @@ const ChatMessage = ({
   const [copySuccess, setCopySuccess] = useState(false);
   const [codeBlockCopyStates, setCodeBlockCopyStates] = useState<Record<string, boolean>>({});
   const [isReferencesExpanded, setIsReferencesExpanded] = useState(false); // Default collapsed
+  const [isContextExpanded, setIsContextExpanded] = useState(false); // Default collapsed for context
   
   // Context menu state
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
@@ -777,7 +780,27 @@ const ChatMessage = ({
                   </div>
                 </div>
               ) : (
-                <div>{content}</div>
+                <>
+                  <div>{content}</div>
+                  {/* Context display for advanced mode */}
+                  {context && (
+                    <div className="mt-3 border-t border-white/20 pt-2">
+                      <button 
+                        onClick={() => setIsContextExpanded(!isContextExpanded)}
+                        className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors w-full text-left font-medium mb-1"
+                      >
+                        <span className={`transform transition-transform ${isContextExpanded ? 'rotate-90' : ''}`}>▶</span>
+                        Context
+                      </button>
+                      
+                      {isContextExpanded && (
+                        <div className="bg-emerald-400/20 rounded px-2 py-1.5 text-xs text-white/95 whitespace-pre-wrap font-mono mt-1 border border-emerald-300/30">
+                          {context}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ) : (
