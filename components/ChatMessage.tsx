@@ -9,7 +9,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useMemo } from 'react';
-import { Bot, User, Copy, Languages, Loader2, ChevronDown, ChevronUp, BookOpen, Edit, Trash2 } from 'lucide-react';
+import { Bot, User, Copy, Languages, Loader2, ChevronDown, ChevronUp, BookOpen, Edit, Trash2, Send } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -19,6 +19,8 @@ import ContextMenu from './ContextMenu';
 import { logger } from '@/lib/logger';
 import { buildApiUrl } from '@/lib/apiConfig';
 import { getDefaultModel } from '@/lib/modelConfig';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { getDictionary } from '@/lib/i18n/dictionaries';
 import type { ChatMessage as ChatMessageType } from '@/lib/chatClient';
 import 'highlight.js/styles/github-dark.css';
 
@@ -40,22 +42,26 @@ export interface ChatMessageProps {
   context?: string; // Advanced mode context
   onEditMessage?: (messageId: string, newContent: string) => void; // Callback for editing messages
   onDeleteMessage?: (messageId: string) => void; // Callback for deleting messages
+  onResendMessage?: (messageId: string, content: string) => void; // Callback for resending messages
 }
 
-const ChatMessage = ({ 
-  role, 
-  content, 
-  timestamp, 
-  mcpExecutionSteps, 
-  networkSearchExecutionSteps, 
-  isMcpStreaming = false, 
-  isNetworkSearchStreaming = false, 
+const ChatMessage = ({
+  role,
+  content,
+  timestamp,
+  mcpExecutionSteps,
+  networkSearchExecutionSteps,
+  isMcpStreaming = false,
+  isNetworkSearchStreaming = false,
   references,
   messageId,
   context,
   onEditMessage,
-  onDeleteMessage
+  onDeleteMessage,
+  onResendMessage
 }: ChatMessageProps) => {
+  const { locale } = useLanguage();
+  const dict = getDictionary(locale);
   const isUser = role === 'user';
   const [showTranslation, setShowTranslation] = useState(false);
   const [translationLines, setTranslationLines] = useState<string[]>([]);
@@ -486,7 +492,7 @@ const ChatMessage = ({
         role: isUser ? 'user' : 'assistant',
         contentLength: content.length,
       }, 'ChatMessage');
-      
+
       onDeleteMessage(messageId);
     } else {
       logger.warn('Delete message requested but no handler available', {
@@ -495,6 +501,24 @@ const ChatMessage = ({
       }, 'ChatMessage');
     }
   }, [messageId, onDeleteMessage, isUser, content]);
+
+  const handleResendMessage = useCallback(() => {
+    if (messageId && onResendMessage) {
+      logger.info('Resending message', {
+        messageId,
+        role: isUser ? 'user' : 'assistant',
+        contentLength: content.length,
+        contentPreview: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+      }, 'ChatMessage');
+
+      onResendMessage(messageId, content);
+    } else {
+      logger.warn('Resend message requested but no handler available', {
+        hasMessageId: !!messageId,
+        hasResendHandler: !!onResendMessage,
+      }, 'ChatMessage');
+    }
+  }, [messageId, onResendMessage, isUser, content]);
 
   const markdownContent = useMemo(() => (
     <ReactMarkdown
@@ -632,6 +656,12 @@ const ChatMessage = ({
       icon: <Copy className="w-4 h-4" />,
       action: handleCopySelectedText,
     },
+    ...(isUser && onResendMessage && messageId ? [{
+      id: 'resend',
+      label: dict.chat.resendMessage,
+      icon: <Send className="w-4 h-4" />,
+      action: handleResendMessage,
+    }] : []),
     ...(onEditMessage && messageId ? [{
       id: 'edit',
       label: 'Edit Message',

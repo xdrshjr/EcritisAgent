@@ -1524,6 +1524,38 @@ const ChatPanel = ({
     }, 'ChatPanel');
   };
 
+  const handleResendMessage = (messageId: string, content: string) => {
+    if (!conversationId) {
+      logger.warn('No active conversation to resend message', { messageId }, 'ChatPanel');
+      return;
+    }
+
+    logger.info('Resending message', {
+      messageId,
+      conversationId,
+      contentLength: content.length,
+      contentPreview: content.substring(0, 50) + (content.length > 50 ? '...' : ''),
+    }, 'ChatPanel');
+
+    // Find the original message to check for context
+    const originalMessage = messages.find(m => m.id === messageId);
+
+    logger.debug('Found original message for resend', {
+      messageId,
+      hasContext: !!originalMessage?.context,
+      contextLength: originalMessage?.context?.length,
+    }, 'ChatPanel');
+
+    // Resend the message using handleSendMessage with the original content and context
+    handleSendMessage(content, undefined, originalMessage?.context);
+
+    logger.success('Message resent successfully', {
+      messageId,
+      conversationId,
+      contentLength: content.length,
+    }, 'ChatPanel');
+  };
+
   const handleClearChat = () => {
     if (!conversationId) {
       logger.error('No active conversation to clear', undefined, 'ChatPanel');
@@ -1663,6 +1695,7 @@ const ChatPanel = ({
                 networkSearchExecutionSteps={message.networkSearchExecutionSteps}
                 onEditMessage={handleEditMessage}
                 onDeleteMessage={handleDeleteMessage}
+                onResendMessage={handleResendMessage}
               />
             ))}
 

@@ -217,6 +217,7 @@ const en = {
     fileSizeExceeded: 'File size must be less than 10MB',
     invalidFileType: 'Please select a PDF or Word document file',
     removeFile: 'Remove file',
+    resendMessage: 'Resend Message',
   },
   settings: {
     title: 'Settings',
@@ -551,6 +552,7 @@ const zh = {
     fileSizeExceeded: '文件大小必须小于10MB',
     invalidFileType: '请选择PDF或Word文档',
     removeFile: '移除文件',
+    resendMessage: '再次发送',
   },
   settings: {
     title: '设置',
