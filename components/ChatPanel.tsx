@@ -727,15 +727,27 @@ const ChatPanel = ({
       try {
         while (true) {
           let readResult;
-          
+
           try {
             readResult = await reader.read();
           } catch (readError) {
-            logger.error('Failed to read from stream', {
-              error: readError instanceof Error ? readError.message : 'Unknown error',
-              chunkCount,
-              contentLength: assistantContent.length,
-            }, 'ChatPanel');
+            // Check if this is an abort-related error
+            const isAbortError = readError instanceof Error &&
+              (readError.name === 'AbortError' ||
+               readError.message.toLowerCase().includes('abort'));
+
+            if (isAbortError) {
+              logger.info('Stream read aborted by user', {
+                chunkCount,
+                contentLength: assistantContent.length,
+              }, 'ChatPanel');
+            } else {
+              logger.error('Failed to read from stream', {
+                error: readError instanceof Error ? readError.message : 'Unknown error',
+                chunkCount,
+                contentLength: assistantContent.length,
+              }, 'ChatPanel');
+            }
             throw readError;
           }
 
@@ -1205,13 +1217,54 @@ const ChatPanel = ({
       }, 'ChatPanel');
 
     } catch (error) {
-      // Check if error is due to abort
-      if (error instanceof Error && error.name === 'AbortError') {
+      // Check if error is due to abort (check both error name and message)
+      const isAbortError = error instanceof Error &&
+        (error.name === 'AbortError' ||
+         error.message.toLowerCase().includes('abort'));
+
+      if (isAbortError) {
         logger.info('Streaming request was aborted by user', {
           conversationId,
+          errorMessage: error instanceof Error ? error.message : 'Unknown',
         }, 'ChatPanel');
-        
-        // Don't show error message for user-initiated stops
+
+        // Save streaming content as a complete message before cleanup if there's any content
+        if (conversationId && streamingContent.trim()) {
+          logger.info('Saving partial response as complete message after abort', {
+            conversationId,
+            contentLength: streamingContent.length,
+            mcpSteps: streamingMcpSteps.length,
+            networkSearchSteps: streamingNetworkSearchSteps.length,
+          }, 'ChatPanel');
+
+          const assistantMessage: Message = {
+            id: `msg-${Date.now()}-aborted`,
+            role: 'assistant',
+            content: streamingContent,
+            timestamp: new Date(),
+            mcpExecutionSteps: streamingMcpSteps.length > 0 ? streamingMcpSteps : undefined,
+            networkSearchExecutionSteps: streamingNetworkSearchSteps.length > 0 ? streamingNetworkSearchSteps : undefined,
+          };
+
+          const newMap = new Map(messagesMap);
+          const currentMessages = newMap.get(conversationId) || [];
+          const updatedMessages = [...currentMessages, assistantMessage];
+          newMap.set(conversationId, updatedMessages);
+          onMessagesMapChange(newMap);
+
+          logger.info('Partial response saved successfully after abort', {
+            conversationId,
+            messageId: assistantMessage.id,
+          }, 'ChatPanel');
+        } else {
+          logger.debug('No streaming content to save after abort', {
+            conversationId,
+            hasContent: !!streamingContent,
+            contentTrimmed: streamingContent.trim().length,
+          }, 'ChatPanel');
+        }
+
+        // Don't show error message for user-initiated stops, clean up state
         setStreamingContent('');
         setStreamingMcpSteps([]);
         setStreamingNetworkSearchSteps([]);
@@ -1314,7 +1367,7 @@ const ChatPanel = ({
     try {
       // Get API URL for stop endpoint
       const apiUrl = await buildApiUrl('/api/chat');
-      
+
       logger.debug('Sending stop request to backend', {
         sessionId: currentSessionId,
         apiUrl,
@@ -1337,7 +1390,7 @@ const ChatPanel = ({
         logger.success('Stop request sent successfully', {
           sessionId: currentSessionId,
         }, 'ChatPanel');
-        
+
         // Also abort the fetch request on client side
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
@@ -1348,7 +1401,7 @@ const ChatPanel = ({
           sessionId: currentSessionId,
           result,
         }, 'ChatPanel');
-        
+
         // Still try to abort on client side
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
@@ -1359,13 +1412,49 @@ const ChatPanel = ({
         error: error instanceof Error ? error.message : 'Unknown error',
         sessionId: currentSessionId,
       }, 'ChatPanel');
-      
+
       // Try to abort on client side as fallback
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         logger.debug('Aborted client-side fetch request as fallback', undefined, 'ChatPanel');
       }
     } finally {
+      // Save streaming content as a complete message before cleanup
+      if (conversationId && streamingContent.trim()) {
+        logger.info('Saving partial response as complete message after stop', {
+          conversationId,
+          contentLength: streamingContent.length,
+          mcpSteps: streamingMcpSteps.length,
+          networkSearchSteps: streamingNetworkSearchSteps.length,
+        }, 'ChatPanel');
+
+        const assistantMessage: Message = {
+          id: `msg-${Date.now()}-stopped`,
+          role: 'assistant',
+          content: streamingContent,
+          timestamp: new Date(),
+          mcpExecutionSteps: streamingMcpSteps.length > 0 ? streamingMcpSteps : undefined,
+          networkSearchExecutionSteps: streamingNetworkSearchSteps.length > 0 ? streamingNetworkSearchSteps : undefined,
+        };
+
+        const newMap = new Map(messagesMap);
+        const currentMessages = newMap.get(conversationId) || [];
+        const updatedMessages = [...currentMessages, assistantMessage];
+        newMap.set(conversationId, updatedMessages);
+        onMessagesMapChange(newMap);
+
+        logger.info('Partial response saved successfully', {
+          conversationId,
+          messageId: assistantMessage.id,
+        }, 'ChatPanel');
+      } else {
+        logger.debug('No streaming content to save after stop', {
+          conversationId,
+          hasContent: !!streamingContent,
+          contentTrimmed: streamingContent.trim().length,
+        }, 'ChatPanel');
+      }
+
       // Clean up state
       setIsStopping(false);
       setIsLoading(false);
@@ -1374,7 +1463,7 @@ const ChatPanel = ({
       setStreamingNetworkSearchSteps([]);
       setCurrentSessionId(null);
       abortControllerRef.current = null;
-      
+
       logger.debug('Cleaned up after stop request', undefined, 'ChatPanel');
     }
   };
