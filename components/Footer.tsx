@@ -18,7 +18,7 @@ const Footer = ({ copyright }: FooterProps) => {
   }, []);
 
   return (
-    <footer className="h-12 bg-muted border-t-4 border-border flex items-center justify-center px-6">
+    <footer className="h-6 bg-muted border-t-4 border-border flex items-center justify-center px-6">
       <p className="text-sm text-muted-foreground">{copyright}</p>
     </footer>
   );

@@ -726,7 +726,7 @@ const ChatMessage = ({
         <div
           className={`relative px-4 py-3 shadow-sm transition-all hover:shadow-md group ${
             isUser
-              ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'
+              ? 'bg-[#F3F4F6] text-foreground'
               : 'bg-muted/80 text-foreground border border-border/50'
           }`}
         >
@@ -770,15 +770,15 @@ const ChatMessage = ({
               <button
                 onClick={handleCopy}
                 onKeyDown={(e) => handleKeyDown(e, handleCopy)}
-                className={`p-1.5 rounded-md transition-all duration-200 hover:bg-white/20 text-white/80 hover:text-white bg-white/10 backdrop-blur-sm border border-white/30 ${copySuccess ? 'bg-green-500/30 border-green-400/50' : ''} shadow-sm hover:shadow-md`}
+                className={`p-1.5 rounded-md transition-all duration-200 hover:bg-black/10 text-black/60 hover:text-black bg-black/5 border border-black/20 ${copySuccess ? 'bg-green-500/20 border-green-400/50' : ''} shadow-sm hover:shadow-md`}
                 aria-label="Copy message"
                 tabIndex={0}
                 title={copySuccess ? 'Copied!' : 'Copy message'}
               >
                 {copySuccess ? (
-                  <span className="text-xs font-semibold text-white">✓</span>
+                  <span className="text-xs font-semibold text-black">✓</span>
                 ) : (
-                  <Copy className="w-3.5 h-3.5 text-white/90" />
+                  <Copy className="w-3.5 h-3.5 text-black/70" />
                 )}
               </button>
             </div>
@@ -790,20 +790,20 @@ const ChatMessage = ({
                   <textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
-                    className="w-full bg-transparent border border-white/30 rounded px-2 py-1 text-sm resize-none focus:outline-none focus:border-white/50"
+                    className="w-full bg-transparent border border-black/15 rounded px-2 py-1 text-sm resize-none focus:outline-none focus:border-black/30"
                     rows={Math.max(2, editContent.split('\n').length)}
                     autoFocus
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={handleSaveEdit}
-                      className="px-2 py-1 text-xs bg-white/20 hover:bg-white/30 rounded border border-white/30 transition-colors"
+                      className="px-2 py-1 text-xs bg-black/10 hover:bg-black/20 rounded border border-black/15 transition-colors"
                     >
                       Save
                     </button>
                     <button
                       onClick={handleCancelEdit}
-                      className="px-2 py-1 text-xs bg-white/10 hover:bg-white/20 rounded border border-white/30 transition-colors"
+                      className="px-2 py-1 text-xs bg-black/5 hover:bg-black/10 rounded border border-black/10 transition-colors"
                     >
                       Cancel
                     </button>
@@ -814,17 +814,17 @@ const ChatMessage = ({
                   <div>{content}</div>
                   {/* Context display for advanced mode */}
                   {context && (
-                    <div className="mt-3 border-t border-white/20 pt-2">
+                    <div className="mt-3 border-t border-black/15 pt-2">
                       <button 
                         onClick={() => setIsContextExpanded(!isContextExpanded)}
-                        className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors w-full text-left font-medium mb-1"
+                        className="flex items-center gap-1.5 text-xs text-black/60 hover:text-black transition-colors w-full text-left font-medium mb-1"
                       >
                         <span className={`transform transition-transform ${isContextExpanded ? 'rotate-90' : ''}`}>▶</span>
                         Context
                       </button>
                       
                       {isContextExpanded && (
-                        <div className="bg-emerald-400/20 rounded px-2 py-1.5 text-xs text-white/95 whitespace-pre-wrap font-mono mt-1 border border-emerald-300/30">
+                        <div className="bg-emerald-400/20 rounded px-2 py-1.5 text-xs text-black/95 whitespace-pre-wrap font-mono mt-1 border border-emerald-300/30">
                           {context}
                         </div>
                       )}
@@ -842,15 +842,15 @@ const ChatMessage = ({
           {/* Translation Display */}
           {showTranslation && hasTranslation && translationLines.length > 0 && (
             <div className={`mt-3 pt-3 border-t ${
-              isUser ? 'border-blue-400/40' : 'border-border/60'
+              isUser ? 'border-black/15' : 'border-border/60'
             }`}>
               <div className={`text-xs mb-2.5 font-medium ${
-                isUser ? 'text-blue-100/90' : 'text-muted-foreground/80'
+                isUser ? 'text-black/70' : 'text-muted-foreground/80'
               }`}>
                 Translation:
               </div>
               <div className={`text-sm leading-relaxed ${
-                isUser ? 'text-blue-50/95' : 'text-muted-foreground/90'
+                isUser ? 'text-black/95' : 'text-muted-foreground/90'
               }`}>
                 {content.split('\n').map((originalLine, index) => {
                   const translationLine = translationLines[index] || '';

@@ -18,6 +18,11 @@ export interface UploadedFile {
   size: number;
 }
 
+interface HistoryEntry {
+  instruction: string;
+  context: string;
+}
+
 export interface ChatInputProps {
   onSend: (message: string, fileContext?: UploadedFile, context?: string) => void;
   disabled?: boolean;
@@ -39,6 +44,9 @@ const ChatInput = ({
   const [contextInput, setContextInput] = useState('');
   const [internalIsAdvancedMode, setInternalIsAdvancedMode] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [inputHistory, setInputHistory] = useState<HistoryEntry[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [tempInput, setTempInput] = useState<{ instruction: string; context: string }>({ instruction: '', context: '' });
   
   const isAdvancedMode = controlledIsAdvancedMode !== undefined ? controlledIsAdvancedMode : internalIsAdvancedMode;
 
@@ -59,6 +67,34 @@ const ChatInput = ({
   const contextInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Load input history from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('aidocmaster.chatInputHistory');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (typeof parsed[0] === 'string') {
+            const converted: HistoryEntry[] = parsed.map((item: string) => ({
+              instruction: item,
+              context: ''
+            }));
+            setInputHistory(converted);
+          } else {
+            setInputHistory(parsed);
+          }
+        }
+      } catch (error) {
+        logger.warn('Failed to parse input history from localStorage', { error }, 'ChatInput');
+      }
+    }
+  }, []);
+
+  // Save input history to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('aidocmaster.chatInputHistory', JSON.stringify(inputHistory));
+  }, [inputHistory]);
 
   // Click outside to collapse
   useEffect(() => {
@@ -93,12 +129,30 @@ const ChatInput = ({
     
     onSend(trimmedMessage, uploadedFile || undefined, isAdvancedMode ? contextInput : undefined);
     
+    const newHistory = [...inputHistory];
+    const lastEntry = newHistory[newHistory.length - 1];
+    const trimmedContext = contextInput.trim();
+    
+    if (newHistory.length === 0 || 
+        lastEntry?.instruction !== trimmedMessage || 
+        lastEntry?.context !== trimmedContext) {
+      newHistory.push({
+        instruction: trimmedMessage,
+        context: trimmedContext
+      });
+      if (newHistory.length > 10) {
+        newHistory.shift();
+      }
+      setInputHistory(newHistory);
+    }
+    
     setMessage('');
     setContextInput('');
     setUploadedFile(null);
     setIsExpanded(false);
+    setHistoryIndex(-1);
+    setTempInput({ instruction: '', context: '' });
 
-    // Reset textarea height
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';
     }
@@ -221,22 +275,66 @@ const ChatInput = ({
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // Send on Enter (without Shift)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigateHistory(-1);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      navigateHistory(1);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMessage(e.target.value);
+  const navigateHistory = (direction: number) => {
+    if (inputHistory.length === 0) {
+      return;
+    }
 
-    // Auto-resize textarea if not expanded advanced mode
+    if (historyIndex === -1 && direction === -1) {
+      setTempInput({ instruction: message, context: contextInput });
+      setHistoryIndex(inputHistory.length - 1);
+      const entry = inputHistory[inputHistory.length - 1];
+      setMessage(entry.instruction);
+      setContextInput(entry.context);
+    } else {
+      const newIndex = historyIndex + direction;
+      if (newIndex >= 0 && newIndex < inputHistory.length) {
+        setHistoryIndex(newIndex);
+        const entry = inputHistory[newIndex];
+        setMessage(entry.instruction);
+        setContextInput(entry.context);
+      } else if (newIndex >= inputHistory.length) {
+        setMessage(tempInput.instruction);
+        setContextInput(tempInput.context);
+        setHistoryIndex(-1);
+      }
+    }
+  };
+
+  const handleInstructionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+    
+    if (historyIndex !== -1) {
+      setHistoryIndex(-1);
+      setTempInput({ instruction: '', context: '' });
+    }
+
     if (!isExpanded || !isAdvancedMode) {
       const textarea = e.target;
       textarea.style.height = 'auto';
-      const newHeight = Math.min(textarea.scrollHeight, 120); // Max 120px
+      const newHeight = Math.min(textarea.scrollHeight, 120);
       textarea.style.height = `${newHeight}px`;
+    }
+  };
+
+  const handleContextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContextInput(e.target.value);
+    
+    if (historyIndex !== -1) {
+      setHistoryIndex(-1);
+      setTempInput({ instruction: '', context: '' });
     }
   };
 
@@ -314,7 +412,7 @@ const ChatInput = ({
                <textarea
                    ref={inputRef}
                    value={message}
-                   onChange={handleChange}
+                   onChange={handleInstructionChange}
                    onKeyDown={handleKeyDown}
                    placeholder="Enter your instruction..."
                    className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
@@ -326,7 +424,7 @@ const ChatInput = ({
                <textarea
                    ref={contextInputRef}
                    value={contextInput}
-                   onChange={(e) => setContextInput(e.target.value)}
+                   onChange={handleContextChange}
                    onKeyDown={handleKeyDown}
                    placeholder="Enter context..."
                    className="flex-1 resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
@@ -339,7 +437,7 @@ const ChatInput = ({
           <textarea
             ref={inputRef}
             value={message}
-            onChange={handleChange}
+            onChange={handleInstructionChange}
             onKeyDown={handleKeyDown}
             onFocus={() => {
               if (isAdvancedMode) setIsExpanded(true);

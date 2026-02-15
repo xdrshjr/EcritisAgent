@@ -55,3 +55,19 @@ next-env.d.ts
 *.swp
 *.swo
 *~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Claude Code
+.claude/
+
+# Cursor
+.cursor/
+
+# Trae
+.trae/
