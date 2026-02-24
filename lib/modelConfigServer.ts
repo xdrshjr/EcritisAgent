@@ -2,64 +2,77 @@
  * Server-Side Model Configuration Service
  * Handles model configuration loading in Next.js API routes (Node.js runtime)
  * Supports both Electron file system and browser cookie-based storage
+ *
+ * Reads from the three-file model type system:
+ *   standard-models.json, coding-plan-models.json, custom-models.json
  */
 
 import { logger } from './logger';
-import { ModelConfig, ModelConfigList } from './modelConfig';
+import { ModelConfig, ModelConfigList, isCodingPlanModel } from './modelConfig';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 
-const MODEL_CONFIG_FILENAME = 'model-configs.json';
+/** File names matching backend ConfigLoader.TYPE_FILES */
+const TYPE_FILES = [
+  'standard-models.json',
+  'coding-plan-models.json',
+  'custom-models.json',
+] as const;
 
 /**
  * Check if running in Electron environment (server-side check)
  */
 const isElectronEnvironment = (): boolean => {
-  // In server-side, check for Electron-specific environment variables
-  return process.env.ELECTRON_RUN_AS_NODE !== undefined || 
+  return process.env.ELECTRON_RUN_AS_NODE !== undefined ||
          process.env.ELECTRON_APP === 'true';
 };
 
 /**
- * Get model config file path for Electron
+ * Get user-data directory path for Electron
  */
-const getElectronConfigPath = (): string => {
-  // Use user data directory
-  const userDataPath = process.env.ELECTRON_USER_DATA || 
-                       path.join(os.homedir(), '.docaimaster');
-  return path.join(userDataPath, MODEL_CONFIG_FILENAME);
+const getElectronUserDataDir = (): string => {
+  return process.env.ELECTRON_USER_DATA ||
+         path.join(os.homedir(), '.docaimaster');
 };
 
 /**
- * Load model configurations from file system (Electron mode)
+ * Load and merge model configurations from all three type files (Electron mode)
  */
 const loadModelConfigsFromFile = async (): Promise<ModelConfigList> => {
-  try {
-    const configPath = getElectronConfigPath();
-    logger.debug('Loading model configs from file', { path: configPath }, 'ModelConfigServer');
-    
-    const fileContent = await fs.readFile(configPath, 'utf-8');
-    const configs = JSON.parse(fileContent) as ModelConfigList;
-    
-    logger.success('Model configurations loaded from file', {
-      count: configs.models.length,
-      path: configPath,
-    }, 'ModelConfigServer');
-    
-    return configs;
-  } catch (error) {
-    if ((error as any).code === 'ENOENT') {
-      logger.info('Model config file not found, returning empty list', undefined, 'ModelConfigServer');
-      return { models: [] };
+  const userDataDir = getElectronUserDataDir();
+  const allModels: ModelConfig[] = [];
+  let defaultModelId: string | undefined;
+
+  for (const filename of TYPE_FILES) {
+    const filePath = path.join(userDataDir, filename);
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const data = JSON.parse(content) as ModelConfigList;
+      allModels.push(...(data.models || []));
+      if (data.defaultModelId && !defaultModelId) {
+        defaultModelId = data.defaultModelId;
+      }
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        logger.error(`Failed to load ${filename}`, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }, 'ModelConfigServer');
+      }
+      // ENOENT is expected for files that don't exist yet — skip silently
     }
-    
-    logger.error('Failed to load model configs from file', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }, 'ModelConfigServer');
-    
-    return { models: [] };
   }
+
+  if (allModels.length > 0) {
+    logger.success('Model configurations loaded from files', {
+      count: allModels.length,
+      dir: userDataDir,
+    }, 'ModelConfigServer');
+  } else {
+    logger.info('No model config files found', undefined, 'ModelConfigServer');
+  }
+
+  return { models: allModels, defaultModelId };
 };
 
 /**
@@ -73,7 +86,6 @@ const loadModelConfigsFromCookies = (request: Request): ModelConfigList => {
       return { models: [] };
     }
 
-    // Parse cookies
     const cookies = Object.fromEntries(
       cookieHeader.split('; ').map(c => {
         const [key, ...v] = c.split('=');
@@ -87,20 +99,19 @@ const loadModelConfigsFromCookies = (request: Request): ModelConfigList => {
       return { models: [] };
     }
 
-    // Decode and parse
     const decoded = decodeURIComponent(modelConfigsCookie);
     const configs = JSON.parse(decoded) as ModelConfigList;
-    
+
     logger.success('Model configurations loaded from cookies', {
       count: configs.models.length,
     }, 'ModelConfigServer');
-    
+
     return configs;
   } catch (error) {
     logger.error('Failed to load model configs from cookies', {
       error: error instanceof Error ? error.message : 'Unknown error',
     }, 'ModelConfigServer');
-    
+
     return { models: [] };
   }
 };
@@ -115,12 +126,10 @@ export const getDefaultModelServer = async (request?: Request): Promise<ModelCon
   try {
     let configList: ModelConfigList;
 
-    // Try Electron file system first
     if (isElectronEnvironment()) {
       logger.debug('Using Electron file system mode', undefined, 'ModelConfigServer');
       configList = await loadModelConfigsFromFile();
     } else if (request) {
-      // Fall back to cookies for browser mode
       logger.debug('Using browser cookie mode', undefined, 'ModelConfigServer');
       configList = loadModelConfigsFromCookies(request);
     } else {
@@ -133,33 +142,30 @@ export const getDefaultModelServer = async (request?: Request): Promise<ModelCon
       return null;
     }
 
-    // Filter enabled models
     const enabledModels = configList.models.filter(m => m.isEnabled !== false);
-    
+
     if (enabledModels.length === 0) {
       logger.warn('No enabled models available', undefined, 'ModelConfigServer');
       return null;
     }
 
-    // Find default model among enabled models
     const defaultModel = enabledModels.find(m => m.isDefault);
-    
+
     if (defaultModel) {
       logger.info('Default model found and enabled', {
         id: defaultModel.id,
         name: defaultModel.name,
-        modelName: defaultModel.modelName,
+        type: defaultModel.type,
       }, 'ModelConfigServer');
       return defaultModel;
     }
 
-    // If no default set among enabled models, return first enabled model
     logger.info('No default model set, using first enabled model', {
       id: enabledModels[0].id,
       name: enabledModels[0].name,
-      modelName: enabledModels[0].modelName,
+      type: enabledModels[0].type,
     }, 'ModelConfigServer');
-    
+
     return enabledModels[0];
   } catch (error) {
     logger.error('Failed to get default model', {
@@ -172,7 +178,6 @@ export const getDefaultModelServer = async (request?: Request): Promise<ModelCon
 /**
  * Get LLM configuration for API calls (server-side)
  * Uses user-configured models from persistent storage
- * No longer depends on environment variables
  */
 export const getLLMConfigServer = async (request?: Request): Promise<{
   apiKey: string;
@@ -183,46 +188,52 @@ export const getLLMConfigServer = async (request?: Request): Promise<{
   logger.info('Fetching LLM configuration (server-side)', undefined, 'ModelConfigServer');
 
   try {
-    // Get default model from user configuration or persistent storage
     const defaultModel = await getDefaultModelServer(request);
-    
+
     if (defaultModel) {
+      // CodingPlan models have apiUrl/modelName resolved by the backend at call time;
+      // server-side we pass empty strings as placeholders.
+      let apiUrl = '';
+      let modelName = '';
+
+      if (!isCodingPlanModel(defaultModel)) {
+        apiUrl = defaultModel.apiUrl;
+        modelName = defaultModel.modelName;
+      }
+
       logger.success('Using user-configured default model', {
         source: 'User Settings',
         modelId: defaultModel.id,
         displayName: defaultModel.name,
-        modelName: defaultModel.modelName,
-        apiUrl: defaultModel.apiUrl,
+        type: defaultModel.type,
+        apiUrl,
         isEnabled: defaultModel.isEnabled !== false,
       }, 'ModelConfigServer');
-      
+
       return {
         apiKey: defaultModel.apiKey,
-        apiUrl: defaultModel.apiUrl,
-        modelName: defaultModel.modelName,
+        apiUrl,
+        modelName,
         timeout: 30000,
       };
     }
 
-    // No model configured - throw error with helpful message
     const errorMessage = 'No LLM model configured. Please configure a model in Settings.';
     logger.error(errorMessage, {
       source: 'User Settings',
       suggestion: 'Open Settings dialog and add a model configuration',
     }, 'ModelConfigServer');
-    
+
     throw new Error(errorMessage);
   } catch (error) {
     if (error instanceof Error && error.message.includes('No LLM model configured')) {
-      // Re-throw configuration errors as-is
       throw error;
     }
-    
+
     logger.error('Error loading user model configuration', {
       error: error instanceof Error ? error.message : 'Unknown error',
     }, 'ModelConfigServer');
-    
+
     throw new Error('Failed to load LLM configuration. Please check your model settings.');
   }
 };
-

@@ -122,302 +122,391 @@ log_file_path = setup_logging()
 # Configuration loader
 class ConfigLoader:
     """
-    Loads LLM configuration from file system
-    Supports both packaged and development modes
+    Loads LLM configuration from file system.
+    Supports three model types stored in separate JSON files:
+      - standard-models.json   (Standard API providers)
+      - coding-plan-models.json (Coding Plan services)
+      - custom-models.json     (Fully custom / legacy models)
+    Also loads read-only provider templates from backend/config/providers.json.
     """
-    
+
+    # File names for each model type
+    TYPE_FILES = {
+        'standard': 'standard-models.json',
+        'codingPlan': 'coding-plan-models.json',
+        'custom': 'custom-models.json',
+    }
+    LEGACY_FILE = 'model-configs.json'
+    PROVIDERS_FILE = 'providers.json'
+
     def __init__(self):
-        self.config_file = 'model-configs.json'
-        self.config_path = self._get_config_path()
-        app.logger.info(f'ConfigLoader initialized with path: {self.config_path}')
-        
-        # Initialize default model configuration if file doesn't exist
+        self.user_data_dir = self._get_user_data_dir()
+        # Keep legacy config_path for backward-compat with routes that reference it
+        self.config_path = self.user_data_dir / self.TYPE_FILES['custom']
+        self.providers_path = Path(__file__).parent / 'config' / self.PROVIDERS_FILE
+        app.logger.info(f'ConfigLoader initialized – userData: {self.user_data_dir}')
+
+        # Run migration from single-file to multi-file (if needed)
+        self._check_and_migrate()
+
+        # Ensure at least the custom-models file exists so first-run works
         self._ensure_default_config()
-    
-    def _get_config_path(self):
-        """Determine configuration file path based on environment"""
-        # CRITICAL FIX: Check for ELECTRON_USER_DATA environment variable first
-        # This ensures Flask backend reads from the same location as Electron main process
+
+    # ── Path resolution ─────────────────────────────────────────────────────
+
+    def _get_user_data_dir(self) -> Path:
+        """Determine the user data directory based on environment."""
         electron_user_data = os.environ.get('ELECTRON_USER_DATA')
-        
         if electron_user_data:
-            # Running in Electron - use the userData path provided by Electron
             config_dir = Path(electron_user_data)
-            app.logger.info(f'Using Electron userData path for model configs: {config_dir}', extra={
-                'source': 'ELECTRON_USER_DATA environment variable',
-                'path': str(config_dir)
-            })
+            app.logger.info(f'Using Electron userData path: {config_dir}')
         elif getattr(sys, 'frozen', False):
-            # Running as packaged executable (non-Electron)
             if sys.platform == 'win32':
                 config_dir = Path(os.environ.get('APPDATA', '')) / 'EcritisAgent'
             else:
                 config_dir = Path.home() / '.config' / 'EcritisAgent'
-            app.logger.info(f'Using packaged app config path: {config_dir}', extra={
-                'source': 'APPDATA or home directory',
-                'path': str(config_dir)
-            })
+            app.logger.info(f'Using packaged app config path: {config_dir}')
         else:
-            # Running in development - look in parent directory
             config_dir = Path(__file__).parent.parent / 'userData'
-            app.logger.info(f'Using development config path: {config_dir}', extra={
-                'source': 'Development mode',
-                'path': str(config_dir)
-            })
-        
+            app.logger.info(f'Using development config path: {config_dir}')
         config_dir.mkdir(parents=True, exist_ok=True)
-        return config_dir / self.config_file
-    
+        return config_dir
+
+    def _type_path(self, model_type: str) -> Path:
+        """Return the JSON file path for a given model type."""
+        filename = self.TYPE_FILES.get(model_type)
+        if not filename:
+            raise ValueError(f'Unknown model type: {model_type}')
+        return self.user_data_dir / filename
+
+    # ── Migration ───────────────────────────────────────────────────────────
+
+    def _check_and_migrate(self):
+        """Migrate legacy model-configs.json → custom-models.json (one-time)."""
+        legacy_path = self.user_data_dir / self.LEGACY_FILE
+        custom_path = self._type_path('custom')
+
+        if not legacy_path.exists() or custom_path.exists():
+            return  # nothing to migrate
+
+        try:
+            app.logger.info('Starting migration from model-configs.json to multi-file storage')
+            with open(legacy_path, 'r', encoding='utf-8') as f:
+                legacy_data = json.load(f)
+
+            # Tag every model as "custom"
+            models = legacy_data.get('models', [])
+            for m in models:
+                m['type'] = 'custom'
+
+            # Write custom-models.json
+            custom_data = {
+                'models': models,
+                'defaultModelId': legacy_data.get('defaultModelId'),
+            }
+            with open(custom_path, 'w', encoding='utf-8') as f:
+                json.dump(custom_data, f, indent=2, ensure_ascii=False)
+
+            # Create empty files for the other two types
+            for t in ('standard', 'codingPlan'):
+                p = self._type_path(t)
+                if not p.exists():
+                    with open(p, 'w', encoding='utf-8') as f:
+                        json.dump({'models': [], 'defaultModelId': None}, f, indent=2)
+
+            # Backup legacy file
+            backup_path = legacy_path.with_suffix('.json.bak')
+            legacy_path.rename(backup_path)
+            app.logger.info(f'Migration complete – {len(models)} models moved to custom-models.json, old file backed up')
+        except Exception as e:
+            app.logger.error(f'Migration failed (legacy file kept untouched): {e}', exc_info=True)
+
+    # ── First-run default config ────────────────────────────────────────────
+
     def _ensure_default_config(self):
-        """Ensure default model configuration exists on first run"""
+        """Create default custom model configs on very first run (no files at all)."""
+        custom_path = self._type_path('custom')
+        if custom_path.exists():
+            return
+
         try:
-            if not self.config_path.exists():
-                app.logger.info('Model config file does not exist, creating default configuration')
-                
-                # Get current UTC timestamp
-                from datetime import timezone
-                current_time = datetime.now(timezone.utc)
-                
-                # Create IDs for two default models
-                qwen_model_id = f'model_{current_time.timestamp()}'
-                deepseek_model_id = f'model_{current_time.timestamp() + 1}'
-                
-                # Create default model configuration with two models
-                default_config = {
-                    'models': [
-                        {
-                            'id': qwen_model_id,
-                            'name': 'Qwen Max',
-                            'apiUrl': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-                            'apiKey': 'sk-a5f209d824d54b6883fbc397f9fb4e28',
-                            'modelName': 'qwen-max-latest',
-                            'isDefault': True,
-                            'isEnabled': True,
-                            'createdAt': current_time.isoformat(),
-                            'updatedAt': current_time.isoformat()
-                        },
-                        {
-                            'id': deepseek_model_id,
-                            'name': 'DeepSeek V3',
-                            'apiUrl': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-                            'apiKey': 'sk-a5f209d824d54b6883fbc397f9fb4e28',
-                            'modelName': 'deepseek-v3',
-                            'isDefault': False,
-                            'isEnabled': True,
-                            'createdAt': current_time.isoformat(),
-                            'updatedAt': current_time.isoformat()
-                        }
-                    ],
-                    'defaultModelId': qwen_model_id
-                }
-                
-                # Save default configuration
-                with open(self.config_path, 'w', encoding='utf-8') as f:
-                    json.dump(default_config, f, indent=2, ensure_ascii=False)
-                
-                app.logger.info('Default model configuration created successfully', extra={
-                    'models': ['qwen-max-latest', 'deepseek-v3'],
-                    'defaultModel': 'qwen-max-latest',
-                    'apiUrl': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-                    'path': str(self.config_path)
-                })
-            else:
-                app.logger.debug('Model config file already exists, skipping default initialization')
-        
+            from datetime import timezone
+            now = datetime.now(timezone.utc)
+            qwen_id = f'model_{now.timestamp()}'
+            ds_id = f'model_{now.timestamp() + 1}'
+
+            default_config = {
+                'models': [
+                    {
+                        'id': qwen_id,
+                        'type': 'custom',
+                        'name': 'Qwen Max',
+                        'apiUrl': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                        'apiKey': 'sk-a5f209d824d54b6883fbc397f9fb4e28',
+                        'modelName': 'qwen-max-latest',
+                        'isDefault': True,
+                        'isEnabled': True,
+                        'createdAt': now.isoformat(),
+                        'updatedAt': now.isoformat(),
+                    },
+                    {
+                        'id': ds_id,
+                        'type': 'custom',
+                        'name': 'DeepSeek V3',
+                        'apiUrl': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                        'apiKey': 'sk-a5f209d824d54b6883fbc397f9fb4e28',
+                        'modelName': 'deepseek-v3',
+                        'isDefault': False,
+                        'isEnabled': True,
+                        'createdAt': now.isoformat(),
+                        'updatedAt': now.isoformat(),
+                    },
+                ],
+                'defaultModelId': qwen_id,
+            }
+
+            with open(custom_path, 'w', encoding='utf-8') as f:
+                json.dump(default_config, f, indent=2, ensure_ascii=False)
+
+            # Also create empty files for the other two types
+            for t in ('standard', 'codingPlan'):
+                p = self._type_path(t)
+                if not p.exists():
+                    with open(p, 'w', encoding='utf-8') as f:
+                        json.dump({'models': [], 'defaultModelId': None}, f, indent=2)
+
+            app.logger.info('Default model configuration created (first run)')
         except Exception as e:
-            app.logger.error(f'Failed to create default model configuration: {str(e)}', exc_info=True)
-    
-    def load_model_configs(self):
-        """Load model configurations from file"""
-        app.logger.debug(f'Loading model configs from: {self.config_path}')
-        
+            app.logger.error(f'Failed to create default config: {e}', exc_info=True)
+
+    # ── Providers (read-only templates) ─────────────────────────────────────
+
+    def load_providers(self) -> dict:
+        """Load provider/service templates from backend/config/providers.json."""
         try:
-            if not self.config_path.exists():
-                app.logger.info('Model config file does not exist, returning empty config')
-                return {'models': []}
-            
-            with open(self.config_path, 'r', encoding='utf-8') as f:
-                configs = json.load(f)
-            
-            app.logger.info(f'Model configurations loaded successfully, count: {len(configs.get("models", []))}')
-            return configs
-        
+            if not self.providers_path.exists():
+                app.logger.warning(f'providers.json not found at {self.providers_path}')
+                return {'standard': [], 'codingPlan': []}
+            with open(self.providers_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
         except Exception as e:
-            app.logger.error(f'Failed to load model configurations: {str(e)}', exc_info=True)
-            return {'models': []}
-    
+            app.logger.error(f'Failed to load providers.json: {e}', exc_info=True)
+            return {'standard': [], 'codingPlan': []}
+
+    def _get_provider_for_model(self, model: dict):
+        """Resolve the provider/service template for a given model record."""
+        providers = self.load_providers()
+        model_type = model.get('type', 'custom')
+
+        if model_type == 'standard':
+            for p in providers.get('standard', []):
+                if p['id'] == model.get('providerId'):
+                    return p
+        elif model_type == 'codingPlan':
+            for s in providers.get('codingPlan', []):
+                if s['id'] == model.get('serviceId'):
+                    return s
+        return None
+
+    # ── Per-type CRUD ───────────────────────────────────────────────────────
+
+    def load_models_by_type(self, model_type: str) -> dict:
+        """Load model configs for a single type (returns {models, defaultModelId})."""
+        p = self._type_path(model_type)
+        try:
+            if not p.exists():
+                return {'models': [], 'defaultModelId': None}
+            with open(p, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            app.logger.error(f'Failed to load {model_type} models: {e}', exc_info=True)
+            return {'models': [], 'defaultModelId': None}
+
+    def save_models_by_type(self, model_type: str, data: dict):
+        """Save model configs for a single type."""
+        p = self._type_path(model_type)
+        try:
+            with open(p, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            app.logger.info(f'Saved {len(data.get("models", []))} {model_type} models')
+        except Exception as e:
+            app.logger.error(f'Failed to save {model_type} models: {e}', exc_info=True)
+            raise
+
+    # ── Merged views (backward-compatible) ──────────────────────────────────
+
+    def load_model_configs(self) -> dict:
+        """Load ALL model configs merged from the three type files.
+        Returns the same shape as the old single-file format: {models, defaultModelId}."""
+        all_models = []
+        default_id = None
+
+        for t in ('standard', 'codingPlan', 'custom'):
+            data = self.load_models_by_type(t)
+            all_models.extend(data.get('models', []))
+            if data.get('defaultModelId') and not default_id:
+                default_id = data['defaultModelId']
+
+        app.logger.debug(f'Loaded {len(all_models)} total models across all types')
+        return {'models': all_models, 'defaultModelId': default_id}
+
+    def load_all_models(self) -> dict:
+        """Alias for load_model_configs (clearer name for new code)."""
+        return self.load_model_configs()
+
+    def save_model_configs(self, data: dict):
+        """Save a merged model config list by dispatching each model to its type file.
+        Keeps backward compatibility with the old single-file save path."""
+        # Bucket models by type
+        buckets = {'standard': [], 'codingPlan': [], 'custom': []}
+        for m in data.get('models', []):
+            t = m.get('type', 'custom')
+            buckets.setdefault(t, []).append(m)
+
+        default_id = data.get('defaultModelId')
+
+        for t, models in buckets.items():
+            # Only one file should hold the defaultModelId
+            file_default = default_id if any(m.get('id') == default_id for m in models) else None
+            self.save_models_by_type(t, {'models': models, 'defaultModelId': file_default})
+
+    # ── Default model (cross-file) ──────────────────────────────────────────
+
     def get_default_model(self):
-        """Get default enabled model from configurations"""
-        app.logger.debug('Getting default model configuration')
-        
+        """Get the global default enabled model across all type files."""
         configs = self.load_model_configs()
         models = configs.get('models', [])
-        
+
         if not models:
             app.logger.warning('No models configured')
             return None
-        
-        # Find default enabled model
-        default_model = next(
+
+        # Prefer explicit default
+        default = next(
             (m for m in models if m.get('isDefault') and m.get('isEnabled', True)),
-            None
+            None,
         )
-        
-        if default_model:
-            app.logger.info(f'Found default model: {default_model.get("name")} ({default_model.get("modelName")})')
-            return default_model
-        
-        # Fallback to first enabled model
-        first_enabled = next(
-            (m for m in models if m.get('isEnabled', True)),
-            None
-        )
-        
-        if first_enabled:
-            app.logger.info(f'Using first enabled model as fallback: {first_enabled.get("name")}')
-            return first_enabled
-        
+        if default:
+            app.logger.info(f'Found default model: {default.get("name")}')
+            return default
+
+        # Fallback to first enabled model (standard > codingPlan > custom priority)
+        for t in ('standard', 'codingPlan', 'custom'):
+            first = next(
+                (m for m in models if m.get('type', 'custom') == t and m.get('isEnabled', True)),
+                None,
+            )
+            if first:
+                app.logger.info(f'Using first enabled {t} model as fallback: {first.get("name")}')
+                return first
+
         app.logger.warning('No enabled models found')
         return None
-    
+
+    def set_default_model(self, model_id: str):
+        """Set a model as global default, clearing default in other files."""
+        for t in self.TYPE_FILES:
+            data = self.load_models_by_type(t)
+            changed = False
+            for m in data.get('models', []):
+                if m.get('id') == model_id:
+                    m['isDefault'] = True
+                    data['defaultModelId'] = model_id
+                    changed = True
+                elif m.get('isDefault'):
+                    m['isDefault'] = False
+                    changed = True
+            if data.get('defaultModelId') and data['defaultModelId'] != model_id:
+                if not any(m.get('id') == model_id for m in data.get('models', [])):
+                    data['defaultModelId'] = None
+                    changed = True
+            if changed:
+                self.save_models_by_type(t, data)
+
+    # ── Model lookup by ID ──────────────────────────────────────────────────
+
     def get_model_by_id(self, model_id):
-        """Get model by ID from configurations"""
-        app.logger.info(f'[ModelSelection] Getting model by ID: {model_id}', extra={
-            'requestedModelId': model_id,
-            'configPath': str(self.config_path)
-        })
-        
+        """Get an enabled model by ID from any type file."""
         configs = self.load_model_configs()
         models = configs.get('models', [])
-        
-        app.logger.info(f'[ModelSelection] Loaded {len(models)} models from config file', extra={
-            'totalModels': len(models),
-            'availableModelIds': [m.get('id') for m in models],
-            'availableModelNames': [m.get('name') for m in models],
-            'configPath': str(self.config_path)
-        })
-        
+
         if not models:
-            app.logger.warning('[ModelSelection] No models configured in config file')
+            app.logger.warning('[ModelSelection] No models configured')
             return None
-        
-        # Find model by ID
-        model = next(
-            (m for m in models if m.get('id') == model_id),
-            None
-        )
-        
+
+        model = next((m for m in models if m.get('id') == model_id), None)
+
         if model:
             if not model.get('isEnabled', True):
-                app.logger.warning(f'[ModelSelection] Model {model_id} is disabled', extra={
-                    'modelId': model_id,
-                    'modelName': model.get('name'),
-                    'isEnabled': model.get('isEnabled')
-                })
+                app.logger.warning(f'[ModelSelection] Model {model_id} is disabled')
                 return None
-            app.logger.info(f'[ModelSelection] Successfully found and selected model by ID', extra={
-                'modelId': model_id,
-                'modelName': model.get('name'),
-                'displayName': model.get('name'),
-                'modelApiName': model.get('modelName'),
-                'apiUrl': model.get('apiUrl'),
-                'isEnabled': model.get('isEnabled')
-            })
+            app.logger.info(f'[ModelSelection] Found model: {model.get("name")} (type={model.get("type")})')
             return model
-        
-        app.logger.warning(f'[ModelSelection] Model with ID {model_id} not found in config', extra={
-            'requestedModelId': model_id,
-            'availableModelIds': [m.get('id') for m in models],
-            'totalModelsInConfig': len(models)
-        })
+
+        app.logger.warning(f'[ModelSelection] Model {model_id} not found')
         return None
-    
+
+    # ── LLM config for API calls ────────────────────────────────────────────
+
     def get_llm_config(self, model_id=None):
         """
-        Get LLM configuration for API calls
-        Uses user-configured models from persistent storage
-        No longer depends on environment variables
-        
-        Args:
-            model_id: Optional model ID to use specific model. If None, uses default model.
+        Build the LLM config dict needed by chat / agent callers.
+        For codingPlan models, resolves apiUrl, modelName, extraHeaders from providers.json.
         """
         if model_id:
-            app.logger.info(f'[ModelSelection] Getting LLM configuration for specific model: {model_id}', extra={
-                'requestedModelId': model_id,
-                'source': 'User Selection',
-                'configPath': str(self.config_path)
-            })
+            selected = self.get_model_by_id(model_id)
+            if not selected:
+                app.logger.warning(f'Model {model_id} not found, falling back to default')
+                selected = self.get_default_model()
         else:
-            app.logger.info('[ModelSelection] Getting LLM configuration from default model', extra={
-                'source': 'Default Model',
-                'configPath': str(self.config_path)
-            })
-        
-        try:
-            # Get model from user configuration or persistent storage
-            if model_id:
-                selected_model = self.get_model_by_id(model_id)
-                if not selected_model:
-                    app.logger.warning(f'[ModelSelection] Specified model {model_id} not found, falling back to default', extra={
-                        'requestedModelId': model_id,
-                        'fallbackReason': 'Model not found or disabled',
-                        'configPath': str(self.config_path)
-                    })
-                    selected_model = self.get_default_model()
-                    if selected_model:
-                        app.logger.info(f'[ModelSelection] Using default model as fallback: {selected_model.get("name")} ({selected_model.get("modelName")})', extra={
-                            'fallbackModelId': selected_model.get('id'),
-                            'fallbackModelName': selected_model.get('name'),
-                            'fallbackModelApiName': selected_model.get('modelName')
-                        })
-            else:
-                selected_model = self.get_default_model()
-            
-            if selected_model:
-                config = {
-                    'apiKey': selected_model.get('apiKey', ''),
-                    'apiUrl': selected_model.get('apiUrl', ''),
-                    'modelName': selected_model.get('modelName', ''),
-                    'timeout': 120  # 120 seconds timeout
-                }
-                
-                app.logger.info(f'Using model: {config["modelName"]} at {config["apiUrl"]}', extra={
-                    'source': 'User Settings',
-                    'modelId': selected_model.get('id'),
-                    'modelDisplayName': selected_model.get('name'),
-                    'modelName': config['modelName'],
-                    'apiUrl': config['apiUrl'],
-                    'hasApiKey': bool(config['apiKey']),
-                    'wasRequested': model_id is not None,
-                    'requestedModelId': model_id
-                })
-                return config
-            
-            # No model configured - return None to trigger error
-            app.logger.error('No LLM model configured in user settings', extra={
-                'source': 'User Settings',
-                'suggestion': 'Please configure a model in Settings dialog'
-            })
+            selected = self.get_default_model()
+
+        if not selected:
+            app.logger.error('No LLM model configured')
             return None
-        
-        except Exception as e:
-            app.logger.error(f'Error loading LLM configuration: {str(e)}', exc_info=True)
-            return None
-    
+
+        model_type = selected.get('type', 'custom')
+
+        if model_type == 'codingPlan':
+            provider = self._get_provider_for_model(selected)
+            if not provider:
+                app.logger.error(f'Provider template not found for serviceId={selected.get("serviceId")}')
+                return None
+            config = {
+                'apiKey': selected.get('apiKey', ''),
+                'apiUrl': provider.get('apiUrl', ''),
+                'modelName': provider.get('model', ''),
+                'timeout': 120,
+                'protocol': provider.get('protocol', 'openai'),
+                'extraHeaders': provider.get('extraHeaders', {}),
+                'defaultParams': provider.get('defaultParams', {}),
+            }
+        else:
+            # standard or custom — both have apiUrl and modelName on the record
+            protocol = 'openai'
+            if model_type == 'standard':
+                provider = self._get_provider_for_model(selected)
+                if provider:
+                    protocol = provider.get('protocol', 'openai')
+            config = {
+                'apiKey': selected.get('apiKey', ''),
+                'apiUrl': selected.get('apiUrl', ''),
+                'modelName': selected.get('modelName', ''),
+                'timeout': 120,
+                'protocol': protocol,
+            }
+
+        app.logger.info(f'Using model: {config["modelName"]} at {config["apiUrl"]} (type={model_type})')
+        return config
+
     def validate_llm_config(self, config):
-        """Validate LLM configuration"""
+        """Validate LLM configuration dict."""
         if not config.get('apiKey'):
-            app.logger.error('LLM API key is missing')
             return {'valid': False, 'error': 'LLM API key is not configured'}
-        
         if not config.get('apiUrl'):
-            app.logger.error('LLM API URL is missing')
             return {'valid': False, 'error': 'LLM API URL is not configured'}
-        
         if not config.get('modelName'):
-            app.logger.error('LLM model name is missing')
             return {'valid': False, 'error': 'LLM model name is not configured'}
-        
         return {'valid': True}
 
 # Initialize config loader

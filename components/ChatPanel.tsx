@@ -21,7 +21,7 @@ import { useLanguage } from '@/lib/i18n/LanguageContext';
 import type { ChatMessage as ChatMessageType, StreamErrorEvent, isStreamErrorEvent } from '@/lib/chatClient';
 import { syncModelConfigsToCookies } from '@/lib/modelConfigSync';
 import { buildApiUrl } from '@/lib/apiConfig';
-import { loadModelConfigs, getDefaultModel, getModelConfigsUpdatedEventName, type ModelConfig } from '@/lib/modelConfig';
+import { loadModelConfigs, getDefaultModel, getModelConfigsUpdatedEventName, getModelApiUrl, getModelName, type ModelConfig } from '@/lib/modelConfig';
 import type { MCPConfig } from '@/lib/mcpConfig';
 import type { Conversation } from './ConversationList';
 import { getChatBotById } from '@/lib/chatBotConfig';
@@ -571,8 +571,9 @@ const ChatPanel = ({
       logger.info('[ModelSelection] Sending chat request with selected model, MCP tools, and network search', {
         selectedModelId: conversationModelId || 'no-model-selected',
         selectedModelName: selectedModel?.name || 'default',
-        selectedModelApiName: selectedModel?.modelName || 'unknown',
-        selectedModelApiUrl: selectedModel?.apiUrl || 'unknown',
+        selectedModelApiName: selectedModel ? (getModelName(selectedModel) || 'resolved-at-call-time') : 'unknown',
+        selectedModelApiUrl: selectedModel ? (getModelApiUrl(selectedModel) || 'resolved-at-call-time') : 'unknown',
+        selectedModelType: selectedModel?.type || 'unknown',
         willUseModelId: conversationModelId,
         messageCount: apiMessages.length,
         mcpEnabled: mcpEnabled && enabledMCPTools.length > 0,
@@ -1623,15 +1624,16 @@ const ChatPanel = ({
   const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const modelId = e.target.value;
     const model = availableModels.find(m => m.id === modelId);
-    
+
     if (model) {
       setSelectedModel(model);
       logger.info('[ModelSelection] Model selection changed by user', {
         selectedModelId: model.id,
         selectedModelName: model.name,
         selectedModelDisplayName: model.name,
-        selectedModelApiName: model.modelName,
-        apiUrl: model.apiUrl,
+        selectedModelApiName: getModelName(model) || 'resolved-at-call-time',
+        apiUrl: getModelApiUrl(model) || 'resolved-at-call-time',
+        modelType: model.type,
         availableModelsCount: availableModels.length,
         conversationId,
       }, 'ChatPanel');
@@ -1776,11 +1778,36 @@ const ChatPanel = ({
               {availableModels.length === 0 ? (
                 <option value="">{dict.chat.noModelsConfigured}</option>
               ) : (
-                availableModels.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))
+                (() => {
+                  const standardModels = availableModels.filter(m => m.type === 'standard');
+                  const codingPlanModels = availableModels.filter(m => m.type === 'codingPlan');
+                  const customModels = availableModels.filter(m => m.type === 'custom');
+                  // Models without type field (legacy) go to custom group
+                  const legacyModels = availableModels.filter(m => !m.type);
+                  const groups: { label: string; models: ModelConfig[] }[] = [];
+                  if (standardModels.length > 0) groups.push({ label: dict.chat.modelGroupStandard, models: standardModels });
+                  if (codingPlanModels.length > 0) groups.push({ label: dict.chat.modelGroupCodingPlan, models: codingPlanModels });
+                  if (customModels.length > 0 || legacyModels.length > 0) groups.push({ label: dict.chat.modelGroupCustom, models: [...customModels, ...legacyModels] });
+
+                  // If only one group, render flat (no optgroup headers)
+                  if (groups.length <= 1) {
+                    return availableModels.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.isDefault ? `★ ${model.name}` : model.name}
+                      </option>
+                    ));
+                  }
+
+                  return groups.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.models.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.isDefault ? `★ ${model.name}` : model.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ));
+                })()
               )}
             </select>
           )}

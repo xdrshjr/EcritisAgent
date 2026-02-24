@@ -6,7 +6,7 @@
  */
 
 import { logger } from './logger';
-import { getDefaultModel, getLLMConfigFromModel } from './modelConfig';
+import { getDefaultModel, getLLMConfigFromModel, getModelApiUrl, getModelName } from './modelConfig';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -61,8 +61,8 @@ export const getLLMConfig = async (): Promise<LLMConfig> => {
         source: 'User Settings',
         modelId: defaultModel.id,
         displayName: defaultModel.name,
-        modelName: defaultModel.modelName,
-        apiUrl: defaultModel.apiUrl,
+        modelName: getModelName(defaultModel) || 'resolved-at-call-time',
+        apiUrl: getModelApiUrl(defaultModel) || 'resolved-at-call-time',
         isEnabled: defaultModel.isEnabled !== false,
       }, 'ChatClient');
       

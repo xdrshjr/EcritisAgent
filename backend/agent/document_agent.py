@@ -6,7 +6,6 @@ LangGraph-based agent for intelligent document processing
 import json
 import logging
 from typing import Dict, Any, Generator, Optional
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from .state import AgentState
 from .tools import DocumentTools
@@ -26,27 +25,34 @@ class DocumentAgent:
     3. Summarize: Generate final execution summary
     """
     
-    def __init__(self, api_key: str, api_url: str, model_name: str, language: str = 'en'):
+    def __init__(self, api_key: str, api_url: str, model_name: str, language: str = 'en', call_config: dict = None):
         """
         Initialize document agent
-        
+
         Args:
             api_key: LLM API key
             api_url: LLM API base URL
             model_name: Model name to use
             language: Language for prompts ('en' or 'zh')
+            call_config: Full LLM call config dict (protocol-aware). When provided,
+                         api_key/api_url/model_name are ignored.
         """
         self.language = language
         self.tools = DocumentTools()
-        
+
         # Initialize LLM
-        self.llm = ChatOpenAI(
-            model=model_name,
-            openai_api_key=api_key,
-            openai_api_base=api_url,
-            temperature=0.3,
-            streaming=True
-        )
+        if call_config:
+            from llm_factory import create_llm_client
+            self.llm = create_llm_client(call_config, temperature=0.3, streaming=True)
+        else:
+            from langchain_openai import ChatOpenAI
+            self.llm = ChatOpenAI(
+                model=model_name,
+                openai_api_key=api_key,
+                openai_api_base=api_url,
+                temperature=0.3,
+                streaming=True,
+            )
         
         logger.info('DocumentAgent initialized', extra={
             'model': model_name,

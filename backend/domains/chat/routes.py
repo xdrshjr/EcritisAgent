@@ -227,25 +227,16 @@ def chat():
         
         full_messages = [system_message] + messages
         
-        # Prepare LLM API request
-        endpoint = f"{config['apiUrl'].rstrip('/')}/chat/completions"
-        logger.debug(f'[Chat Domain] Sending request to LLM API: {endpoint}')
-        
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f"Bearer {config['apiKey']}"
-        }
-        
-        payload = {
+        # Prepare LLM API request (protocol-aware)
+        from llm_factory import build_http_request
+        endpoint, headers, payload, chat_protocol = build_http_request(
+            config, full_messages, stream=True, temperature=0.7,
+        )
+        logger.debug(f'[Chat Domain] Sending request to LLM API: {endpoint} (protocol={chat_protocol})')
+
+        logger.info('[Chat Domain] [LLM Request] Prepared protocol-aware request', extra={
             'model': config['modelName'],
-            'messages': full_messages,
-            'stream': True,
-            'temperature': 0.7
-        }
-        
-        logger.info('[Chat Domain] [LLM Request] Removed max_tokens limit to allow unlimited response length', extra={
-            'model': config['modelName'],
-            'note': 'AI responses will not be truncated by token limits'
+            'protocol': chat_protocol,
         })
         
         # Check if MCP tools should be used
@@ -613,13 +604,12 @@ def chat():
                         
                         # Create LLM client for tool analysis
                         try:
-                            from langchain_openai import ChatOpenAI
-                            
-                            llm_for_analysis = ChatOpenAI(
-                                api_key=config['apiKey'],
-                                base_url=config['apiUrl'].rstrip('/'),
-                                model=config['modelName'],
+                            from llm_factory import create_llm_client
+
+                            llm_for_analysis = create_llm_client(
+                                config,
                                 temperature=0.1,  # Lower temperature for more deterministic tool selection
+                                streaming=False,
                             )
                             
                             logger.info('[Chat Domain] [MCP] Created LLM client for tool analysis', extra={
@@ -810,40 +800,50 @@ def chat():
                 logger.info('=' * 80)
                 
                 # llm_response is already available from outer scope and status is 200
-                logger.info(f'[Chat Domain] Streaming chat response started for session {session_id}')
+                logger.info(f'[Chat Domain] Streaming chat response started for session {session_id} (protocol={chat_protocol})')
                 chunk_count = 0
-                
+
                 try:
-                    for chunk in llm_response.iter_content(chunk_size=8192):
-                        # Check if stop was requested
-                        if should_stop():
-                            logger.info(f'[Chat Domain] Session {session_id} stopped during streaming at chunk {chunk_count}')
-                            
-                            # Close the response connection
-                            llm_response.close()
-                            
-                            # Send stop event to client
-                            stop_event = {
-                                'type': 'stream_stopped',
-                                'message': 'Stream stopped by user',
-                                'chunksProcessed': chunk_count,
-                            }
-                            yield f"data: {json.dumps(stop_event, ensure_ascii=False)}\n\n".encode('utf-8')
-                            
-                            logger.info(f'[Chat Domain] Session {session_id} successfully stopped after {chunk_count} chunks')
-                            return
-                        
-                        if chunk:
+                    if chat_protocol == 'anthropic':
+                        # Convert Anthropic SSE → OpenAI SSE on the fly
+                        from llm_factory import iter_anthropic_as_openai_sse
+                        for chunk in iter_anthropic_as_openai_sse(llm_response):
+                            if should_stop():
+                                logger.info(f'[Chat Domain] Session {session_id} stopped during Anthropic streaming at chunk {chunk_count}')
+                                llm_response.close()
+                                stop_event = {
+                                    'type': 'stream_stopped',
+                                    'message': 'Stream stopped by user',
+                                    'chunksProcessed': chunk_count,
+                                }
+                                yield f"data: {json.dumps(stop_event, ensure_ascii=False)}\n\n".encode('utf-8')
+                                return
                             chunk_count += 1
                             yield chunk
-                            
-                            # Log progress periodically
                             if chunk_count % 10 == 0:
-                                logger.debug(f'[Chat Domain] Chat stream progress for session {session_id}: {chunk_count} chunks')
-                    
+                                logger.debug(f'[Chat Domain] Chat stream progress for session {session_id}: {chunk_count} chunks (anthropic)')
+                    else:
+                        # OpenAI-compatible: pass raw SSE chunks through
+                        for chunk in llm_response.iter_content(chunk_size=8192):
+                            if should_stop():
+                                logger.info(f'[Chat Domain] Session {session_id} stopped during streaming at chunk {chunk_count}')
+                                llm_response.close()
+                                stop_event = {
+                                    'type': 'stream_stopped',
+                                    'message': 'Stream stopped by user',
+                                    'chunksProcessed': chunk_count,
+                                }
+                                yield f"data: {json.dumps(stop_event, ensure_ascii=False)}\n\n".encode('utf-8')
+                                return
+                            if chunk:
+                                chunk_count += 1
+                                yield chunk
+                                if chunk_count % 10 == 0:
+                                    logger.debug(f'[Chat Domain] Chat stream progress for session {session_id}: {chunk_count} chunks')
+
                     duration = (datetime.now() - start_time).total_seconds()
                     logger.info(f'[Chat Domain] Chat stream completed for session {session_id}: {chunk_count} chunks in {duration:.2f}s')
-                
+
                 finally:
                     # Always close the response to free resources
                     llm_response.close()

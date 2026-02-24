@@ -27,7 +27,6 @@ from pathlib import Path
 from typing import Annotated, Dict, Generator, List, Optional, TypedDict
 
 from langchain_core.messages import SystemMessage
-from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
 from .writer_intent import (
@@ -49,14 +48,27 @@ class WriterLLMConfig:
         model: str,
         max_retries: int = 3,
         timeout: int = 90,
+        call_config: dict = None,
     ):
         self.api_key = api_key
         self.api_url = api_url
         self.model = model
         self.max_retries = max_retries
         self.timeout = timeout
+        self.call_config = call_config
 
     def get_llm(self, temperature: float = 0.7, streaming: bool = False):
+        if self.call_config:
+            from llm_factory import create_llm_client
+            return create_llm_client(
+                self.call_config,
+                temperature=temperature,
+                streaming=streaming,
+                max_retries=self.max_retries,
+                timeout=self.timeout,
+            )
+
+        from langchain_openai import ChatOpenAI
         return ChatOpenAI(
             model=self.model,
             temperature=temperature,
@@ -695,9 +707,9 @@ def _search_image_for_keywords(keywords: List[str]) -> Optional[Dict[str, str]]:
 
 
 class AutoWriterAgent:
-    def __init__(self, api_key: str, api_url: str, model_name: str, language: str = "zh"):
+    def __init__(self, api_key: str, api_url: str, model_name: str, language: str = "zh", call_config: dict = None):
         self.language = language
-        self.config = WriterLLMConfig(api_key=api_key, api_url=api_url, model=model_name)
+        self.config = WriterLLMConfig(api_key=api_key, api_url=api_url, model=model_name, call_config=call_config)
         self.intent_llm = self.config.get_llm(temperature=0.0)
         self.workflow = create_writer_workflow()
 

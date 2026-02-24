@@ -119,7 +119,8 @@ def agent_validation():
                 api_key=config['apiKey'],
                 api_url=config['apiUrl'],
                 model_name=config['modelName'],
-                language=language
+                language=language,
+                call_config=config,
             )
             logger.info(f'[Agent Domain] DocumentAgent initialized successfully')
         except Exception as agent_error:
@@ -408,6 +409,7 @@ def agent_route():
             api_url=config['apiUrl'],
             model_name=config['modelName'],
             language=language,
+            call_config=config,
         )
         
         routing_result = router.route(user_request, has_document=has_document)
@@ -452,6 +454,7 @@ def agent_route():
                         api_url=config['apiUrl'],
                         model_name=config['modelName'],
                         language=language,
+                        call_config=config,
                     )
                     
                     # Check if image generation is enabled
@@ -494,8 +497,9 @@ def agent_route():
                         api_url=config['apiUrl'],
                         model_name=config['modelName'],
                         language=language,
+                        call_config=config,
                     )
-                    
+
                     for event in agent.run(user_request, document_content):
                         chunk_count += 1
                         event_type = event.get('type', 'unknown')
@@ -633,6 +637,7 @@ def auto_writer_agent():
             api_url=config['apiUrl'],
             model_name=config['modelName'],
             language=language,
+            call_config=config,
         )
 
         logger.info('[Agent Domain] Auto writer agent initialized', extra={

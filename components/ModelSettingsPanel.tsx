@@ -1,193 +1,379 @@
 /**
  * Model Settings Panel Component
- * Manages LLM model configurations with maxToken support
+ * Three-tab layout: Standard API / Coding Plan / Custom
  */
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Star, Edit, XCircle, Power, Check } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Plus, Trash2, Save, Star, Edit, XCircle, ChevronDown } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import {
-  loadModelConfigs,
-  addModelConfig,
-  updateModelConfig,
-  deleteModelConfig,
+  loadModelConfigsByType,
+  saveModelConfigsByType,
+  loadProviders,
   setDefaultModel,
-  toggleModelEnabled,
-  clearAllModels,
-  saveModelConfigs,
+  generateModelId,
+  validateModelConfig,
   type ModelConfig,
+  type StandardModelConfig,
+  type CodingPlanModelConfig,
+  type CustomModelConfig,
   type ModelConfigList,
+  type ModelType,
+  type ProvidersConfig,
+  type StandardProvider,
+  type CodingPlanService,
 } from '@/lib/modelConfig';
 import { syncModelConfigsToCookies } from '@/lib/modelConfigSync';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getDictionary } from '@/lib/i18n/dictionaries';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 
 interface ModelSettingsPanelProps {
   className?: string;
 }
 
+type ActiveTab = 'standard' | 'codingPlan' | 'custom';
+
 const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
   const { locale } = useLanguage();
   const dict = getDictionary(locale);
-  const [models, setModels] = useState<ModelConfig[]>([]);
-  const [stagedModels, setStagedModels] = useState<ModelConfig[]>([]);
-  const [hasChanges, setHasChanges] = useState(false);
+  const t = dict.settings.modelForm;
+  const tabs = dict.settings.modelTabs;
+
+  // ── Per-type model state ────────────────────────────────────────────────
+  const [standardModels, setStandardModels] = useState<StandardModelConfig[]>([]);
+  const [codingPlanModels, setCodingPlanModels] = useState<CodingPlanModelConfig[]>([]);
+  const [customModels, setCustomModels] = useState<CustomModelConfig[]>([]);
+
+  // Staged (editing) copies
+  const [stagedStandard, setStagedStandard] = useState<StandardModelConfig[]>([]);
+  const [stagedCodingPlan, setStagedCodingPlan] = useState<CodingPlanModelConfig[]>([]);
+  const [stagedCustom, setStagedCustom] = useState<CustomModelConfig[]>([]);
+
+  // Provider templates
+  const [providers, setProviders] = useState<ProvidersConfig>({ standard: [], codingPlan: [] });
+
+  // UI state
+  const [activeTab, setActiveTab] = useState<ActiveTab>('standard');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string>('');
-  const [success, setSuccess] = useState<string>('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   // Form state
+  const [isFormVisible, setIsFormVisible] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingModelId, setEditingModelId] = useState<string | null>(null);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+
+  // Form fields
   const [formName, setFormName] = useState('');
   const [formApiUrl, setFormApiUrl] = useState('');
   const [formApiKey, setFormApiKey] = useState('');
   const [formModelName, setFormModelName] = useState('');
-  const [formMaxToken, setFormMaxToken] = useState<string>('');
-  const [isFormVisible, setIsFormVisible] = useState(false);
-  
-  // Edit mode state
-  const [editingModelId, setEditingModelId] = useState<string | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [formMaxToken, setFormMaxToken] = useState('');
+
+  // Combobox state
+  const [comboOpen, setComboOpen] = useState(false);
+  const [comboFilter, setComboFilter] = useState('');
+  const comboRef = useRef<HTMLDivElement>(null);
+
+  // ── Derived ─────────────────────────────────────────────────────────────
+
+  const hasChanges =
+    JSON.stringify(stagedStandard) !== JSON.stringify(standardModels) ||
+    JSON.stringify(stagedCodingPlan) !== JSON.stringify(codingPlanModels) ||
+    JSON.stringify(stagedCustom) !== JSON.stringify(customModels);
+
+  const selectedProvider: StandardProvider | undefined = providers.standard.find(
+    (p) => p.id === selectedProviderId,
+  );
+
+  const selectedService: CodingPlanService | undefined = providers.codingPlan.find(
+    (s) => s.id === selectedServiceId,
+  );
+
+  // ── Load data on mount ──────────────────────────────────────────────────
 
   useEffect(() => {
     logger.component('ModelSettingsPanel', 'mounted');
-    handleLoadModels();
+    handleLoadAll();
   }, []);
 
-  const handleLoadModels = async () => {
-    logger.info('Loading model configurations', undefined, 'ModelSettingsPanel');
+  // Close combobox on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (comboRef.current && !comboRef.current.contains(e.target as Node)) {
+        setComboOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleLoadAll = async () => {
     setIsLoading(true);
     setError('');
-
     try {
-      const configList: ModelConfigList = await loadModelConfigs();
-      setModels(configList.models);
-      setStagedModels(JSON.parse(JSON.stringify(configList.models))); // Deep copy
-      setHasChanges(false);
-      
-      logger.success('Model configurations loaded', {
-        count: configList.models.length,
+      const [stdRes, cpRes, cusRes, provRes] = await Promise.all([
+        loadModelConfigsByType('standard'),
+        loadModelConfigsByType('codingPlan'),
+        loadModelConfigsByType('custom'),
+        loadProviders(),
+      ]);
+
+      const std = (stdRes.models || []) as StandardModelConfig[];
+      const cp = (cpRes.models || []) as CodingPlanModelConfig[];
+      const cus = (cusRes.models || []) as CustomModelConfig[];
+
+      setStandardModels(std);
+      setCodingPlanModels(cp);
+      setCustomModels(cus);
+      setStagedStandard(structuredClone(std));
+      setStagedCodingPlan(structuredClone(cp));
+      setStagedCustom(structuredClone(cus));
+      setProviders(provRes);
+
+      logger.success('All model configurations loaded', {
+        standard: std.length,
+        codingPlan: cp.length,
+        custom: cus.length,
       }, 'ModelSettingsPanel');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load models';
-      logger.error('Failed to load model configurations', { error: errorMessage }, 'ModelSettingsPanel');
-      setError(errorMessage);
+      const msg = err instanceof Error ? err.message : 'Failed to load models';
+      logger.error('Failed to load model configurations', { error: msg }, 'ModelSettingsPanel');
+      setError(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleAddModel = async () => {
-    logger.info('Adding new model', { name: formName }, 'ModelSettingsPanel');
-    setIsLoading(true);
+  // ── Form helpers ────────────────────────────────────────────────────────
+
+  const resetForm = useCallback(() => {
+    setFormName('');
+    setFormApiUrl('');
+    setFormApiKey('');
+    setFormModelName('');
+    setFormMaxToken('');
+    setIsFormVisible(false);
+    setIsEditMode(false);
+    setEditingModelId(null);
+    setSelectedProviderId(null);
+    setSelectedServiceId(null);
+    setComboOpen(false);
+    setComboFilter('');
+  }, []);
+
+  const showMessage = useCallback((msg: string, type: 'success' | 'error') => {
+    if (type === 'success') {
+      setSuccess(msg);
+      setError('');
+    } else {
+      setError(msg);
+      setSuccess('');
+    }
+    setTimeout(() => {
+      setSuccess('');
+      setError('');
+    }, 3000);
+  }, []);
+
+  // Auto-generate display name
+  const autoGenerateName = useCallback((providerOrService: string, model: string) => {
+    if (providerOrService && model) return `${providerOrService} - ${model}`;
+    if (providerOrService) return providerOrService;
+    return model;
+  }, []);
+
+  // ── Standard API handlers ───────────────────────────────────────────────
+
+  const handleSelectProvider = (providerId: string) => {
+    const provider = providers.standard.find((p) => p.id === providerId);
+    if (!provider) return;
+    setSelectedProviderId(providerId);
+    setFormApiUrl(provider.apiUrl);
+    setFormModelName('');
+    setFormName('');
+    setIsFormVisible(true);
     setError('');
     setSuccess('');
-
-    try {
-      const result = await addModelConfig({
-        name: formName.trim(),
-        apiUrl: formApiUrl.trim(),
-        apiKey: formApiKey.trim(),
-        modelName: formModelName.trim(),
-        maxToken: formMaxToken.trim() ? parseInt(formMaxToken.trim(), 10) : undefined,
-      });
-
-      if (result.success && result.model) {
-        logger.success('Model added successfully', {
-          id: result.model.id,
-          name: result.model.name,
-        }, 'ModelSettingsPanel');
-
-        // Update state immediately with the newly added model
-        const updatedModels = [...models, result.model];
-        setModels(updatedModels);
-        setStagedModels(JSON.parse(JSON.stringify(updatedModels))); // Deep copy
-        
-        logger.debug('Model list updated in UI', {
-          modelId: result.model.id,
-          totalModels: updatedModels.length,
-        }, 'ModelSettingsPanel');
-
-        setSuccess('Model added successfully!');
-        handleResetForm();
-      } else {
-        throw new Error(result.error || 'Failed to add model');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to add model';
-      logger.error('Failed to add model', { error: errorMessage }, 'ModelSettingsPanel');
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
   };
 
-  const handleUpdateModel = async () => {
-    if (!editingModelId) {
-      logger.warn('No model ID for update', undefined, 'ModelSettingsPanel');
-      return;
-    }
+  const handleStandardSubmit = () => {
+    if (!selectedProvider) return;
+    const now = new Date().toISOString();
 
-    logger.info('Updating model', { id: editingModelId, name: formName }, 'ModelSettingsPanel');
-    setIsLoading(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const result = await updateModelConfig(editingModelId, {
-        name: formName.trim(),
-        apiUrl: formApiUrl.trim(),
-        apiKey: formApiKey.trim(),
-        modelName: formModelName.trim(),
-        maxToken: formMaxToken.trim() ? parseInt(formMaxToken.trim(), 10) : undefined,
-      });
-
-      if (result.success) {
-        logger.success('Model updated successfully', {
-          id: editingModelId,
-          name: formName,
-        }, 'ModelSettingsPanel');
-
-        // Update state immediately with the modified model
-        const updatedModels = models.map(model => 
-          model.id === editingModelId
+    if (isEditMode && editingModelId) {
+      // Update existing
+      setStagedStandard((prev) =>
+        prev.map((m) =>
+          m.id === editingModelId
             ? {
-                ...model,
+                ...m,
                 name: formName.trim(),
                 apiUrl: formApiUrl.trim(),
                 apiKey: formApiKey.trim(),
                 modelName: formModelName.trim(),
                 maxToken: formMaxToken.trim() ? parseInt(formMaxToken.trim(), 10) : undefined,
-                updatedAt: new Date().toISOString(),
+                updatedAt: now,
               }
-            : model
-        );
-        setModels(updatedModels);
-        setStagedModels(JSON.parse(JSON.stringify(updatedModels))); // Deep copy
-        
-        logger.debug('Model list updated in UI after edit', {
-          modelId: editingModelId,
-          totalModels: updatedModels.length,
-        }, 'ModelSettingsPanel');
-
-        setSuccess('Model updated successfully!');
-        handleResetForm();
-      } else {
-        throw new Error(result.error || 'Failed to update model');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update model';
-      logger.error('Failed to update model', { error: errorMessage, id: editingModelId }, 'ModelSettingsPanel');
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
+            : m,
+        ),
+      );
+      showMessage(t.updatedSuccess, 'success');
+    } else {
+      // Add new
+      const newModel: StandardModelConfig = {
+        id: generateModelId(),
+        type: 'standard',
+        providerId: selectedProvider.id,
+        name: formName.trim() || autoGenerateName(selectedProvider.name, formModelName.trim()),
+        apiUrl: formApiUrl.trim(),
+        apiKey: formApiKey.trim(),
+        modelName: formModelName.trim(),
+        maxToken: formMaxToken.trim() ? parseInt(formMaxToken.trim(), 10) : undefined,
+        isEnabled: true,
+        isDefault: stagedStandard.length === 0 && stagedCodingPlan.length === 0 && stagedCustom.length === 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setStagedStandard((prev) => [...prev, newModel]);
+      showMessage(t.addedSuccess, 'success');
     }
+    resetForm();
   };
 
-  const handleEditModel = (model: ModelConfig) => {
-    logger.info('Entering edit mode', { id: model.id, name: model.name }, 'ModelSettingsPanel');
-    
+  const handleEditStandard = (model: StandardModelConfig) => {
+    setEditingModelId(model.id);
+    setIsEditMode(true);
+    setSelectedProviderId(model.providerId);
+    setFormName(model.name);
+    setFormApiUrl(model.apiUrl);
+    setFormApiKey(model.apiKey);
+    setFormModelName(model.modelName);
+    setFormMaxToken(model.maxToken?.toString() || '');
+    setIsFormVisible(true);
+    setError('');
+    setSuccess('');
+  };
+
+  // ── Coding Plan handlers ────────────────────────────────────────────────
+
+  const handleSelectService = (serviceId: string) => {
+    const service = providers.codingPlan.find((s) => s.id === serviceId);
+    if (!service) return;
+    setSelectedServiceId(serviceId);
+    setFormName(autoGenerateName(service.name, service.model));
+    setFormApiKey('');
+    setIsFormVisible(true);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleCodingPlanSubmit = () => {
+    if (!selectedService) return;
+    const now = new Date().toISOString();
+
+    if (isEditMode && editingModelId) {
+      setStagedCodingPlan((prev) =>
+        prev.map((m) =>
+          m.id === editingModelId
+            ? {
+                ...m,
+                name: formName.trim(),
+                apiKey: formApiKey.trim(),
+                updatedAt: now,
+              }
+            : m,
+        ),
+      );
+      showMessage(t.updatedSuccess, 'success');
+    } else {
+      const newModel: CodingPlanModelConfig = {
+        id: generateModelId(),
+        type: 'codingPlan',
+        serviceId: selectedService.id,
+        name: formName.trim() || autoGenerateName(selectedService.name, selectedService.model),
+        apiKey: formApiKey.trim(),
+        isEnabled: true,
+        isDefault: stagedStandard.length === 0 && stagedCodingPlan.length === 0 && stagedCustom.length === 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setStagedCodingPlan((prev) => [...prev, newModel]);
+      showMessage(t.addedSuccess, 'success');
+    }
+    resetForm();
+  };
+
+  const handleEditCodingPlan = (model: CodingPlanModelConfig) => {
+    setEditingModelId(model.id);
+    setIsEditMode(true);
+    setSelectedServiceId(model.serviceId);
+    setFormName(model.name);
+    setFormApiKey(model.apiKey);
+    setIsFormVisible(true);
+    setError('');
+    setSuccess('');
+  };
+
+  // ── Custom handlers ─────────────────────────────────────────────────────
+
+  const handleShowCustomForm = () => {
+    setIsEditMode(false);
+    setEditingModelId(null);
+    setIsFormVisible(true);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleCustomSubmit = () => {
+    const now = new Date().toISOString();
+
+    if (isEditMode && editingModelId) {
+      setStagedCustom((prev) =>
+        prev.map((m) =>
+          m.id === editingModelId
+            ? {
+                ...m,
+                name: formName.trim(),
+                apiUrl: formApiUrl.trim(),
+                apiKey: formApiKey.trim(),
+                modelName: formModelName.trim(),
+                maxToken: formMaxToken.trim() ? parseInt(formMaxToken.trim(), 10) : undefined,
+                updatedAt: now,
+              }
+            : m,
+        ),
+      );
+      showMessage(t.updatedSuccess, 'success');
+    } else {
+      const newModel: CustomModelConfig = {
+        id: generateModelId(),
+        type: 'custom',
+        name: formName.trim(),
+        apiUrl: formApiUrl.trim(),
+        apiKey: formApiKey.trim(),
+        modelName: formModelName.trim(),
+        maxToken: formMaxToken.trim() ? parseInt(formMaxToken.trim(), 10) : undefined,
+        isEnabled: true,
+        isDefault: stagedStandard.length === 0 && stagedCodingPlan.length === 0 && stagedCustom.length === 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      setStagedCustom((prev) => [...prev, newModel]);
+      showMessage(t.addedSuccess, 'success');
+    }
+    resetForm();
+  };
+
+  const handleEditCustom = (model: CustomModelConfig) => {
     setEditingModelId(model.id);
     setIsEditMode(true);
     setFormName(model.name);
@@ -200,560 +386,767 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
     setSuccess('');
   };
 
-  const handleSubmitForm = () => {
-    if (isEditMode) {
-      handleUpdateModel();
-    } else {
-      handleAddModel();
-    }
+  // ── Cross-tab operations ────────────────────────────────────────────────
+
+  const handleDeleteModel = (id: string, name: string, type: ActiveTab) => {
+    if (!confirm(t.deleteConfirm.replace('{name}', name))) return;
+    if (type === 'standard') setStagedStandard((prev) => prev.filter((m) => m.id !== id));
+    else if (type === 'codingPlan') setStagedCodingPlan((prev) => prev.filter((m) => m.id !== id));
+    else setStagedCustom((prev) => prev.filter((m) => m.id !== id));
+    showMessage(t.deletedSuccess, 'success');
   };
 
-  const handleResetForm = () => {
-    logger.debug('Resetting form', undefined, 'ModelSettingsPanel');
-    
-    setFormName('');
-    setFormApiUrl('');
-    setFormApiKey('');
-    setFormModelName('');
-    setFormMaxToken('');
-    setIsFormVisible(false);
-    setEditingModelId(null);
-    setIsEditMode(false);
+  const handleSetDefault = (id: string, name: string) => {
+    // Clear isDefault in all staged arrays, then set the target
+    const clearDefault = <T extends ModelConfig>(arr: T[]): T[] =>
+      arr.map((m) => ({ ...m, isDefault: m.id === id }));
+
+    setStagedStandard(clearDefault);
+    setStagedCodingPlan(clearDefault);
+    setStagedCustom(clearDefault);
+    showMessage(`"${name}" ${t.setDefault}`, 'success');
   };
 
-  const handleClearAllModels = async () => {
-    const modelCount = stagedModels.length;
-    
-    if (modelCount === 0) {
-      logger.info('No models to clear', undefined, 'ModelSettingsPanel');
-      setError('No models to clear');
-      return;
-    }
+  const handleToggleEnabled = (id: string, type: ActiveTab) => {
+    const toggle = <T extends ModelConfig>(arr: T[]): T[] =>
+      arr.map((m) => (m.id === id ? { ...m, isEnabled: m.isEnabled === false ? true : false } : m));
 
-    if (!confirm(`Are you sure you want to clear all ${modelCount} model(s)? This action cannot be undone.`)) {
-      logger.debug('Clear all models cancelled by user', undefined, 'ModelSettingsPanel');
-      return;
-    }
-
-    logger.info('Clearing all models', { count: modelCount }, 'ModelSettingsPanel');
-    setIsLoading(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const result = await clearAllModels();
-
-      if (result.success) {
-        logger.success('All models cleared successfully', { count: modelCount }, 'ModelSettingsPanel');
-        setSuccess('All models cleared successfully!');
-        
-        // Reset form if it was open
-        handleResetForm();
-        
-        // Reload models to get empty state
-        await handleLoadModels();
-      } else {
-        throw new Error(result.error || 'Failed to clear all models');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to clear all models';
-      logger.error('Failed to clear all models', { error: errorMessage }, 'ModelSettingsPanel');
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
+    if (type === 'standard') setStagedStandard(toggle);
+    else if (type === 'codingPlan') setStagedCodingPlan(toggle);
+    else setStagedCustom(toggle);
   };
 
-  const handleDeleteModel = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete the model "${name}"?`)) {
-      logger.debug('Delete model cancelled by user', { id, name }, 'ModelSettingsPanel');
-      return;
-    }
-
-    logger.info('Deleting model', { id, name }, 'ModelSettingsPanel');
-    setIsLoading(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const result = await deleteModelConfig(id);
-
-      if (result.success) {
-        logger.success('Model deleted successfully', { id, name }, 'ModelSettingsPanel');
-        
-        // Update state immediately by filtering out the deleted model
-        const updatedModels = models.filter(model => model.id !== id);
-        setModels(updatedModels);
-        setStagedModels(JSON.parse(JSON.stringify(updatedModels))); // Deep copy
-        
-        logger.debug('Model list updated in UI after deletion', {
-          deletedModelId: id,
-          remainingModels: updatedModels.length,
-        }, 'ModelSettingsPanel');
-        
-        setSuccess('Model deleted successfully!');
-      } else {
-        throw new Error(result.error || 'Failed to delete model');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to delete model';
-      logger.error('Failed to delete model', { error: errorMessage, id }, 'ModelSettingsPanel');
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSetDefault = async (id: string, name: string) => {
-    logger.info('Setting default model', { id, name }, 'ModelSettingsPanel');
-    setIsLoading(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const result = await setDefaultModel(id);
-
-      if (result.success) {
-        logger.success('Default model set successfully', { id, name }, 'ModelSettingsPanel');
-        
-        // Update state immediately - set selected model as default and clear others
-        const updatedModels = models.map(model => ({
-          ...model,
-          isDefault: model.id === id,
-        }));
-        setModels(updatedModels);
-        setStagedModels(JSON.parse(JSON.stringify(updatedModels))); // Deep copy
-        
-        logger.debug('Model list updated in UI after setting default', {
-          defaultModelId: id,
-          totalModels: updatedModels.length,
-        }, 'ModelSettingsPanel');
-        
-        setSuccess(`"${name}" set as default model!`);
-        
-        // Sync to cookies for persistence
-        await syncModelConfigsToCookies();
-      } else {
-        throw new Error(result.error || 'Failed to set default model');
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to set default model';
-      logger.error('Failed to set default model', { error: errorMessage, id }, 'ModelSettingsPanel');
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleStagedToggleEnabled = (id: string) => {
-    logger.info('Toggling model enabled status (staged)', { id }, 'ModelSettingsPanel');
-    
-    const updatedModels = stagedModels.map(model => {
-      if (model.id === id) {
-        const newEnabled = !model.isEnabled;
-        
-        // If disabling the default model, set first enabled model as default
-        if (!newEnabled && model.isDefault) {
-          const firstEnabledIndex = stagedModels.findIndex(m => m.id !== id && m.isEnabled !== false);
-          if (firstEnabledIndex >= 0) {
-            stagedModels[firstEnabledIndex].isDefault = true;
-            logger.debug('Transferring default to another enabled model', {
-              newDefaultId: stagedModels[firstEnabledIndex].id,
-            }, 'ModelSettingsPanel');
-          }
-          return { ...model, isEnabled: newEnabled, isDefault: false };
-        }
-        
-        return { ...model, isEnabled: newEnabled };
-      }
-      return model;
-    });
-    
-    setStagedModels(updatedModels);
-    setHasChanges(true);
-    logger.debug('Model enabled status toggled in staged changes', { id }, 'ModelSettingsPanel');
-  };
-
-  const handleShowAddForm = () => {
-    logger.debug('Showing add model form', undefined, 'ModelSettingsPanel');
-    setIsEditMode(false);
-    setEditingModelId(null);
-    setIsFormVisible(true);
-    setError('');
-    setSuccess('');
-  };
-
-  const handleCancelForm = () => {
-    logger.debug('Canceling form', { isEditMode }, 'ModelSettingsPanel');
-    handleResetForm();
-    setError('');
-  };
+  // ── Confirm / Cancel ────────────────────────────────────────────────────
 
   const handleConfirmChanges = async () => {
-    logger.info('Confirming model configuration changes', {
-      stagedCount: stagedModels.length,
-      hasChanges,
-    }, 'ModelSettingsPanel');
-
-    // Validate: default model must be enabled
-    const defaultModel = stagedModels.find(m => m.isDefault);
-    if (defaultModel && !defaultModel.isEnabled) {
-      const errorMsg = 'Default model must be enabled';
-      logger.warn(errorMsg, { defaultModelId: defaultModel.id }, 'ModelSettingsPanel');
-      setError(errorMsg);
-      return;
-    }
-
-    // Validate: at least one model must be enabled
-    const hasEnabledModel = stagedModels.some(m => m.isEnabled !== false);
-    if (!hasEnabledModel) {
-      const errorMsg = 'At least one model must be enabled';
-      logger.warn(errorMsg, undefined, 'ModelSettingsPanel');
-      setError(errorMsg);
-      return;
-    }
-
     setIsLoading(true);
     setError('');
     setSuccess('');
 
     try {
-      // Save the staged models
-      const configList: ModelConfigList = {
-        models: stagedModels,
-        defaultModelId: stagedModels.find(m => m.isDefault)?.id,
-      };
+      const saves: Promise<{ success: boolean; error?: string }>[] = [];
 
-      const result = await saveModelConfigs(configList);
-
-      if (result.success) {
-        logger.success('Model configurations saved successfully', {
-          count: stagedModels.length,
-        }, 'ModelSettingsPanel');
-
-        setSuccess('Model configurations saved successfully!');
-        setModels(JSON.parse(JSON.stringify(stagedModels))); // Update main state
-        setHasChanges(false);
-
-        // Sync to cookies
-        await syncModelConfigsToCookies();
-      } else {
-        throw new Error(result.error || 'Failed to save configurations');
+      if (JSON.stringify(stagedStandard) !== JSON.stringify(standardModels)) {
+        const defaultId = stagedStandard.find((m) => m.isDefault)?.id
+          || stagedCodingPlan.find((m) => m.isDefault)?.id
+          || stagedCustom.find((m) => m.isDefault)?.id;
+        saves.push(
+          saveModelConfigsByType('standard', { models: stagedStandard, defaultModelId: defaultId }),
+        );
       }
+      if (JSON.stringify(stagedCodingPlan) !== JSON.stringify(codingPlanModels)) {
+        const defaultId = stagedStandard.find((m) => m.isDefault)?.id
+          || stagedCodingPlan.find((m) => m.isDefault)?.id
+          || stagedCustom.find((m) => m.isDefault)?.id;
+        saves.push(
+          saveModelConfigsByType('codingPlan', { models: stagedCodingPlan, defaultModelId: defaultId }),
+        );
+      }
+      if (JSON.stringify(stagedCustom) !== JSON.stringify(customModels)) {
+        const defaultId = stagedStandard.find((m) => m.isDefault)?.id
+          || stagedCodingPlan.find((m) => m.isDefault)?.id
+          || stagedCustom.find((m) => m.isDefault)?.id;
+        saves.push(
+          saveModelConfigsByType('custom', { models: stagedCustom, defaultModelId: defaultId }),
+        );
+      }
+
+      const results = await Promise.all(saves);
+      const failed = results.find((r) => !r.success);
+      if (failed) {
+        throw new Error(failed.error || 'Failed to save configurations');
+      }
+
+      // Commit staged to saved
+      setStandardModels(structuredClone(stagedStandard));
+      setCodingPlanModels(structuredClone(stagedCodingPlan));
+      setCustomModels(structuredClone(stagedCustom));
+
+      await syncModelConfigsToCookies();
+      showMessage(t.savedSuccess, 'success');
+      logger.success('Model configurations saved', undefined, 'ModelSettingsPanel');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save configurations';
-      logger.error('Failed to save model configurations', { error: errorMessage }, 'ModelSettingsPanel');
-      setError(errorMessage);
+      const msg = err instanceof Error ? err.message : 'Failed to save';
+      logger.error('Failed to save model configurations', { error: msg }, 'ModelSettingsPanel');
+      showMessage(msg, 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleCancelChanges = () => {
-    logger.info('Canceling model configuration changes', undefined, 'ModelSettingsPanel');
-    
-    // Revert to original models
-    setStagedModels(JSON.parse(JSON.stringify(models)));
-    setHasChanges(false);
-    setError('');
-    setSuccess('');
-    
-    logger.debug('Changes reverted to saved state', undefined, 'ModelSettingsPanel');
+    setStagedStandard(structuredClone(standardModels));
+    setStagedCodingPlan(structuredClone(codingPlanModels));
+    setStagedCustom(structuredClone(customModels));
+    resetForm();
   };
 
-  return (
-    <div className={`h-full flex flex-col overflow-hidden p-4 relative ${className || ''}`}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-foreground">LLM Models</h3>
-        {!isFormVisible && (
-          <div className="flex gap-2">
-            <button
-              onClick={handleClearAllModels}
-              disabled={isLoading || models.length === 0}
-              className="px-4 py-2 bg-destructive text-destructive-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              aria-label="Clear All Models"
-              title="Clear All Models"
-            >
-              <XCircle className="w-4 h-4" />
-              <span className="font-medium">Clear All</span>
-            </button>
-            <button
-              onClick={handleShowAddForm}
-              disabled={isLoading}
-              className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              aria-label="Add Model"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="font-medium">Add Model</span>
-            </button>
-          </div>
+  // ── Combobox for model selection ────────────────────────────────────────
+
+  const modelOptions = selectedProvider?.models || [];
+  const filteredModels = comboFilter
+    ? modelOptions.filter((m) => m.toLowerCase().includes(comboFilter.toLowerCase()))
+    : modelOptions;
+
+  const handleModelSelect = (model: string) => {
+    setFormModelName(model);
+    setComboFilter('');
+    setComboOpen(false);
+    // Auto-generate name if empty
+    if (!formName && selectedProvider) {
+      setFormName(autoGenerateName(selectedProvider.name, model));
+    }
+  };
+
+  const handleModelInputChange = (value: string) => {
+    setFormModelName(value);
+    setComboFilter(value);
+    setComboOpen(true);
+    // Auto-update name
+    if (selectedProvider && !isEditMode) {
+      setFormName(autoGenerateName(selectedProvider.name, value));
+    }
+  };
+
+  // ── Render helpers ──────────────────────────────────────────────────────
+
+  const renderModelCard = (
+    model: ModelConfig,
+    type: ActiveTab,
+    onEdit: () => void,
+    extra?: React.ReactNode,
+  ) => {
+    const providerLabel =
+      type === 'standard'
+        ? providers.standard.find((p) => p.id === (model as StandardModelConfig).providerId)?.name
+        : type === 'codingPlan'
+        ? providers.codingPlan.find((s) => s.id === (model as CodingPlanModelConfig).serviceId)?.name
+        : undefined;
+
+    return (
+      <div
+        key={model.id}
+        className={cn(
+          'p-3 bg-card border border-border rounded-md shadow-sm hover:shadow-md transition-all',
+          model.isEnabled === false && 'opacity-60',
         )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <h4 className="text-sm font-bold text-foreground truncate">{model.name}</h4>
+              {providerLabel && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                  {providerLabel}
+                </Badge>
+              )}
+              {model.isDefault && (
+                <Badge className="text-[10px] px-1.5 py-0 gap-0.5">
+                  <Star className="w-2.5 h-2.5" />
+                  {t.default}
+                </Badge>
+              )}
+              {model.isEnabled === false && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  {dict.settings.disabled}
+                </Badge>
+              )}
+            </div>
+            <div className="space-y-0.5 text-xs text-muted-foreground">
+              {extra}
+              <div>{t.apiKey}: ••••••••</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!model.isDefault && (
+              <button
+                onClick={() => handleSetDefault(model.id, model.name)}
+                disabled={isLoading || isFormVisible}
+                className="px-2 py-1 text-[10px] bg-muted text-muted-foreground border border-border rounded hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label={t.setDefault}
+              >
+                {t.setDefault}
+              </button>
+            )}
+            <button
+              onClick={onEdit}
+              disabled={isLoading || isFormVisible}
+              className="p-1.5 bg-blue-600 text-white border border-border rounded shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label={t.editModel}
+            >
+              <Edit className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleDeleteModel(model.id, model.name, type)}
+              disabled={isLoading || isFormVisible}
+              className="p-1.5 bg-destructive text-destructive-foreground border border-border rounded shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label={dict.settings.delete}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <Switch
+              checked={model.isEnabled !== false}
+              onCheckedChange={() => handleToggleEnabled(model.id, type)}
+              disabled={isLoading || isFormVisible}
+              aria-label={model.isEnabled !== false ? 'Disable' : 'Enable'}
+            />
+          </div>
+        </div>
       </div>
+    );
+  };
 
-      {/* Messages */}
-      {error && (
-        <div className="mb-4 p-3 bg-destructive border border-border rounded-md text-destructive-foreground text-sm">
-          {error}
-        </div>
-      )}
-      
-      {success && (
-        <div className="mb-4 p-3 bg-secondary border border-border rounded-md text-secondary-foreground text-sm">
-          {success}
-        </div>
-      )}
+  // ── Standard API tab content ────────────────────────────────────────────
 
-      {/* Add/Edit Model Form */}
-      {isFormVisible && (
-        <div className="mb-4 p-4 bg-card border border-border rounded-md shadow-sm">
-          <h4 className="text-md font-bold text-foreground mb-3">
-            {isEditMode ? 'Edit Model' : 'Add New Model'}
-          </h4>
-          
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
-                Model Display Name *
-              </label>
-              <input
-                type="text"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="e.g., GPT-4 Turbo"
-                className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
+  const renderStandardTab = () => (
+    <div className="space-y-3">
+      {/* Provider selector (when no form) */}
+      {!isFormVisible && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground">{t.selectProvider}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {providers.standard.map((provider) => (
+              <button
+                key={provider.id}
+                onClick={() => handleSelectProvider(provider.id)}
                 disabled={isLoading}
-              />
+                className="p-2.5 bg-card border border-border rounded-md hover:border-primary hover:bg-accent/50 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label={`${t.selectProvider}: ${provider.name}`}
+              >
+                <div className="text-sm font-medium text-foreground">{provider.name}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  {provider.models.length} models
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Standard form */}
+      {isFormVisible && selectedProviderId && (
+        <div className="p-3 bg-card border border-border rounded-md shadow-sm">
+          <h4 className="text-sm font-bold text-foreground mb-2">
+            {isEditMode ? t.editModel : t.addStandard}
+          </h4>
+          <div className="space-y-2">
+            {/* Provider (read-only) */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.provider}
+              </label>
+              <div className="px-2.5 py-1.5 bg-muted border border-border rounded text-sm text-foreground">
+                {selectedProvider?.name}
+              </div>
             </div>
 
+            {/* API URL */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
-                API URL *
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.apiUrl} *
               </label>
               <input
                 type="url"
                 value={formApiUrl}
                 onChange={(e) => setFormApiUrl(e.target.value)}
                 placeholder="https://api.openai.com/v1"
-                className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-primary"
                 disabled={isLoading}
               />
             </div>
 
+            {/* API Key */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
-                Model Name *
-              </label>
-              <input
-                type="text"
-                value={formModelName}
-                onChange={(e) => setFormModelName(e.target.value)}
-                placeholder="e.g., gpt-4-turbo"
-                className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
-                API Key *
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.apiKey} *
               </label>
               <input
                 type="password"
                 value={formApiKey}
                 onChange={(e) => setFormApiKey(e.target.value)}
                 placeholder="sk-..."
-                className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-primary"
                 disabled={isLoading}
               />
             </div>
 
+            {/* Model (combobox) */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
-                Max Token ({dict.settings.optional})
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.modelName} *
+              </label>
+              <div className="relative" ref={comboRef}>
+                <div className="flex">
+                  <input
+                    type="text"
+                    value={formModelName}
+                    onChange={(e) => handleModelInputChange(e.target.value)}
+                    onFocus={() => setComboOpen(true)}
+                    placeholder={t.modelOrType}
+                    className="w-full px-2.5 py-1.5 bg-background border border-border rounded-l text-sm text-foreground focus:outline-none focus:border-primary"
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setComboOpen(!comboOpen)}
+                    className="px-2 bg-background border border-l-0 border-border rounded-r hover:bg-muted transition-colors"
+                    aria-label="Toggle model list"
+                    tabIndex={-1}
+                  >
+                    <ChevronDown className={cn('w-3.5 h-3.5 text-muted-foreground transition-transform', comboOpen && 'rotate-180')} />
+                  </button>
+                </div>
+                {comboOpen && filteredModels.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                    {filteredModels.map((model) => (
+                      <button
+                        key={model}
+                        onClick={() => handleModelSelect(model)}
+                        className={cn(
+                          'w-full px-2.5 py-1.5 text-left text-sm hover:bg-accent transition-colors',
+                          formModelName === model && 'bg-accent font-medium',
+                        )}
+                      >
+                        {model}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Display Name */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.displayName} *
+              </label>
+              <input
+                type="text"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder="e.g., GPT-4o"
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-primary"
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Max Token */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.maxToken} ({dict.settings.optional})
               </label>
               <input
                 type="number"
                 value={formMaxToken}
                 onChange={(e) => setFormMaxToken(e.target.value)}
-                placeholder="Leave empty for default maximum"
                 min="1"
-                className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-primary"
                 disabled={isLoading}
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Maximum number of tokens for responses. Leave empty to use the model's default maximum.
-              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t.maxTokenHint}</p>
             </div>
 
-            <div className="flex gap-2 pt-2">
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
               <button
-                onClick={handleSubmitForm}
-                disabled={
-                  isLoading ||
-                  !formName.trim() ||
-                  !formApiUrl.trim() ||
-                  !formApiKey.trim() ||
-                  !formModelName.trim()
-                }
-                className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                onClick={handleStandardSubmit}
+                disabled={isLoading || !formApiUrl.trim() || !formApiKey.trim() || !formModelName.trim()}
+                className="px-3 py-1.5 bg-primary text-primary-foreground border border-border rounded shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 text-sm font-medium"
               >
-                <Save className="w-4 h-4" />
-                <span className="font-medium">
-                  {isEditMode ? 'Update Model' : 'Save Model'}
-                </span>
+                <Save className="w-3.5 h-3.5" />
+                {isEditMode ? t.updateModel : t.saveModel}
               </button>
               <button
-                onClick={handleCancelForm}
+                onClick={resetForm}
                 disabled={isLoading}
-                className="px-4 py-2 bg-muted text-foreground border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 bg-muted text-foreground border border-border rounded hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
-                Cancel
+                {dict.settings.cancel}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Model List */}
-      <div className="flex-1 overflow-y-auto mb-16">
-        {isLoading && stagedModels.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            Loading models...
-          </div>
-        ) : stagedModels.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No models configured. Add your first model to get started.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {stagedModels.map((model) => (
-              <div
-                key={model.id}
-                className={`p-4 bg-card border border-border rounded-md shadow-sm hover:shadow-md transition-all ${
-                  model.isEnabled === false ? 'opacity-60' : ''
-                }`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  {/* Model Info */}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h4 className="text-md font-bold text-foreground">
-                        {model.name}
-                      </h4>
-                      {model.isDefault && (
-                        <button
-                          onClick={() => handleSetDefault(model.id, model.name)}
-                          className="px-2 py-0.5 bg-accent text-accent-foreground text-xs font-medium border border-border flex items-center gap-1 hover:bg-accent/80 transition-colors"
-                          title="Default Model"
-                        >
-                          <Star className="w-3 h-3" />
-                          Default
-                        </button>
-                      )}
-                      {!model.isDefault && (
-                        <button
-                          onClick={() => handleSetDefault(model.id, model.name)}
-                          className="px-2 py-0.5 bg-muted text-muted-foreground text-xs font-medium border border-border hover:bg-accent hover:text-accent-foreground transition-colors"
-                          title="Set as Default"
-                        >
-                          Set Default
-                        </button>
-                      )}
-                      {model.isEnabled === false && (
-                        <span className="px-2 py-0.5 bg-muted text-muted-foreground text-xs font-medium border border-border">
-                          Disabled
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="space-y-1 text-sm text-muted-foreground">
-                      <div>
-                        <span className="font-medium">Model:</span> {model.modelName}
-                      </div>
-                      <div>
-                        <span className="font-medium">API URL:</span> {model.apiUrl}
-                      </div>
-                      <div>
-                        <span className="font-medium">API Key:</span> ••••••••
-                      </div>
-                      {model.maxToken && (
-                        <div>
-                          <span className="font-medium">Max Token:</span> {model.maxToken.toLocaleString()}
-                        </div>
-                      )}
-                      {!model.maxToken && (
-                        <div>
-                          <span className="font-medium">Max Token:</span> <span className="text-muted-foreground italic">Default maximum</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Action Buttons - Right Side */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleEditModel(model)}
-                      disabled={isLoading || isFormVisible}
-                      className="p-2 bg-blue-600 text-white border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      aria-label="Edit Model"
-                      title="Edit Model"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteModel(model.id, model.name)}
-                      disabled={isLoading || isFormVisible}
-                      className="p-2 bg-destructive text-destructive-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      aria-label="Delete Model"
-                      title="Delete Model"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    
-                    {/* Enable/Disable Toggle Switch */}
-                    <button
-                      onClick={() => handleStagedToggleEnabled(model.id)}
-                      disabled={isLoading || isFormVisible}
-                      className={`relative inline-flex h-8 w-14 items-center rounded-full border border-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                        model.isEnabled !== false
-                          ? 'bg-green-600'
-                          : 'bg-muted'
-                      }`}
-                      aria-label={model.isEnabled !== false ? 'Disable Model' : 'Enable Model'}
-                      title={model.isEnabled !== false ? 'Enabled' : 'Disabled'}
-                    >
-                      <span
-                        className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                          model.isEnabled !== false ? 'translate-x-7' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+      {/* Model list */}
+      <div className="space-y-2">
+        {stagedStandard.map((model) =>
+          renderModelCard(model, 'standard', () => handleEditStandard(model), (
+            <>
+              <div>{t.modelName}: {model.modelName}</div>
+              <div>{t.apiUrl}: {model.apiUrl}</div>
+            </>
+          )),
+        )}
+        {stagedStandard.length === 0 && !isFormVisible && (
+          <div className="text-center py-6 text-sm text-muted-foreground">
+            <div>{t.noModels}</div>
+            <div className="text-xs mt-1">{t.noModelsHint}</div>
           </div>
         )}
       </div>
+    </div>
+  );
 
-      {/* Bottom Action Bar - Confirm/Cancel Buttons */}
-      {!isFormVisible && stagedModels.length > 0 && (
-        <div className="absolute bottom-0 left-0 right-0 bg-background border-t border-border p-4 flex items-center justify-end gap-3">
+  // ── Coding Plan tab content ─────────────────────────────────────────────
+
+  const renderCodingPlanTab = () => (
+    <div className="space-y-3">
+      {/* Service selector */}
+      {!isFormVisible && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground">{t.selectService}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {providers.codingPlan.map((service) => (
+              <button
+                key={service.id}
+                onClick={() => handleSelectService(service.id)}
+                disabled={isLoading}
+                className="p-2.5 bg-card border border-border rounded-md hover:border-primary hover:bg-accent/50 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label={`${t.selectService}: ${service.name}`}
+              >
+                <div className="text-sm font-medium text-foreground">{service.name}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">{service.model}</div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Coding Plan form */}
+      {isFormVisible && selectedServiceId && (
+        <div className="p-3 bg-card border border-border rounded-md shadow-sm">
+          <h4 className="text-sm font-bold text-foreground mb-2">
+            {isEditMode ? t.editModel : t.addCodingPlan}
+          </h4>
+          <div className="space-y-2">
+            {/* Service (read-only) */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.service}
+              </label>
+              <div className="px-2.5 py-1.5 bg-muted border border-border rounded text-sm text-foreground">
+                {selectedService?.name}
+              </div>
+            </div>
+
+            {/* Model (read-only) */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.modelName} ({t.fixedModel})
+              </label>
+              <div className="px-2.5 py-1.5 bg-muted border border-border rounded text-sm text-foreground">
+                {selectedService?.model}
+              </div>
+            </div>
+
+            {/* API Key */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.apiKey} *
+              </label>
+              <input
+                type="password"
+                value={formApiKey}
+                onChange={(e) => setFormApiKey(e.target.value)}
+                placeholder="sk-..."
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-primary"
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Display Name */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.displayName} *
+              </label>
+              <input
+                type="text"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-primary"
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleCodingPlanSubmit}
+                disabled={isLoading || !formApiKey.trim()}
+                className="px-3 py-1.5 bg-primary text-primary-foreground border border-border rounded shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 text-sm font-medium"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {isEditMode ? t.updateModel : t.saveModel}
+              </button>
+              <button
+                onClick={resetForm}
+                disabled={isLoading}
+                className="px-3 py-1.5 bg-muted text-foreground border border-border rounded hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {dict.settings.cancel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Model list */}
+      <div className="space-y-2">
+        {stagedCodingPlan.map((model) => {
+          const service = providers.codingPlan.find((s) => s.id === model.serviceId);
+          return renderModelCard(model, 'codingPlan', () => handleEditCodingPlan(model), (
+            <>
+              {service && <div>{t.modelName}: {service.model}</div>}
+            </>
+          ));
+        })}
+        {stagedCodingPlan.length === 0 && !isFormVisible && (
+          <div className="text-center py-6 text-sm text-muted-foreground">
+            <div>{t.noModels}</div>
+            <div className="text-xs mt-1">{t.noModelsHint}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── Custom tab content ──────────────────────────────────────────────────
+
+  const renderCustomTab = () => (
+    <div className="space-y-3">
+      {/* Add button */}
+      {!isFormVisible && (
+        <button
+          onClick={handleShowCustomForm}
+          disabled={isLoading}
+          className="w-full px-3 py-2 bg-primary text-primary-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm font-medium"
+          aria-label={t.addCustom}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          {t.addCustom}
+        </button>
+      )}
+
+      {/* Custom form */}
+      {isFormVisible && activeTab === 'custom' && (
+        <div className="p-3 bg-card border border-border rounded-md shadow-sm">
+          <h4 className="text-sm font-bold text-foreground mb-2">
+            {isEditMode ? t.editModel : t.addCustom}
+          </h4>
+          <div className="space-y-2">
+            {/* Display Name */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.displayName} *
+              </label>
+              <input
+                type="text"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder="e.g., My Custom Model"
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-primary"
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* API URL */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.apiUrl} *
+              </label>
+              <input
+                type="url"
+                value={formApiUrl}
+                onChange={(e) => setFormApiUrl(e.target.value)}
+                placeholder="https://api.example.com/v1"
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-primary"
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Model Name */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.modelName} *
+              </label>
+              <input
+                type="text"
+                value={formModelName}
+                onChange={(e) => setFormModelName(e.target.value)}
+                placeholder="e.g., my-model-v1"
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-primary"
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* API Key */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.apiKey} *
+              </label>
+              <input
+                type="password"
+                value={formApiKey}
+                onChange={(e) => setFormApiKey(e.target.value)}
+                placeholder="sk-..."
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-primary"
+                disabled={isLoading}
+              />
+            </div>
+
+            {/* Max Token */}
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-0.5">
+                {t.maxToken} ({dict.settings.optional})
+              </label>
+              <input
+                type="number"
+                value={formMaxToken}
+                onChange={(e) => setFormMaxToken(e.target.value)}
+                min="1"
+                className="w-full px-2.5 py-1.5 bg-background border border-border rounded text-sm text-foreground focus:outline-none focus:border-primary"
+                disabled={isLoading}
+              />
+              <p className="text-[10px] text-muted-foreground mt-0.5">{t.maxTokenHint}</p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleCustomSubmit}
+                disabled={
+                  isLoading || !formName.trim() || !formApiUrl.trim() || !formApiKey.trim() || !formModelName.trim()
+                }
+                className="px-3 py-1.5 bg-primary text-primary-foreground border border-border rounded shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 text-sm font-medium"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {isEditMode ? t.updateModel : t.saveModel}
+              </button>
+              <button
+                onClick={resetForm}
+                disabled={isLoading}
+                className="px-3 py-1.5 bg-muted text-foreground border border-border rounded hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {dict.settings.cancel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Model list */}
+      <div className="space-y-2">
+        {stagedCustom.map((model) =>
+          renderModelCard(model, 'custom', () => handleEditCustom(model), (
+            <>
+              <div>{t.modelName}: {model.modelName}</div>
+              <div>{t.apiUrl}: {model.apiUrl}</div>
+            </>
+          )),
+        )}
+        {stagedCustom.length === 0 && !isFormVisible && (
+          <div className="text-center py-6 text-sm text-muted-foreground">
+            <div>{t.noModels}</div>
+            <div className="text-xs mt-1">{t.noModelsHint}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── Main render ─────────────────────────────────────────────────────────
+
+  return (
+    <div className={cn('h-full flex flex-col overflow-hidden p-4 relative', className)}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-lg font-bold text-foreground">{t.title}</h3>
+      </div>
+
+      {/* Messages */}
+      {error && (
+        <div className="mb-3 p-2 bg-destructive border border-border rounded text-destructive-foreground text-xs">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="mb-3 p-2 bg-secondary border border-border rounded text-secondary-foreground text-xs">
+          {success}
+        </div>
+      )}
+
+      {isLoading && stagedStandard.length === 0 && stagedCodingPlan.length === 0 && stagedCustom.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground text-sm">{t.loading}</div>
+      ) : (
+        <>
+          {/* Tabs */}
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => {
+              setActiveTab(v as ActiveTab);
+              resetForm();
+            }}
+            className="flex-1 flex flex-col overflow-hidden"
+          >
+            <TabsList className="w-full justify-start mb-3">
+              <TabsTrigger value="standard" className="gap-1.5">
+                {tabs.standard}
+                <Badge variant="secondary" className="text-[10px] px-1 py-0 min-w-[18px] justify-center">
+                  {stagedStandard.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="codingPlan" className="gap-1.5">
+                {tabs.codingPlan}
+                <Badge variant="secondary" className="text-[10px] px-1 py-0 min-w-[18px] justify-center">
+                  {stagedCodingPlan.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="custom" className="gap-1.5">
+                {tabs.custom}
+                <Badge variant="secondary" className="text-[10px] px-1 py-0 min-w-[18px] justify-center">
+                  {stagedCustom.length}
+                </Badge>
+              </TabsTrigger>
+            </TabsList>
+
+            <div className="flex-1 overflow-y-auto pb-16">
+              <TabsContent value="standard" className="mt-0">
+                {renderStandardTab()}
+              </TabsContent>
+              <TabsContent value="codingPlan" className="mt-0">
+                {renderCodingPlanTab()}
+              </TabsContent>
+              <TabsContent value="custom" className="mt-0">
+                {renderCustomTab()}
+              </TabsContent>
+            </div>
+          </Tabs>
+        </>
+      )}
+
+      {/* Bottom Action Bar */}
+      {hasChanges && !isFormVisible && (
+        <div className="absolute bottom-0 left-0 right-0 bg-background border-t border-border p-3 flex items-center justify-end gap-2">
           <button
             onClick={handleCancelChanges}
-            disabled={!hasChanges || isLoading}
-            className="px-6 py-2 bg-muted text-foreground border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            disabled={isLoading}
+            className="px-4 py-1.5 bg-muted text-foreground border border-border rounded hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
           >
-            Cancel
+            {dict.settings.cancel}
           </button>
           <button
             onClick={handleConfirmChanges}
-            disabled={!hasChanges || isLoading}
-            className="px-6 py-2 bg-primary text-primary-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+            disabled={isLoading}
+            className="px-4 py-1.5 bg-primary text-primary-foreground border border-border rounded shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 text-sm font-medium"
           >
-            <Check className="w-4 h-4" />
-            Confirm Changes
+            <Save className="w-3.5 h-3.5" />
+            {t.confirmChanges}
           </button>
         </div>
       )}
@@ -762,9 +1155,3 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
 };
 
 export default ModelSettingsPanel;
-
-
-
-
-
-

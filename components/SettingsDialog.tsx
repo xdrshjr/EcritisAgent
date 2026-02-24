@@ -19,6 +19,8 @@ import {
   clearAllModels,
   reorderModelConfigs,
   saveModelConfigs,
+  getModelApiUrl,
+  getModelName,
   type ModelConfig,
   type ModelConfigList,
 } from '@/lib/modelConfig';
@@ -119,6 +121,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
 
     try {
       const result = await addModelConfig({
+        type: 'custom',
         name: formName.trim(),
         apiUrl: formApiUrl.trim(),
         apiKey: formApiKey.trim(),
@@ -168,6 +171,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
 
     try {
       const result = await updateModelConfig(editingModelId, {
+        type: 'custom',
         name: formName.trim(),
         apiUrl: formApiUrl.trim(),
         apiKey: formApiKey.trim(),
@@ -181,16 +185,15 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
         }, 'SettingsDialog');
 
         // Update state immediately with the modified model
-        const updatedModels = models.map(model => 
+        const updatedModels = models.map(model =>
           model.id === editingModelId
-            ? {
+            ? ({
                 ...model,
                 name: formName.trim(),
-                apiUrl: formApiUrl.trim(),
+                ...(model.type !== 'codingPlan' ? { apiUrl: formApiUrl.trim(), modelName: formModelName.trim() } : {}),
                 apiKey: formApiKey.trim(),
-                modelName: formModelName.trim(),
                 updatedAt: new Date().toISOString(),
-              }
+              } as ModelConfig)
             : model
         );
         setModels(updatedModels);
@@ -221,9 +224,9 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
     setEditingModelId(model.id);
     setIsEditMode(true);
     setFormName(model.name);
-    setFormApiUrl(model.apiUrl);
+    setFormApiUrl(getModelApiUrl(model) || '');
     setFormApiKey(model.apiKey);
-    setFormModelName(model.modelName);
+    setFormModelName(getModelName(model) || '');
     setIsFormVisible(true);
     setError('');
     setSuccess('');
@@ -1054,10 +1057,10 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                               
                               <div className="space-y-1 text-sm text-muted-foreground">
                                 <div>
-                                  <span className="font-medium">Model:</span> {model.modelName}
+                                  <span className="font-medium">Model:</span> {getModelName(model) || '(resolved at call time)'}
                                 </div>
                                 <div>
-                                  <span className="font-medium">API URL:</span> {model.apiUrl}
+                                  <span className="font-medium">API URL:</span> {getModelApiUrl(model) || '(resolved at call time)'}
                                 </div>
                                 <div>
                                   <span className="font-medium">API Key:</span> ••••••••

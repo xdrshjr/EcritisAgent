@@ -15,7 +15,6 @@ This module:
 import json
 import logging
 from typing import Dict, Any, Optional, Literal
-from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 logger = logging.getLogger(__name__)
@@ -112,24 +111,32 @@ AVAILABLE_AGENTS = [AUTO_WRITER_AGENT, DOCUMENT_MODIFIER_AGENT]
 class AgentRouter:
     """Routes requests to appropriate agents using LLM-based intent detection"""
     
-    def __init__(self, api_key: str, api_url: str, model_name: str, language: str = 'en'):
+    def __init__(self, api_key: str, api_url: str, model_name: str, language: str = 'en', call_config: dict = None):
         """
         Initialize agent router
-        
+
         Args:
             api_key: LLM API key
             api_url: LLM API base URL
             model_name: Model name for intent detection
             language: Language for prompts ('en' or 'zh')
+            call_config: Full LLM call config dict (protocol-aware). When provided,
+                         api_key/api_url/model_name are ignored.
         """
         self.language = language
-        self.llm = ChatOpenAI(
-            model=model_name,
-            openai_api_key=api_key,
-            openai_api_base=api_url,
-            temperature=0.0,  # Use deterministic routing
-            streaming=False
-        )
+
+        if call_config:
+            from llm_factory import create_llm_client
+            self.llm = create_llm_client(call_config, temperature=0.0, streaming=False)
+        else:
+            from langchain_openai import ChatOpenAI
+            self.llm = ChatOpenAI(
+                model=model_name,
+                openai_api_key=api_key,
+                openai_api_base=api_url,
+                temperature=0.0,
+                streaming=False,
+            )
         
         logger.info('AgentRouter initialized', extra={
             'model': model_name,

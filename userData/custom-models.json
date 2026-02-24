@@ -1,0 +1,41 @@
+{
+  "models": [
+    {
+      "apiKey": "j6v_gFKaIuXBdUn5ggsibzEo3EZX5nJcwBiNG5xqJzE",
+      "apiUrl": "https://api.poe.com/v1",
+      "createdAt": "2025-11-26T12:24:43.753Z",
+      "id": "model_1764159883753_cvm2a81",
+      "isDefault": true,
+      "isEnabled": true,
+      "modelName": "claude-sonnet-4.5",
+      "name": "claude-sonnet-4.5",
+      "updatedAt": "2025-12-06T15:35:31.977Z",
+      "type": "custom"
+    },
+    {
+      "apiKey": "sk-a5f209d824d54b6883fbc397f9fb4e28",
+      "apiUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "createdAt": "2024-11-14T10:00:01.000000+00:00",
+      "id": "model_1731579601.000000",
+      "isDefault": false,
+      "isEnabled": true,
+      "modelName": "deepseek-v3",
+      "name": "DeepSeek V3",
+      "updatedAt": "2024-11-14T10:00:01.000000+00:00",
+      "type": "custom"
+    },
+    {
+      "apiKey": "sk-a5f209d824d54b6883fbc397f9fb4e28",
+      "apiUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "createdAt": "2024-11-14T10:00:00.000000+00:00",
+      "id": "model_1731579600.000000",
+      "isDefault": false,
+      "isEnabled": true,
+      "modelName": "qwen-max-latest",
+      "name": "Qwen Max",
+      "updatedAt": "2024-11-14T10:00:00.000000+00:00",
+      "type": "custom"
+    }
+  ],
+  "defaultModelId": "model_1764159883753_cvm2a81"
+}

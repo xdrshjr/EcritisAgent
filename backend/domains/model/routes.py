@@ -1,10 +1,9 @@
 """
 Model Domain Routes
-Handles LLM model configuration management
+Handles LLM model configuration management (multi-type storage)
 """
 
 import logging
-import json
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify, current_app
 
@@ -14,119 +13,213 @@ logger = logging.getLogger(__name__)
 model_bp = Blueprint('model', __name__, url_prefix='/api')
 
 
+def _get_config_loader():
+    """Helper to get config_loader from Flask app config."""
+    loader = current_app.config.get('config_loader')
+    if not loader:
+        logger.error('[Model Domain] config_loader not found in app.config')
+    return loader
+
+
+def _validate_model(model: dict, idx: int):
+    """Validate a single model dict. Returns error string or None."""
+    model_type = model.get('type', 'custom')
+    base_required = ['id', 'name', 'apiKey']
+
+    if model_type == 'standard':
+        required = base_required + ['providerId', 'apiUrl', 'modelName']
+    elif model_type == 'codingPlan':
+        required = base_required + ['serviceId']
+    else:  # custom
+        required = base_required + ['apiUrl', 'modelName']
+
+    missing = [f for f in required if f not in model or not model[f]]
+    if missing:
+        return f'Model at index {idx} (type={model_type}) is missing: {", ".join(missing)}'
+    return None
+
+
+# ── Merged endpoint (backward-compatible) ────────────────────────────────────
+
 @model_bp.route('/model-configs', methods=['GET', 'POST'])
 def model_configs():
     """
-    Manage model configurations with persistent storage
-    GET: Retrieve all model configurations
-    POST: Save model configurations
+    GET:  Retrieve ALL model configurations (merged from three type files).
+    POST: Save model configurations (dispatches to correct type files).
     """
-    # Get config_loader from Flask app config
-    config_loader = current_app.config.get('config_loader')
+    config_loader = _get_config_loader()
     if not config_loader:
-        logger.error('[Model Domain] config_loader not found in app.config')
-        return jsonify({
-            'success': False,
-            'error': 'Configuration error',
-            'details': 'Config loader not available'
-        }), 500
-    
+        return jsonify({'success': False, 'error': 'Config loader not available'}), 500
+
     if request.method == 'GET':
-        logger.info('[Model Domain] Model configurations retrieval requested')
-        
         try:
-            configs = config_loader.load_model_configs()
-            
-            logger.info(f'[Model Domain] Returning {len(configs.get("models", []))} model configurations')
-            
+            # Support ?type= query parameter for filtered loading
+            model_type = request.args.get('type', 'all')
+            valid_types = ('standard', 'codingPlan', 'custom', 'all')
+            if model_type not in valid_types:
+                return jsonify({'success': False, 'error': f'Invalid type. Must be one of: {valid_types}'}), 400
+
+            if model_type == 'all':
+                configs = config_loader.load_model_configs()
+            else:
+                configs = config_loader.load_models_by_type(model_type)
+
             return jsonify({
                 'success': True,
                 'data': configs,
                 'count': len(configs.get('models', [])),
-                'configPath': str(config_loader.config_path)
+                'type': model_type,
             })
-        
         except Exception as e:
-            logger.error(f'[Model Domain] Failed to retrieve model configurations: {str(e)}', exc_info=True)
-            return jsonify({
-                'success': False,
-                'error': 'Failed to retrieve model configurations',
-                'details': str(e)
-            }), 500
-    
-    # POST request - save model configurations
-    logger.info('[Model Domain] Model configuration save requested')
-    
+            logger.error(f'[Model Domain] Failed to retrieve configs: {e}', exc_info=True)
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # POST – save (dispatches by type)
     try:
         data = request.get_json()
-        
-        if not data:
-            logger.warning('[Model Domain] No data provided in model config save request')
-            return jsonify({
-                'success': False,
-                'error': 'Request body is required'
-            }), 400
-        
-        # Validate required fields
-        if 'models' not in data:
-            logger.warning('[Model Domain] Models array missing in request data')
-            return jsonify({
-                'success': False,
-                'error': 'Models array is required'
-            }), 400
-        
-        models = data.get('models', [])
-        logger.debug(f'[Model Domain] Saving {len(models)} model configurations')
-        
-        # Validate each model configuration
-        for idx, model in enumerate(models):
-            required_fields = ['id', 'name', 'apiUrl', 'apiKey', 'modelName']
-            missing_fields = [field for field in required_fields if field not in model or not model[field]]
-            
-            if missing_fields:
-                logger.warning(f'[Model Domain] Model at index {idx} missing required fields: {missing_fields}')
-                return jsonify({
-                    'success': False,
-                    'error': f'Model at index {idx} is missing required fields: {", ".join(missing_fields)}'
-                }), 400
-            
-            logger.debug(f'[Model Domain] Model {idx}: {model.get("name")} ({model.get("modelName")})')
-        
-        # Add timestamps if not present
+        if not data or 'models' not in data:
+            return jsonify({'success': False, 'error': 'models array is required'}), 400
+
+        # If a top-level "type" is given, save only to that file
+        target_type = data.get('type')
+        models = data['models']
         current_time = datetime.now(timezone.utc).isoformat()
-        for model in models:
-            if 'updatedAt' not in model:
-                model['updatedAt'] = current_time
-            if 'createdAt' not in model:
-                model['createdAt'] = current_time
-        
-        # Save to file
-        config_data = {
-            'models': models,
-            'defaultModelId': data.get('defaultModelId')
-        }
-        
-        with open(config_loader.config_path, 'w', encoding='utf-8') as f:
-            json.dump(config_data, f, indent=2, ensure_ascii=False)
-        
-        logger.info(f'[Model Domain] Model configurations saved successfully: {len(models)} models', extra={
-            'count': len(models),
-            'path': str(config_loader.config_path),
-            'defaultModelId': data.get('defaultModelId')
-        })
-        
+
+        for idx, model in enumerate(models):
+            # Use the explicit target type or fall back to per-model type
+            if target_type:
+                model['type'] = target_type
+            elif 'type' not in model:
+                model['type'] = 'custom'
+            err = _validate_model(model, idx)
+            if err:
+                return jsonify({'success': False, 'error': err}), 400
+            model.setdefault('updatedAt', current_time)
+            model.setdefault('createdAt', current_time)
+
+        if target_type and target_type in ('standard', 'codingPlan', 'custom'):
+            config_loader.save_models_by_type(target_type, {
+                'models': models,
+                'defaultModelId': data.get('defaultModelId'),
+            })
+            label = target_type
+        else:
+            config_loader.save_model_configs({
+                'models': models,
+                'defaultModelId': data.get('defaultModelId'),
+            })
+            label = 'all'
+
         return jsonify({
             'success': True,
-            'message': 'Model configurations saved successfully',
+            'message': f'{label.capitalize()} model configurations saved successfully',
             'count': len(models),
-            'configPath': str(config_loader.config_path)
         })
-    
     except Exception as e:
-        logger.error(f'[Model Domain] Failed to save model configurations: {str(e)}', exc_info=True)
-        return jsonify({
-            'success': False,
-            'error': 'Failed to save model configurations',
-            'details': str(e)
-        }), 500
+        logger.error(f'[Model Domain] Failed to save configs: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
+
+# ── Default model endpoint (must be registered before the variable route) ────
+
+@model_bp.route('/model-configs/default', methods=['POST'])
+def set_default_model():
+    """Set the global default model (cross-file)."""
+    config_loader = _get_config_loader()
+    if not config_loader:
+        return jsonify({'success': False, 'error': 'Config loader not available'}), 500
+
+    try:
+        data = request.get_json()
+        model_id = data.get('modelId') if data else None
+        if not model_id:
+            return jsonify({'success': False, 'error': 'modelId is required'}), 400
+
+        config_loader.set_default_model(model_id)
+        return jsonify({
+            'success': True,
+            'message': f'Default model set to {model_id}',
+        })
+    except Exception as e:
+        logger.error(f'[Model Domain] Failed to set default model: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ── Per-type endpoints ───────────────────────────────────────────────────────
+
+@model_bp.route('/model-configs/<model_type>', methods=['GET', 'POST'])
+def model_configs_by_type(model_type: str):
+    """
+    GET:  Retrieve model configurations for a specific type.
+    POST: Save model configurations for a specific type.
+    """
+    valid_types = ('standard', 'codingPlan', 'custom')
+    if model_type not in valid_types:
+        return jsonify({'success': False, 'error': f'Invalid type. Must be one of: {valid_types}'}), 400
+
+    config_loader = _get_config_loader()
+    if not config_loader:
+        return jsonify({'success': False, 'error': 'Config loader not available'}), 500
+
+    if request.method == 'GET':
+        try:
+            data = config_loader.load_models_by_type(model_type)
+            return jsonify({
+                'success': True,
+                'data': data,
+                'count': len(data.get('models', [])),
+            })
+        except Exception as e:
+            logger.error(f'[Model Domain] Failed to load {model_type}: {e}', exc_info=True)
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # POST
+    try:
+        data = request.get_json()
+        if not data or 'models' not in data:
+            return jsonify({'success': False, 'error': 'models array is required'}), 400
+
+        models = data['models']
+        current_time = datetime.now(timezone.utc).isoformat()
+
+        for idx, model in enumerate(models):
+            model['type'] = model_type  # enforce type
+            err = _validate_model(model, idx)
+            if err:
+                return jsonify({'success': False, 'error': err}), 400
+            model.setdefault('updatedAt', current_time)
+            model.setdefault('createdAt', current_time)
+
+        config_loader.save_models_by_type(model_type, {
+            'models': models,
+            'defaultModelId': data.get('defaultModelId'),
+        })
+
+        return jsonify({
+            'success': True,
+            'message': f'{model_type} model configurations saved',
+            'count': len(models),
+        })
+    except Exception as e:
+        logger.error(f'[Model Domain] Failed to save {model_type}: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ── Provider templates endpoint ──────────────────────────────────────────────
+
+@model_bp.route('/providers', methods=['GET'])
+def get_providers():
+    """Return the read-only provider/service templates from providers.json."""
+    config_loader = _get_config_loader()
+    if not config_loader:
+        return jsonify({'success': False, 'error': 'Config loader not available'}), 500
+
+    try:
+        providers = config_loader.load_providers()
+        return jsonify({
+            'success': True,
+            'data': providers,
+        })
+    except Exception as e:
+        logger.error(f'[Model Domain] Failed to load providers: {e}', exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500

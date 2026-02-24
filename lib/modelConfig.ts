@@ -7,23 +7,106 @@
 import { logger } from './logger';
 import { buildFlaskApiUrl } from './flaskConfig';
 
-export interface ModelConfig {
+// ── Model Type System ──────────────────────────────────────────────────────────
+
+/** Model type discriminator */
+export type ModelType = 'standard' | 'codingPlan' | 'custom';
+
+/** Fields shared by all model types */
+export interface BaseModelConfig {
   id: string;
+  type: ModelType;
   name: string;
-  apiUrl: string;
-  apiKey: string;
-  modelName: string;
-  maxToken?: number;
   isDefault?: boolean;
   isEnabled?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
 
+/** Standard API provider model (OpenAI, Anthropic, Gemini, DeepSeek) */
+export interface StandardModelConfig extends BaseModelConfig {
+  type: 'standard';
+  providerId: string;
+  apiUrl: string;
+  apiKey: string;
+  modelName: string;
+  maxToken?: number;
+}
+
+/** Coding Plan service model (e.g. Kimi K2.5) */
+export interface CodingPlanModelConfig extends BaseModelConfig {
+  type: 'codingPlan';
+  serviceId: string;
+  apiKey: string;
+}
+
+/** Fully custom / self-hosted model */
+export interface CustomModelConfig extends BaseModelConfig {
+  type: 'custom';
+  apiUrl: string;
+  apiKey: string;
+  modelName: string;
+  maxToken?: number;
+}
+
+/** Discriminated union of all model config types */
+export type ModelConfig = StandardModelConfig | CodingPlanModelConfig | CustomModelConfig;
+
 export interface ModelConfigList {
   models: ModelConfig[];
   defaultModelId?: string;
 }
+
+// ── Provider / Service Templates (read-only, from providers.json) ────────────
+
+export interface StandardProvider {
+  id: string;
+  name: string;
+  apiUrl: string;
+  models: string[];
+  protocol: 'openai' | 'anthropic';
+}
+
+export interface CodingPlanService {
+  id: string;
+  name: string;
+  apiUrl: string;
+  model: string;
+  protocol: 'openai' | 'anthropic';
+  extraHeaders: Record<string, string>;
+  defaultParams: Record<string, number>;
+}
+
+export interface ProvidersConfig {
+  standard: StandardProvider[];
+  codingPlan: CodingPlanService[];
+}
+
+// ── Distributive helper ──────────────────────────────────────────────────────
+
+/** Distributive Omit that preserves discriminated union branches */
+type DistributiveOmit<T, K extends keyof any> = T extends any ? Omit<T, K> : never;
+
+/** Distributive Partial that preserves discriminated union branches */
+type DistributivePartial<T> = T extends any ? Partial<T> : never;
+
+// ── Type Guards ──────────────────────────────────────────────────────────────
+
+export const isStandardModel = (m: ModelConfig): m is StandardModelConfig => m.type === 'standard';
+export const isCodingPlanModel = (m: ModelConfig): m is CodingPlanModelConfig => m.type === 'codingPlan';
+export const isCustomModel = (m: ModelConfig): m is CustomModelConfig => m.type === 'custom';
+
+/** Helper: get apiUrl from any model config (CodingPlan resolves via provider template) */
+export const getModelApiUrl = (m: ModelConfig): string | undefined => {
+  if (m.type === 'codingPlan') return undefined; // resolved from providers.json at call time
+  return m.apiUrl;
+};
+
+/** Helper: get modelName from any model config (CodingPlan resolves via provider template) */
+export const getModelName = (m: ModelConfig): string | undefined => {
+  if (m.type === 'codingPlan') return undefined; // resolved from providers.json at call time
+  return m.modelName;
+};
 
 const MODEL_CONFIG_KEY = 'docaimaster_model_configs';
 const MODEL_CONFIGS_UPDATED_EVENT = 'docaimaster_model_configs_updated';
@@ -80,37 +163,55 @@ export const generateModelId = (): string => {
 };
 
 /**
- * Validate model configuration
+ * Validate model configuration (type-aware)
  */
 export const validateModelConfig = (config: Partial<ModelConfig>): { valid: boolean; error?: string } => {
-  logger.debug('Validating model configuration', { configId: config.id }, 'ModelConfig');
+  logger.debug('Validating model configuration', { configId: config.id, type: config.type }, 'ModelConfig');
 
   if (!config.name || config.name.trim().length === 0) {
     logger.warn('Model name is required', undefined, 'ModelConfig');
     return { valid: false, error: 'Model name is required' };
   }
 
-  if (!config.apiUrl || config.apiUrl.trim().length === 0) {
-    logger.warn('API URL is required', undefined, 'ModelConfig');
-    return { valid: false, error: 'API URL is required' };
-  }
-
-  // Validate URL format
-  try {
-    new URL(config.apiUrl);
-  } catch {
-    logger.warn('Invalid API URL format', { url: config.apiUrl }, 'ModelConfig');
-    return { valid: false, error: 'Invalid API URL format' };
-  }
-
-  if (!config.apiKey || config.apiKey.trim().length === 0) {
+  if (!config.apiKey || (config.apiKey as string).trim().length === 0) {
     logger.warn('API key is required', undefined, 'ModelConfig');
     return { valid: false, error: 'API key is required' };
   }
 
-  if (!config.modelName || config.modelName.trim().length === 0) {
-    logger.warn('Model name is required', undefined, 'ModelConfig');
-    return { valid: false, error: 'Model name is required' };
+  const type = config.type || 'custom';
+
+  if (type === 'standard') {
+    const sc = config as Partial<StandardModelConfig>;
+    if (!sc.providerId || sc.providerId.trim().length === 0) {
+      return { valid: false, error: 'Provider is required for standard model' };
+    }
+    if (!sc.apiUrl || sc.apiUrl.trim().length === 0) {
+      return { valid: false, error: 'API URL is required' };
+    }
+    try { new URL(sc.apiUrl!); } catch {
+      return { valid: false, error: 'Invalid API URL format' };
+    }
+    if (!sc.modelName || sc.modelName.trim().length === 0) {
+      return { valid: false, error: 'Model name is required' };
+    }
+  } else if (type === 'codingPlan') {
+    const cp = config as Partial<CodingPlanModelConfig>;
+    if (!cp.serviceId || cp.serviceId.trim().length === 0) {
+      return { valid: false, error: 'Service ID is required for coding plan model' };
+    }
+    // apiUrl and modelName are resolved from providers.json — not required here
+  } else {
+    // custom
+    const cc = config as Partial<CustomModelConfig>;
+    if (!cc.apiUrl || cc.apiUrl.trim().length === 0) {
+      return { valid: false, error: 'API URL is required' };
+    }
+    try { new URL(cc.apiUrl!); } catch {
+      return { valid: false, error: 'Invalid API URL format' };
+    }
+    if (!cc.modelName || cc.modelName.trim().length === 0) {
+      return { valid: false, error: 'Model name is required' };
+    }
   }
 
   logger.debug('Model configuration validated successfully', { configId: config.id }, 'ModelConfig');
@@ -318,7 +419,7 @@ export const saveModelConfigs = async (configs: ModelConfigList): Promise<{ succ
 /**
  * Add a new model configuration
  */
-export const addModelConfig = async (config: Omit<ModelConfig, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ success: boolean; error?: string; model?: ModelConfig }> => {
+export const addModelConfig = async (config: DistributiveOmit<ModelConfig, 'id' | 'createdAt' | 'updatedAt'>): Promise<{ success: boolean; error?: string; model?: ModelConfig }> => {
   logger.info('Adding new model configuration', {
     name: config.name,
   }, 'ModelConfig');
@@ -334,13 +435,13 @@ export const addModelConfig = async (config: Omit<ModelConfig, 'id' | 'createdAt
     const configList = await loadModelConfigs();
 
     // Create new model with metadata
-    const newModel: ModelConfig = {
+    const newModel = {
       ...config,
       id: generateModelId(),
       isEnabled: true, // New models are enabled by default
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    };
+    } as ModelConfig;
 
     // If this is the first model, make it default
     if (configList.models.length === 0) {
@@ -377,7 +478,7 @@ export const addModelConfig = async (config: Omit<ModelConfig, 'id' | 'createdAt
 /**
  * Update an existing model configuration
  */
-export const updateModelConfig = async (id: string, updates: Partial<Omit<ModelConfig, 'id' | 'createdAt'>>): Promise<{ success: boolean; error?: string }> => {
+export const updateModelConfig = async (id: string, updates: DistributivePartial<DistributiveOmit<ModelConfig, 'id' | 'createdAt'>>): Promise<{ success: boolean; error?: string }> => {
   logger.info('Updating model configuration', { id }, 'ModelConfig');
 
   try {
@@ -397,7 +498,7 @@ export const updateModelConfig = async (id: string, updates: Partial<Omit<ModelC
       ...configList.models[modelIndex],
       ...updates,
       updatedAt: new Date().toISOString(),
-    };
+    } as ModelConfig;
 
     // Validate updated configuration
     const validation = validateModelConfig(updatedModel);
@@ -490,36 +591,24 @@ export const setDefaultModel = async (id: string): Promise<{ success: boolean; e
   logger.info('Setting default model', { id }, 'ModelConfig');
 
   try {
-    // Load existing configs
-    const configList = await loadModelConfigs();
-
-    // Find model
-    const model = configList.models.find(m => m.id === id);
-    
-    if (!model) {
-      logger.warn('Model configuration not found', { id }, 'ModelConfig');
-      return { success: false, error: 'Model not found' };
-    }
-
-    // Update default flags
-    configList.models.forEach(m => {
-      m.isDefault = m.id === id;
+    // Call the dedicated backend endpoint for cross-file default setting
+    const apiUrl = buildFlaskApiUrl('/api/model-configs/default');
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modelId: id }),
     });
-    configList.defaultModelId = id;
 
-    // Save to storage
-    const saveResult = await saveModelConfigs(configList);
-    
-    if (!saveResult.success) {
-      return { success: false, error: saveResult.error };
+    if (response.ok) {
+      // Emit update event so UI refreshes
+      const refreshed = await loadModelConfigs();
+      emitModelConfigsUpdatedEvent(refreshed);
+      logger.success('Default model set successfully', { id }, 'ModelConfig');
+      return { success: true };
     }
 
-    logger.success('Default model set successfully', {
-      id,
-      name: model.name,
-    }, 'ModelConfig');
-
-    return { success: true };
+    const err = await response.json().catch(() => ({ error: 'Unknown' }));
+    return { success: false, error: err.error };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Failed to set default model', {
@@ -560,7 +649,7 @@ export const getDefaultModel = async (): Promise<ModelConfig | null> => {
       logger.info('Default model found and enabled', {
         id: defaultModel.id,
         name: defaultModel.name,
-        modelName: defaultModel.modelName,
+        type: defaultModel.type,
       }, 'ModelConfig');
       return defaultModel;
     }
@@ -569,7 +658,7 @@ export const getDefaultModel = async (): Promise<ModelConfig | null> => {
     logger.info('No default model set, using first enabled model', {
       id: enabledModels[0].id,
       name: enabledModels[0].name,
-      modelName: enabledModels[0].modelName,
+      type: enabledModels[0].type,
     }, 'ModelConfig');
     
     return enabledModels[0];
@@ -786,10 +875,98 @@ export const clearAllModels = async (): Promise<{ success: boolean; error?: stri
   }
 };
 
+// ── Per-type loading / saving ────────────────────────────────────────────────
+
+/**
+ * Load model configurations for a specific type from the Python backend.
+ */
+export const loadModelConfigsByType = async (type: ModelType): Promise<ModelConfigList> => {
+  try {
+    const apiUrl = buildFlaskApiUrl(`/api/model-configs/${type}`);
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.data) {
+        return result.data;
+      }
+    }
+    return { models: [] };
+  } catch {
+    logger.debug(`Failed to load ${type} models from backend`, undefined, 'ModelConfig');
+    return { models: [] };
+  }
+};
+
+/**
+ * Save model configurations for a specific type to the Python backend.
+ */
+export const saveModelConfigsByType = async (
+  type: ModelType,
+  data: ModelConfigList,
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const apiUrl = buildFlaskApiUrl(`/api/model-configs/${type}`);
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (response.ok) {
+      emitModelConfigsUpdatedEvent(await loadModelConfigs());
+      return { success: true };
+    }
+    const err = await response.json().catch(() => ({ error: 'Unknown' }));
+    return { success: false, error: err.error };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+};
+
+/**
+ * Alias for loadModelConfigs (clearer name for new code).
+ */
+export const loadAllModelConfigs = loadModelConfigs;
+
+/**
+ * Load provider/service templates from backend (read-only).
+ */
+export const loadProviders = async (): Promise<ProvidersConfig> => {
+  try {
+    const apiUrl = buildFlaskApiUrl('/api/providers');
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (response.ok) {
+      const result = await response.json();
+      if (result.success && result.data) {
+        return result.data;
+      }
+    }
+    return { standard: [], codingPlan: [] };
+  } catch {
+    logger.debug('Failed to load providers from backend', undefined, 'ModelConfig');
+    return { standard: [], codingPlan: [] };
+  }
+};
+
 /**
  * Get LLM configuration from model config (for compatibility with chatClient)
+ * For CodingPlan models, apiUrl and modelName must be resolved from providers.json
+ * before calling this function (or pass resolved values).
  */
-export const getLLMConfigFromModel = (model: ModelConfig) => {
+export const getLLMConfigFromModel = (model: ModelConfig, resolvedApiUrl?: string, resolvedModelName?: string) => {
+  if (model.type === 'codingPlan') {
+    return {
+      apiKey: model.apiKey,
+      apiUrl: resolvedApiUrl || '',
+      modelName: resolvedModelName || '',
+      timeout: DEFAULT_TIMEOUT,
+    };
+  }
   return {
     apiKey: model.apiKey,
     apiUrl: model.apiUrl,
