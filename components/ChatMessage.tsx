@@ -627,18 +627,18 @@ const ChatMessage = ({
         ),
         table: ({ node, children, ...props }) => (
           <div className="overflow-x-auto my-2">
-            <table className="min-w-full border-collapse border border-gray-300" {...props}>
+            <table className="min-w-full border-collapse border border-border" {...props}>
               {children}
             </table>
           </div>
         ),
         th: ({ node, children, ...props }) => (
-          <th className="border border-gray-300 px-2 py-1 bg-gray-100 dark:bg-gray-800 font-semibold" {...props}>
+          <th className="border border-border px-2 py-1 bg-muted font-semibold" {...props}>
             {children}
           </th>
         ),
         td: ({ node, children, ...props }) => (
-          <td className="border border-gray-300 px-2 py-1" {...props}>
+          <td className="border border-border px-2 py-1" {...props}>
             {children}
           </td>
         ),
@@ -726,8 +726,8 @@ const ChatMessage = ({
         <div
           className={`relative px-4 py-3 shadow-sm transition-all hover:shadow-md group ${
             isUser
-              ? 'bg-[#F3F4F6] text-foreground'
-              : 'bg-muted/80 text-foreground border border-border/50'
+              ? 'bg-primary/5 text-foreground rounded-2xl rounded-br-sm'
+              : 'bg-card text-foreground border border-border/50 rounded-2xl rounded-bl-sm'
           }`}
         >
           {/* Action Buttons - Top Corner */}
@@ -770,15 +770,15 @@ const ChatMessage = ({
               <button
                 onClick={handleCopy}
                 onKeyDown={(e) => handleKeyDown(e, handleCopy)}
-                className={`p-1.5 rounded-md transition-all duration-200 hover:bg-black/10 text-black/60 hover:text-black bg-black/5 border border-black/20 ${copySuccess ? 'bg-green-500/20 border-green-400/50' : ''} shadow-sm hover:shadow-md`}
+                className={`p-1.5 rounded-md transition-all duration-200 hover:bg-foreground/10 text-foreground/60 hover:text-foreground bg-foreground/5 border border-foreground/20 ${copySuccess ? 'bg-green-500/20 border-green-400/50' : ''} shadow-sm hover:shadow-md`}
                 aria-label="Copy message"
                 tabIndex={0}
                 title={copySuccess ? 'Copied!' : 'Copy message'}
               >
                 {copySuccess ? (
-                  <span className="text-xs font-semibold text-black">✓</span>
+                  <span className="text-xs font-semibold text-foreground">✓</span>
                 ) : (
-                  <Copy className="w-3.5 h-3.5 text-black/70" />
+                  <Copy className="w-3.5 h-3.5 text-foreground/70" />
                 )}
               </button>
             </div>
@@ -790,20 +790,20 @@ const ChatMessage = ({
                   <textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
-                    className="w-full bg-transparent border border-black/15 rounded px-2 py-1 text-sm resize-none focus:outline-none focus:border-black/30"
+                    className="w-full bg-transparent border border-foreground/15 rounded px-2 py-1 text-sm resize-none focus:outline-none focus:border-foreground/30"
                     rows={Math.max(2, editContent.split('\n').length)}
                     autoFocus
                   />
                   <div className="flex gap-2">
                     <button
                       onClick={handleSaveEdit}
-                      className="px-2 py-1 text-xs bg-black/10 hover:bg-black/20 rounded border border-black/15 transition-colors"
+                      className="px-2 py-1 text-xs bg-foreground/10 hover:bg-foreground/20 rounded border border-foreground/15 transition-colors"
                     >
                       Save
                     </button>
                     <button
                       onClick={handleCancelEdit}
-                      className="px-2 py-1 text-xs bg-black/5 hover:bg-black/10 rounded border border-black/10 transition-colors"
+                      className="px-2 py-1 text-xs bg-foreground/5 hover:bg-foreground/10 rounded border border-foreground/10 transition-colors"
                     >
                       Cancel
                     </button>
@@ -817,14 +817,14 @@ const ChatMessage = ({
                     <div className="mt-3 border-t border-black/15 pt-2">
                       <button 
                         onClick={() => setIsContextExpanded(!isContextExpanded)}
-                        className="flex items-center gap-1.5 text-xs text-black/60 hover:text-black transition-colors w-full text-left font-medium mb-1"
+                        className="flex items-center gap-1.5 text-xs text-foreground/60 hover:text-foreground transition-colors w-full text-left font-medium mb-1"
                       >
                         <span className={`transform transition-transform ${isContextExpanded ? 'rotate-90' : ''}`}>▶</span>
                         Context
                       </button>
                       
                       {isContextExpanded && (
-                        <div className="bg-emerald-400/20 rounded px-2 py-1.5 text-xs text-black/95 whitespace-pre-wrap font-mono mt-1 border border-emerald-300/30">
+                        <div className="bg-emerald-400/20 rounded px-2 py-1.5 text-xs text-foreground whitespace-pre-wrap font-mono mt-1 border border-emerald-300/30">
                           {context}
                         </div>
                       )}
@@ -842,15 +842,15 @@ const ChatMessage = ({
           {/* Translation Display */}
           {showTranslation && hasTranslation && translationLines.length > 0 && (
             <div className={`mt-3 pt-3 border-t ${
-              isUser ? 'border-black/15' : 'border-border/60'
+              isUser ? 'border-foreground/15' : 'border-border/60'
             }`}>
               <div className={`text-xs mb-2.5 font-medium ${
-                isUser ? 'text-black/70' : 'text-muted-foreground/80'
+                isUser ? 'text-foreground/70' : 'text-muted-foreground/80'
               }`}>
                 Translation:
               </div>
               <div className={`text-sm leading-relaxed ${
-                isUser ? 'text-black/95' : 'text-muted-foreground/90'
+                isUser ? 'text-foreground/95' : 'text-muted-foreground/90'
               }`}>
                 {content.split('\n').map((originalLine, index) => {
                   const translationLine = translationLines[index] || '';

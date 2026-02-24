@@ -6,7 +6,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Monitor, Type } from 'lucide-react';
+import { Monitor, Type, Sun, Moon } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { logger } from '@/lib/logger';
 import {
   loadDisplayConfig,
@@ -27,10 +28,16 @@ interface DisplaySettingsPanelProps {
 const DisplaySettingsPanel = ({ className }: DisplaySettingsPanelProps) => {
   const { locale } = useLanguage();
   const dict = getDictionary(locale);
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   const [config, setConfig] = useState<DisplayConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [success, setSuccess] = useState<string>('');
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     logger.component('DisplaySettingsPanel', 'mounted');
@@ -130,22 +137,63 @@ const DisplaySettingsPanel = ({ className }: DisplaySettingsPanelProps) => {
 
       {/* Messages */}
       {error && (
-        <div className="mb-4 p-3 bg-destructive border-2 border-border text-destructive-foreground text-sm rounded">
+        <div className="mb-4 p-3 bg-destructive border border-border text-destructive-foreground text-sm rounded">
           {error}
         </div>
       )}
       
       {success && (
-        <div className="mb-4 p-3 bg-secondary border-2 border-border text-secondary-foreground text-sm rounded">
+        <div className="mb-4 p-3 bg-secondary border border-border text-secondary-foreground text-sm rounded">
           {success}
         </div>
       )}
 
-      {/* Font Size Settings */}
+      {/* Settings */}
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-6">
+          {/* Theme Section */}
+          <div className="bg-card border border-border shadow-sm p-6 rounded-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <Monitor className="w-5 h-5 text-primary" />
+              <h4 className="text-md font-bold text-foreground">
+                {locale === 'zh' ? '主题' : 'Theme'}
+              </h4>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-4">
+              {locale === 'zh' ? '选择界面主题外观。' : 'Choose the appearance of the interface.'}
+            </p>
+
+            {mounted && (
+              <div className="flex gap-3">
+                {([
+                  { value: 'light', label: locale === 'zh' ? '浅色' : 'Light', icon: Sun },
+                  { value: 'dark', label: locale === 'zh' ? '深色' : 'Dark', icon: Moon },
+                ] as const).map(({ value, label, icon: Icon }) => (
+                  <button
+                    key={value}
+                    onClick={() => {
+                      logger.info('Theme changed from settings', { from: theme, to: value }, 'DisplaySettingsPanel');
+                      setTheme(value);
+                    }}
+                    className={cn(
+                      'flex-1 flex items-center gap-3 p-4 rounded-md border transition-colors',
+                      'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+                      theme === value
+                        ? 'bg-primary/10 text-primary border-primary'
+                        : 'bg-background text-foreground border-border hover:bg-accent hover:text-accent-foreground'
+                    )}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="font-medium">{label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Font Size Section */}
-          <div className="bg-card border-4 border-border shadow-sm p-6 rounded">
+          <div className="bg-card border border-border shadow-sm p-6 rounded-xl">
             <div className="flex items-center gap-3 mb-4">
               <Type className="w-5 h-5 text-primary" />
               <h4 className="text-md font-bold text-foreground">
@@ -181,8 +229,8 @@ const DisplaySettingsPanel = ({ className }: DisplaySettingsPanelProps) => {
                     aria-label={`${label} (${percentage}%)`}
                     aria-pressed={isSelected}
                     className={cn(
-                      'w-full flex items-center justify-between p-4 rounded border-2 transition-all',
-                      'hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none',
+                      'w-full flex items-center justify-between p-4 rounded-md border transition-all',
+                      '',
                       'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
                       'disabled:opacity-50 disabled:cursor-not-allowed',
                       isSelected
@@ -192,7 +240,7 @@ const DisplaySettingsPanel = ({ className }: DisplaySettingsPanelProps) => {
                   >
                     <div className="flex items-center gap-4">
                       <div className={cn(
-                        'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all',
+                        'w-5 h-5 rounded-full border flex items-center justify-center transition-all',
                         isSelected
                           ? 'border-primary-foreground bg-primary-foreground'
                           : 'border-border'
@@ -225,12 +273,12 @@ const DisplaySettingsPanel = ({ className }: DisplaySettingsPanelProps) => {
             </div>
 
             {/* Preview Section */}
-            <div className="mt-6 pt-6 border-t-2 border-border">
+            <div className="mt-6 pt-6 border-t border-border">
               <h5 className="text-sm font-semibold text-foreground mb-3">
                 {dict.settings.displaySettings.preview || 'Preview'}
               </h5>
               <div 
-                className="p-4 bg-muted rounded border-2 border-border"
+                className="p-4 bg-muted rounded border border-border"
                 style={{ fontSize: `${config.fontSize.scale}rem` }}
               >
                 <p className="text-foreground">

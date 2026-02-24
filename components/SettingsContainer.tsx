@@ -80,7 +80,7 @@ const SettingsContainer = ({ className }: SettingsContainerProps) => {
   return (
     <div className={cn('h-full flex overflow-hidden bg-background', className)}>
       {/* Left Sidebar - 15% */}
-      <aside className="w-[15%] h-full border-r-2 border-border bg-sidebar overflow-y-auto">
+      <aside className="w-[15%] h-full border-r border-border bg-sidebar overflow-y-auto">
         <div className="p-4">
           <h2 className="text-lg font-semibold mb-4">{dict.settings.title}</h2>
           <nav className="space-y-1">
@@ -99,13 +99,12 @@ const SettingsContainer = ({ className }: SettingsContainerProps) => {
                   tabIndex={0}
                   aria-label={item.label}
                   className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2 rounded transition-colors',
-                    'border-2 border-transparent',
+                    'w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors',
                     'hover:bg-accent hover:text-accent-foreground',
                     'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
                     isActive
-                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                      : 'bg-card text-foreground'
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-foreground'
                   )}
                 >
                   {item.icon}

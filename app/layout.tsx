@@ -1,19 +1,17 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import "./chat.css";
 import { LanguageProvider } from "@/lib/i18n/LanguageContext";
 import { DisplayProvider } from "@/lib/displayContext";
 
-// Use system fonts for desktop build to avoid Google Fonts fetch issues
-const dmSans = {
-  variable: "--font-sans",
-  className: "",
-};
-
-const spaceMono = {
-  variable: "--font-mono",
-  className: "",
-};
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+  fallback: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
+});
 
 export const metadata: Metadata = {
   title: "EcritisAgent - Where Writing Meets Intelligence",
@@ -34,13 +32,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${dmSans.variable} ${spaceMono.variable} antialiased`} suppressHydrationWarning>
-        <LanguageProvider>
-          <DisplayProvider>
-            {children}
-          </DisplayProvider>
-        </LanguageProvider>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <body className={`${inter.className} antialiased`} suppressHydrationWarning>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+          <LanguageProvider>
+            <DisplayProvider>
+              {children}
+            </DisplayProvider>
+          </LanguageProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

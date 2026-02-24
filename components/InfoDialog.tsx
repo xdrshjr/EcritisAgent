@@ -52,7 +52,7 @@ const InfoDialog = ({ isOpen, onClose }: InfoDialogProps) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       role="dialog"
       aria-modal="true"
       aria-label={dict.header.info.title}
@@ -60,9 +60,9 @@ const InfoDialog = ({ isOpen, onClose }: InfoDialogProps) => {
       onKeyDown={handleKeyDown}
       tabIndex={-1}
     >
-      <div className="bg-background border-4 border-border rounded-lg shadow-xl w-[600px] max-w-[90%] max-h-[90vh] overflow-y-auto">
+      <div className="bg-background border border-border rounded-xl shadow-xl w-[600px] max-w-[90%] max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b-4 border-border bg-muted/60 sticky top-0 z-10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/60 sticky top-0 z-10">
           <div className="flex items-center gap-2">
             <Info className="w-5 h-5 text-primary" />
             <h2 className="text-lg font-semibold text-foreground">{dict.header.info.title}</h2>
@@ -117,7 +117,7 @@ const InfoDialog = ({ isOpen, onClose }: InfoDialogProps) => {
         </div>
 
         {/* Actions */}
-        <div className="px-6 py-4 border-t-4 border-border bg-muted/40 flex items-center justify-end">
+        <div className="px-6 py-4 border-t border-border bg-muted/40 flex items-center justify-end">
           <button
             onClick={handleCloseClick}
             className="px-4 py-2 text-sm font-medium rounded-md border border-border bg-background hover:bg-muted transition-colors"

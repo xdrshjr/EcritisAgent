@@ -250,13 +250,13 @@ const TextCheckResultView = ({
   return (
     <div
       ref={panelRef}
-      className={`bg-card border-2 border-border rounded-xl shadow-2xl text-check-result-view max-w-2xl w-full backdrop-blur-sm animate-slideUp ${isDragging ? 'select-none' : ''}`}
+      className={`bg-card border border-border rounded-xl shadow-2xl text-check-result-view max-w-2xl w-full backdrop-blur-sm animate-slideUp ${isDragging ? 'select-none' : ''}`}
       style={panelStyle}
     >
       <div className="flex flex-col gap-4 p-5">
         {/* Header - Draggable */}
         <div 
-          className="flex items-center justify-between border-b-2 border-border/50 pb-3 drag-header cursor-grab active:cursor-grabbing"
+          className="flex items-center justify-between border-b border-border/50 pb-3 drag-header cursor-grab active:cursor-grabbing"
           onMouseDown={handleMouseDown}
         >
           <div className="flex items-center gap-3 flex-1">
@@ -307,7 +307,7 @@ const TextCheckResultView = ({
         {/* Results Content */}
         <div className="max-h-[32rem] overflow-y-auto pr-1 custom-scrollbar">
           {issues.length === 0 ? (
-            <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-xl border-2 border-green-300 dark:border-green-700">
+            <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-xl border border-green-300 dark:border-green-700">
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">
                   <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
@@ -331,7 +331,7 @@ const TextCheckResultView = ({
                 return (
                   <div
                     key={index}
-                    className={`relative ${config.bgColor} border-l-4 ${config.borderColor} rounded-lg shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden`}
+                    className={`relative ${config.bgColor} border-l ${config.borderColor} rounded-lg shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden`}
                   >
                     <div className={`absolute inset-0 ${config.bgColor} opacity-50`} />
                     <div className="relative px-4 pt-5 pb-4">
@@ -345,7 +345,7 @@ const TextCheckResultView = ({
                         <div className="flex-1 flex flex-col gap-2.5 min-w-0">
                           {/* Issue Header with Type Badge */}
                           <div className="flex items-center gap-2.5 flex-wrap">
-                            <div className={`flex items-center gap-1.5 px-3 py-1.5 ${config.badgeColor} rounded-lg border-2 text-xs font-bold uppercase tracking-wide flex-shrink-0`}>
+                            <div className={`flex items-center gap-1.5 px-3 py-1.5 ${config.badgeColor} rounded-lg border text-xs font-bold uppercase tracking-wide flex-shrink-0`}>
                               {getIssueTypeLabel(issue.type)}
                             </div>
                             <div className={`flex-shrink-0 w-6 h-6 rounded-full ${config.iconBgColor} flex items-center justify-center text-xs font-bold ${config.textColor}`}>
@@ -360,7 +360,7 @@ const TextCheckResultView = ({
                           
                           {/* Suggestion */}
                           {issue.suggestion && (
-                            <div className={`mt-2 pl-3 border-l-3 ${config.borderColor} ${config.textColor} opacity-90`}>
+                            <div className={`mt-2 pl-3 border-l ${config.borderColor} ${config.textColor} opacity-90`}>
                               <div className="flex items-start gap-2">
                                 <Lightbulb className={`w-4 h-4 ${config.iconColor} flex-shrink-0 mt-0.5`} />
                                 <div className="flex-1">

@@ -199,7 +199,7 @@ const ChatErrorDisplay = ({ error, timestamp }: ChatErrorDisplayProps) => {
   return (
     <div className="mb-6 animate-fadeIn">
       <div
-        className={`rounded-lg border-2 ${style.borderColor} ${style.bgColor} p-4 shadow-sm transition-all hover:shadow-md`}
+        className={`rounded-lg border ${style.borderColor} ${style.bgColor} p-4 shadow-sm transition-all hover:shadow-md`}
       >
         {/* Error Header */}
         <div className="flex items-start gap-3 mb-3">

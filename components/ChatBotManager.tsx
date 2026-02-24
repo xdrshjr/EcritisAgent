@@ -224,7 +224,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
         {!isAdding && !editingId && (
           <button
             onClick={handleAdd}
-            className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded border-2 border-border hover:bg-primary/90 transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded border border-border hover:bg-primary/90 transition-colors"
             tabIndex={0}
             aria-label={dict.settings.addChatBot}
           >
@@ -238,7 +238,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
       <div className="flex-1 overflow-y-auto p-4">
         {/* Add/Edit Form */}
         {(isAdding || editingId) && (
-          <div className="mb-4 p-4 border-2 border-border bg-card rounded-lg">
+          <div className="mb-4 p-4 border border-border bg-card rounded-lg">
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">{dict.settings.chatBotName}</label>
@@ -246,7 +246,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
                   type="text"
                   value={formData.name || ''}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border-2 border-border bg-background rounded focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full px-3 py-2 border border-border bg-background rounded focus:outline-none focus:ring-2 focus:ring-ring"
                   placeholder={dict.settings.chatBotName}
                 />
               </div>
@@ -256,7 +256,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
                 <textarea
                   value={formData.systemPrompt || ''}
                   onChange={(e) => setFormData({ ...formData, systemPrompt: e.target.value })}
-                  className="w-full px-3 py-2 border-2 border-border bg-background rounded focus:outline-none focus:ring-2 focus:ring-ring min-h-[120px] resize-y"
+                  className="w-full px-3 py-2 border border-border bg-background rounded focus:outline-none focus:ring-2 focus:ring-ring min-h-[120px] resize-y"
                   placeholder={dict.settings.systemPrompt}
                 />
               </div>
@@ -266,7 +266,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
                 <select
                   value={formData.modelId || ''}
                   onChange={(e) => setFormData({ ...formData, modelId: e.target.value })}
-                  className="w-full px-3 py-2 border-2 border-border bg-background rounded focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full px-3 py-2 border border-border bg-background rounded focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   {models.length === 0 ? (
                     <option value="">{dict.chat.noModelsConfigured}</option>
@@ -290,7 +290,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
                     step="0.1"
                     value={formData.temperature ?? 0.7}
                     onChange={(e) => setFormData({ ...formData, temperature: parseFloat(e.target.value) || 0.7 })}
-                    className="w-full px-3 py-2 border-2 border-border bg-background rounded focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full px-3 py-2 border border-border bg-background rounded focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                 </div>
 
@@ -301,7 +301,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
                     min="1"
                     value={formData.maxTokens || ''}
                     onChange={(e) => setFormData({ ...formData, maxTokens: e.target.value ? parseInt(e.target.value) : undefined })}
-                    className="w-full px-3 py-2 border-2 border-border bg-background rounded focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full px-3 py-2 border border-border bg-background rounded focus:outline-none focus:ring-2 focus:ring-ring"
                     placeholder={dict.settings.optional}
                   />
                 </div>
@@ -310,7 +310,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={handleCancel}
-                  className="flex items-center gap-2 px-3 py-1.5 border-2 border-border bg-card hover:bg-accent transition-colors rounded"
+                  className="flex items-center gap-2 px-3 py-1.5 border border-border bg-card hover:bg-accent transition-colors rounded"
                   tabIndex={0}
                 >
                   <X className="w-4 h-4" />
@@ -318,7 +318,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
                 </button>
                 <button
                   onClick={handleSave}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded border-2 border-border hover:bg-primary/90 transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded border border-border hover:bg-primary/90 transition-colors"
                   tabIndex={0}
                 >
                   <Save className="w-4 h-4" />
@@ -349,7 +349,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
               return (
                 <div
                   key={bot.id}
-                  className="p-4 border-2 border-border bg-card rounded-lg hover:border-primary/50 transition-colors"
+                  className="p-4 border border-border bg-card rounded-lg hover:border-primary/50 transition-colors"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -378,7 +378,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
                     <div className="flex gap-2 ml-4">
                       <button
                         onClick={() => handleEdit(bot)}
-                        className="p-2 border-2 border-border bg-card hover:bg-accent transition-colors rounded"
+                        className="p-2 border border-border bg-card hover:bg-accent transition-colors rounded"
                         tabIndex={0}
                         aria-label={`Edit ${bot.name}`}
                       >
@@ -386,7 +386,7 @@ const ChatBotManager = ({ className }: ChatBotManagerProps) => {
                       </button>
                       <button
                         onClick={() => handleDelete(bot)}
-                        className="p-2 border-2 border-border bg-card hover:bg-destructive/10 hover:border-destructive/50 transition-colors rounded"
+                        className="p-2 border border-border bg-card hover:bg-destructive/10 hover:border-destructive/50 transition-colors rounded"
                         tabIndex={0}
                         aria-label={`Delete ${bot.name}`}
                       >

@@ -269,9 +269,9 @@ const ErrorDialog = ({ isOpen, onClose, error }: ErrorDialogProps) => {
       onKeyDown={handleKeyDown}
       tabIndex={-1}
     >
-      <div className={`${style.bgColor} border-2 ${style.borderColor} rounded-xl shadow-2xl w-[550px] max-w-[90%] max-h-[85vh] overflow-hidden animate-scaleIn`}>
+      <div className={`${style.bgColor} border ${style.borderColor} rounded-xl shadow-2xl w-[550px] max-w-[90%] max-h-[85vh] overflow-hidden animate-scaleIn`}>
         {/* Header */}
-        <div className={`flex items-center justify-between px-6 py-4 ${style.headerBg} border-b-2 ${style.borderColor}`}>
+        <div className={`flex items-center justify-between px-6 py-4 ${style.headerBg} border-b ${style.borderColor}`}>
           <div className="flex items-center gap-3">
             <div className={`${style.iconColor} flex-shrink-0`}>
               <Icon className="w-6 h-6" />
@@ -361,7 +361,7 @@ const ErrorDialog = ({ isOpen, onClose, error }: ErrorDialogProps) => {
         </div>
 
         {/* Footer Actions */}
-        <div className={`px-6 py-4 border-t-2 ${style.borderColor} ${style.headerBg} flex items-center justify-between gap-3`}>
+        <div className={`px-6 py-4 border-t ${style.borderColor} ${style.headerBg} flex items-center justify-between gap-3`}>
           <button
             onClick={handleCopyError}
             className={`px-4 py-2 text-sm font-medium rounded-lg border ${style.borderColor} bg-background/50 hover:bg-background transition-all duration-200 flex items-center gap-2 ${style.textColor} ${copySuccess ? 'bg-green-500/20' : ''}`}

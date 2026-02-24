@@ -159,15 +159,15 @@ const ConversationList = ({
   };
 
   return (
-    <aside className="h-full bg-sidebar border-r-4 border-sidebar-border flex flex-col">
+    <aside className="h-full bg-sidebar border-r border-sidebar-border flex flex-col">
       {/* Header with New Conversation button */}
-      <div className="p-3 border-b-2 border-sidebar-border">
+      <div className="p-3 border-b border-sidebar-border">
         <button
           onClick={handleNewConversationClick}
           onKeyDown={handleNewKeyDown}
           tabIndex={0}
           aria-label={dict.chat.newConversation}
-          className="w-full px-3 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all shadow-sm flex items-center justify-center gap-2 text-sm font-medium"
+          className="w-full px-3 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
           <span>{dict.chat.newConversation}</span>
@@ -203,10 +203,10 @@ const ConversationList = ({
                     onKeyDown={(event) => handleKeyDown(event, conversation.id)}
                     tabIndex={0}
                     aria-label={`Conversation: ${conversation.title}`}
-                    className={`flex-1 min-w-0 px-3 py-2 text-left border-2 transition-all ${
+                    className={`flex-1 min-w-0 px-3 py-2 text-left rounded-md transition-colors ${
                       isActive
-                        ? 'bg-primary text-primary-foreground border-border shadow-md'
-                        : 'bg-card text-card-foreground border-border hover:bg-accent hover:text-accent-foreground shadow-sm hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none'
+                        ? 'bg-primary/10 text-primary border-transparent'
+                        : 'text-card-foreground hover:bg-accent hover:text-accent-foreground'
                     }`}
                   >
                     <div className="flex items-start gap-2">
@@ -239,10 +239,10 @@ const ConversationList = ({
                     }
                     tabIndex={0}
                     aria-label={`${dict.chat.deleteConversationAriaLabel}: ${conversation.title}`}
-                    className={`flex-shrink-0 px-2 py-2 border-2 transition-all flex items-center justify-center ${
+                    className={`flex-shrink-0 px-2 py-2 rounded-md transition-colors flex items-center justify-center ${
                       isActive
-                        ? 'bg-primary text-primary-foreground border-border shadow-md hover:bg-primary/90'
-                        : 'bg-card text-muted-foreground border-border shadow-sm hover:bg-destructive/10 hover:text-destructive hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none'
+                        ? 'text-primary hover:bg-primary/10'
+                        : 'text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
                     }`}
                   >
                     <Trash2 className="w-4 h-4" />

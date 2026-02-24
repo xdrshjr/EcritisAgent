@@ -255,9 +255,9 @@ const ImageInsertDialog = ({ isOpen, onClose, onInsertImage }: ImageInsertDialog
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-background border-2 border-border shadow-lg rounded-lg w-[90vw] max-w-4xl h-[85vh] flex flex-col">
+      <div className="bg-background border border-border shadow-lg rounded-lg w-[90vw] max-w-4xl h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b-2 border-border">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-xl font-semibold text-foreground">
             {dict.docValidation.imageInsert.title}
           </h2>
@@ -272,7 +272,7 @@ const ImageInsertDialog = ({ isOpen, onClose, onInsertImage }: ImageInsertDialog
         </div>
 
         {/* Search and Upload Section */}
-        <div className="p-4 border-b-2 border-border space-y-4">
+        <div className="p-4 border-b border-border space-y-4">
           {/* Search Form */}
           <form onSubmit={handleSearchSubmit} className="flex gap-2">
             <div className="flex-1">
@@ -281,7 +281,7 @@ const ImageInsertDialog = ({ isOpen, onClose, onInsertImage }: ImageInsertDialog
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={dict.docValidation.imageInsert.searchPlaceholder}
-                className="w-full px-4 py-2 border-2 border-border bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                className="w-full px-4 py-2 border border-border bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
                 disabled={isSearching}
               />
             </div>
@@ -306,7 +306,7 @@ const ImageInsertDialog = ({ isOpen, onClose, onInsertImage }: ImageInsertDialog
 
           {/* Upload Section */}
           <div
-            className={`border-2 border-dashed rounded-md p-4 transition-colors ${
+            className={`border border-dashed rounded-md p-4 transition-colors ${
               dragActive
                 ? 'border-primary bg-primary/10'
                 : 'border-border hover:border-primary/50'
@@ -327,7 +327,7 @@ const ImageInsertDialog = ({ isOpen, onClose, onInsertImage }: ImageInsertDialog
               <button
                 onClick={handleUploadClick}
                 disabled={isUploading}
-                className="mt-2 px-4 py-2 bg-card border-2 border-border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                className="mt-2 px-4 py-2 bg-card border border-border rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
               >
                 {isUploading ? (
                   <>
@@ -378,7 +378,7 @@ const ImageInsertDialog = ({ isOpen, onClose, onInsertImage }: ImageInsertDialog
                 {images.map((image) => (
                   <div
                     key={image.id}
-                    className="group relative aspect-square border-2 border-border rounded-md overflow-hidden hover:border-primary transition-colors cursor-pointer"
+                    className="group relative aspect-square border border-border rounded-md overflow-hidden hover:border-primary transition-colors cursor-pointer"
                     onClick={() => handleSelectImage(image.url)}
                   >
                     <img
@@ -418,7 +418,7 @@ const ImageInsertDialog = ({ isOpen, onClose, onInsertImage }: ImageInsertDialog
                   <button
                     onClick={handlePreviousPage}
                     disabled={currentPage === 1}
-                    className="px-4 py-2 border-2 border-border bg-card rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    className="px-4 py-2 border border-border bg-card rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                   >
                     <ChevronLeft className="w-4 h-4" />
                     <span>{dict.docValidation.imageInsert.previousPage}</span>
@@ -429,7 +429,7 @@ const ImageInsertDialog = ({ isOpen, onClose, onInsertImage }: ImageInsertDialog
                   <button
                     onClick={handleNextPage}
                     disabled={currentPage === totalPages}
-                    className="px-4 py-2 border-2 border-border bg-card rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    className="px-4 py-2 border border-border bg-card rounded-md hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                   >
                     <span>{dict.docValidation.imageInsert.nextPage}</span>
                     <ChevronRight className="w-4 h-4" />

@@ -348,7 +348,7 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
   return (
     <div className={cn('h-full flex flex-col overflow-hidden bg-background', className)}>
       {/* Header */}
-      <div className="flex-shrink-0 border-b-2 border-border bg-card p-4">
+      <div className="flex-shrink-0 border-b border-border bg-card p-4">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-lg font-bold text-foreground mb-1">
@@ -361,7 +361,7 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
           {!isAdding && !editingId && (
             <button
               onClick={handleAdd}
-              className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all flex items-center gap-2 font-medium"
+              className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md shadow-sm transition-all flex items-center gap-2 font-medium"
               aria-label={dict.settings.imageServiceAdd || 'Add Image Service'}
             >
               <Plus className="w-4 h-4" />
@@ -372,21 +372,21 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
 
         {/* Messages */}
         {error && (
-          <div className="mb-3 p-3 bg-destructive/10 border-2 border-destructive text-destructive-foreground text-sm rounded-md flex items-center gap-2">
+          <div className="mb-3 p-3 bg-destructive/10 border border-destructive text-destructive-foreground text-sm rounded-md flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
         
         {success && (
-          <div className="mb-3 p-3 bg-green-600/10 border-2 border-green-600 text-green-600 text-sm rounded-md flex items-center gap-2">
+          <div className="mb-3 p-3 bg-green-600/10 border border-green-600 text-green-600 text-sm rounded-md flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
             <span>{success}</span>
           </div>
         )}
 
         {/* Test Search Section */}
-        <div className="mt-4 p-4 bg-muted/50 border-2 border-border rounded-md">
+        <div className="mt-4 p-4 bg-muted/50 border border-border rounded-md">
           <div className="flex items-center gap-2 mb-3">
             <Search className="w-4 h-4 text-foreground" />
             <h4 className="text-sm font-semibold text-foreground">
@@ -404,13 +404,13 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
                 }
               }}
               placeholder={dict.settings.imageServiceSearchPlaceholder || 'Enter search query...'}
-              className="flex-1 px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary rounded-md text-sm"
+              className="flex-1 px-3 py-2 bg-background border border-border text-foreground focus:outline-none focus:border-primary rounded-md text-sm"
               disabled={isSearching}
             />
             <button
               onClick={handleTestSearch}
               disabled={isSearching || !testSearchQuery.trim()}
-              className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+              className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
             >
               {isSearching ? (
                 <>
@@ -439,7 +439,7 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
                 {searchResults.map((result) => (
                   <div
                     key={result.id}
-                    className="relative aspect-video bg-muted border-2 border-border rounded-md overflow-hidden group"
+                    className="relative aspect-video bg-muted border border-border rounded-md overflow-hidden group"
                   >
                     <img
                       src={result.url}
@@ -466,7 +466,7 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
       <div className="flex-1 overflow-y-auto p-4">
         {/* Add/Edit Form */}
         {(isAdding || editingId) && (
-          <div className="mb-4 p-4 bg-card border-2 border-border rounded-md shadow-sm">
+          <div className="mb-4 p-4 bg-card border border-border rounded-md shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-md font-bold text-foreground">
                 {isAdding
@@ -492,7 +492,7 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder={dict.settings.imageServiceNamePlaceholder || 'Enter service name...'}
-                  className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary rounded-md text-sm"
+                  className="w-full px-3 py-2 bg-background border border-border text-foreground focus:outline-none focus:border-primary rounded-md text-sm"
                 />
               </div>
 
@@ -503,7 +503,7 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
                 <select
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value as 'unsplash' | 'custom' })}
-                  className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary rounded-md text-sm"
+                  className="w-full px-3 py-2 bg-background border border-border text-foreground focus:outline-none focus:border-primary rounded-md text-sm"
                   disabled={editingId !== null && services.find(s => s.id === editingId)?.type === 'unsplash' && !services.find(s => s.id === editingId)?.isDeletable}
                 >
                   <option value="unsplash">Unsplash</option>
@@ -532,12 +532,12 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
                         value={key}
                         onChange={(e) => handleApiKeyChange(index, e.target.value)}
                         placeholder={`${dict.settings.imageServiceApiKeyPlaceholder || 'Enter API key'} ${index + 1}`}
-                        className="flex-1 px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary rounded-md text-sm"
+                        className="flex-1 px-3 py-2 bg-background border border-border text-foreground focus:outline-none focus:border-primary rounded-md text-sm"
                       />
                       {formData.apiKeys.length > 1 && (
                         <button
                           onClick={() => handleRemoveApiKey(index)}
-                          className="px-3 py-2 bg-destructive/10 hover:bg-destructive/20 text-destructive border-2 border-destructive rounded-md transition-colors"
+                          className="px-3 py-2 bg-destructive/10 hover:bg-destructive/20 text-destructive border border-destructive rounded-md transition-colors"
                           aria-label="Remove API key"
                         >
                           <X className="w-4 h-4" />
@@ -551,14 +551,14 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
               <div className="flex justify-end gap-2">
                 <button
                   onClick={handleCancel}
-                  className="px-4 py-2 bg-muted hover:bg-accent text-foreground border-2 border-border rounded-md transition-colors"
+                  className="px-4 py-2 bg-muted hover:bg-accent text-foreground border border-border rounded-md transition-colors"
                 >
                   {dict.settings.cancel || 'Cancel'}
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={isSaving || !formData.name.trim() || formData.apiKeys.every(key => !key.trim())}
-                  className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+                  className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
                 >
                   <Save className="w-4 h-4" />
                   <span>{dict.settings.save || 'Save'}</span>
@@ -596,7 +596,7 @@ const ImageServiceSettingsPanel = ({ className }: ImageServiceSettingsPanelProps
                 <div
                   key={service.id}
                   className={cn(
-                    'p-4 bg-card border-2 border-border rounded-md shadow-sm hover:shadow-md transition-all',
+                    'p-4 bg-card border border-border rounded-md shadow-sm hover:shadow-md transition-all',
                     isEditing && 'ring-2 ring-primary'
                   )}
                 >

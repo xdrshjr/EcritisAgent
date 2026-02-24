@@ -1489,7 +1489,7 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
         'rounded-none shadow-none',
         className
       )
-    : 'fixed bottom-24 right-6 w-[576px] bg-background border-2 border-border rounded-lg shadow-xl flex flex-col z-50 animate-slideUp';
+    : 'fixed bottom-24 right-6 w-[576px] bg-background border border-border rounded-xl shadow-xl flex flex-col z-50 animate-slideUp';
 
   return (
     <div

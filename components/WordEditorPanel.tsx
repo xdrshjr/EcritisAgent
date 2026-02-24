@@ -1668,13 +1668,13 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Toolbar */}
-      <div className="border-b-4 border-border bg-card shadow-sm">
+      <div className="border-b border-border bg-card shadow-sm rounded-b-md">
         <div className="px-4 py-3 flex items-center gap-2 flex-wrap">
           {/* Upload Button */}
           <button
             onClick={handleUploadClick}
             disabled={isUploading}
-            className="px-3 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-3 py-2 bg-primary text-primary-foreground border border-border rounded-md hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             aria-label={dict.docValidation.uploadDocument}
           >
             <Upload className="w-4 h-4" />
@@ -1688,7 +1688,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
           {/* Format Buttons */}
           <button
             onClick={() => editor.chain().focus().toggleBold().run()}
-            className={`p-2 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm ${
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
               editor.isActive('bold') ? 'bg-primary text-primary-foreground' : 'bg-card'
             }`}
             aria-label={dict.docValidation.editorToolbar.bold}
@@ -1698,7 +1698,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
           <button
             onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={`p-2 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm ${
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
               editor.isActive('italic') ? 'bg-primary text-primary-foreground' : 'bg-card'
             }`}
             aria-label={dict.docValidation.editorToolbar.italic}
@@ -1708,7 +1708,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
           <button
             onClick={() => editor.chain().focus().toggleUnderline().run()}
-            className={`p-2 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm ${
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
               editor.isActive('underline') ? 'bg-primary text-primary-foreground' : 'bg-card'
             }`}
             aria-label={dict.docValidation.editorToolbar.underline}
@@ -1718,7 +1718,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
           <button
             onClick={() => editor.chain().focus().toggleStrike().run()}
-            className={`p-2 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm ${
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
               editor.isActive('strike') ? 'bg-primary text-primary-foreground' : 'bg-card'
             }`}
             aria-label={dict.docValidation.editorToolbar.strike}
@@ -1730,7 +1730,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
           <button
             onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            className={`p-2 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm ${
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
               editor.isActive('heading', { level: 1 }) ? 'bg-primary text-primary-foreground' : 'bg-card'
             }`}
             aria-label={dict.docValidation.editorToolbar.heading1}
@@ -1740,7 +1740,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
           <button
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            className={`p-2 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm ${
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
               editor.isActive('heading', { level: 2 }) ? 'bg-primary text-primary-foreground' : 'bg-card'
             }`}
             aria-label={dict.docValidation.editorToolbar.heading2}
@@ -1752,7 +1752,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
           <button
             onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={`p-2 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm ${
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
               editor.isActive('bulletList') ? 'bg-primary text-primary-foreground' : 'bg-card'
             }`}
             aria-label={dict.docValidation.editorToolbar.bulletList}
@@ -1762,7 +1762,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
           <button
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            className={`p-2 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm ${
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
               editor.isActive('orderedList') ? 'bg-primary text-primary-foreground' : 'bg-card'
             }`}
             aria-label={dict.docValidation.editorToolbar.orderedList}
@@ -1774,7 +1774,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
           <button
             onClick={() => editor.chain().focus().setTextAlign('left').run()}
-            className={`p-2 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm ${
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
               editor.isActive({ textAlign: 'left' }) ? 'bg-primary text-primary-foreground' : 'bg-card'
             }`}
             aria-label={dict.docValidation.editorToolbar.alignLeft}
@@ -1784,7 +1784,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
           <button
             onClick={() => editor.chain().focus().setTextAlign('center').run()}
-            className={`p-2 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm ${
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
               editor.isActive({ textAlign: 'center' }) ? 'bg-primary text-primary-foreground' : 'bg-card'
             }`}
             aria-label={dict.docValidation.editorToolbar.alignCenter}
@@ -1794,7 +1794,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
           <button
             onClick={() => editor.chain().focus().setTextAlign('right').run()}
-            className={`p-2 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm ${
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
               editor.isActive({ textAlign: 'right' }) ? 'bg-primary text-primary-foreground' : 'bg-card'
             }`}
             aria-label={dict.docValidation.editorToolbar.alignRight}
@@ -1807,7 +1807,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
           <button
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().undo()}
-            className="p-2 border-2 border-border bg-card transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 border border-border bg-card rounded-md hover:bg-accent/80 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label={dict.docValidation.editorToolbar.undo}
           >
             <Undo className="w-4 h-4" />
@@ -1816,7 +1816,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
           <button
             onClick={() => editor.chain().focus().redo().run()}
             disabled={!editor.can().redo()}
-            className="p-2 border-2 border-border bg-card transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="p-2 border border-border bg-card rounded-md hover:bg-accent/80 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label={dict.docValidation.editorToolbar.redo}
           >
             <Redo className="w-4 h-4" />
@@ -1826,7 +1826,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
           <div className="w-px h-6 bg-border mx-2" />
           <button
             onClick={handleOpenImageDialog}
-            className="px-3 py-2 border-2 border-border bg-card transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm flex items-center gap-2"
+            className="px-3 py-2 border border-border bg-card rounded-md hover:bg-accent/80 transition-colors shadow-sm flex items-center gap-2"
             aria-label={dict.docValidation.editorToolbar.insertImage}
             title={dict.docValidation.editorToolbar.insertImage}
           >
@@ -1841,7 +1841,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
               <select
                 value={selectedModelId || ''}
                 onChange={handleModelChange}
-                className="px-3 py-2 border-2 border-border bg-card text-foreground transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-sm font-medium"
+                className="px-3 py-2 border border-border bg-card text-foreground rounded-md hover:bg-accent/80 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-primary text-sm font-medium"
                 aria-label="Select AI Model"
               >
                 {availableModels.map((model) => (
@@ -1859,7 +1859,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
           <button
             onClick={handleExport}
             disabled={isExporting || !editor}
-            className="px-3 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-3 py-2 bg-primary text-primary-foreground border border-border rounded-md hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             aria-label={dict.docValidation.editorToolbar.export}
             title={dict.docValidation.editorToolbar.export}
           >
@@ -1872,7 +1872,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
 
         {/* File Name Display */}
         {fileName && (
-          <div className="px-4 py-2 bg-background border-t-2 border-border">
+          <div className="px-4 py-2 bg-background border-t border-border">
             <p className="text-sm text-muted-foreground">
               Editing: <span className="font-medium text-foreground">{fileName}</span>
             </p>
@@ -1909,7 +1909,7 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
         {/* Drag and Drop Hint Overlay - Only shows when dragging */}
         {dragActive && (
           <div className="absolute inset-0 flex items-center justify-center bg-primary/10 backdrop-blur-sm z-10 pointer-events-none">
-            <div className="text-center p-8 bg-card border-4 border-dashed border-primary">
+            <div className="text-center p-8 bg-card border border-dashed border-primary rounded-md">
               <Upload className="w-16 h-16 mx-auto mb-4 text-primary" />
               <h3 className="text-xl font-semibold text-foreground mb-2">
                 {dict.docValidation.uploadHint}

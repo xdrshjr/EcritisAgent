@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { useEffect, useState, useRef } from 'react';
 import { Download, ChevronDown, Settings } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
+import ThemeToggle from './ThemeToggle';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { cn } from '@/lib/utils';
@@ -115,7 +116,7 @@ const MenuBar = ({ tasks, onTaskChange }: MenuBarProps) => {
           <ChevronDown className="w-3 h-3" />
         </button>
         {openMenu === 'task' && (
-          <div className="absolute top-full left-0 mt-1 bg-background border-2 border-border shadow-lg z-50 min-w-[180px]">
+          <div className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-md shadow-lg z-50 min-w-[180px]">
             {tasks.map((task) => (
               <button
                 key={task.id}
@@ -213,7 +214,7 @@ const Header = ({
 
   return (
     <>
-      <header className="h-8 bg-background border-b-4 border-border flex items-center px-4 shadow-sm">
+      <header className="h-10 bg-card border-b border-border flex items-center px-4 shadow-sm">
         <div className="flex items-center justify-between w-full">
           {/* Left: Menu Bar */}
           <MenuBar
@@ -224,7 +225,8 @@ const Header = ({
           {/* Right: Language Switcher, Settings Button & Export Button */}
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
-            
+            <ThemeToggle />
+
             {/* Settings Button */}
             <div className="relative group">
               <button
@@ -247,7 +249,7 @@ const Header = ({
               {/* Tooltip */}
               {hoveredSettings && (
                 <div className="absolute top-full right-0 mt-1 z-50 pointer-events-none">
-                  <div className="bg-popover text-popover-foreground px-2 py-1 border-2 border-border shadow-md whitespace-nowrap">
+                  <div className="bg-popover text-popover-foreground px-2 py-1 border border-border rounded-md shadow-md whitespace-nowrap">
                     <span className="text-xs font-medium">{dict.taskbar.settings}</span>
                   </div>
                 </div>
@@ -258,7 +260,7 @@ const Header = ({
               <button
                 onClick={handleExportClick}
                 disabled={exportDisabled}
-                className="px-3 py-1 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                className="px-3 py-1 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
                 aria-label="Export Document"
               >
                 <Download className="w-3 h-3" />

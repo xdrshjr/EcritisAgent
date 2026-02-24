@@ -56,7 +56,7 @@ const TextSelectionToolbar = ({
 
   return (
     <div
-      className="bg-card border-2 border-border rounded shadow-lg px-3 py-2 text-selection-toolbar whitespace-nowrap"
+      className="bg-card border border-border rounded shadow-lg px-3 py-2 text-selection-toolbar whitespace-nowrap"
       style={panelStyle}
     >
       <div className="flex items-center gap-3">
@@ -64,7 +64,7 @@ const TextSelectionToolbar = ({
         <button
           onClick={handlePolish}
           disabled={isProcessing}
-          className={`px-3 py-1.5 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm flex items-center gap-2 ${
+          className={`px-3 py-1.5 border border-border transition-all rounded-md shadow-sm flex items-center gap-2 ${
             isProcessing && processingType === 'polish'
               ? 'bg-primary text-primary-foreground opacity-75'
               : 'bg-card hover:bg-primary hover:text-primary-foreground'
@@ -84,7 +84,7 @@ const TextSelectionToolbar = ({
         <button
           onClick={handleRewrite}
           disabled={isProcessing}
-          className={`px-3 py-1.5 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm flex items-center gap-2 ${
+          className={`px-3 py-1.5 border border-border transition-all rounded-md shadow-sm flex items-center gap-2 ${
             isProcessing && processingType === 'rewrite'
               ? 'bg-primary text-primary-foreground opacity-75'
               : 'bg-card hover:bg-primary hover:text-primary-foreground'
@@ -104,7 +104,7 @@ const TextSelectionToolbar = ({
         <button
           onClick={handleCheck}
           disabled={isProcessing}
-          className={`px-3 py-1.5 border-2 border-border transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm flex items-center gap-2 ${
+          className={`px-3 py-1.5 border border-border transition-all rounded-md shadow-sm flex items-center gap-2 ${
             isProcessing && processingType === 'check'
               ? 'bg-primary text-primary-foreground opacity-75'
               : 'bg-card hover:bg-primary hover:text-primary-foreground'

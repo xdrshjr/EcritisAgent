@@ -222,7 +222,7 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
   return (
     <div className={cn('h-full flex flex-col overflow-hidden bg-background', className)}>
       {/* JSON Configuration Area - Top */}
-      <div className="flex-shrink-0 border-b-2 border-border bg-card p-4">
+      <div className="flex-shrink-0 border-b border-border bg-card p-4">
         <div className="mb-3">
           <h3 className="text-lg font-bold text-foreground mb-1">
             {dict.settings.mcpJsonConfig}
@@ -234,14 +234,14 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
 
         {/* Messages */}
         {error && (
-          <div className="mb-3 p-3 bg-destructive/10 border-2 border-destructive text-destructive-foreground text-sm rounded-md flex items-center gap-2">
+          <div className="mb-3 p-3 bg-destructive/10 border border-destructive text-destructive-foreground text-sm rounded-md flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
         
         {success && (
-          <div className="mb-3 p-3 bg-green-600/10 border-2 border-green-600 text-green-600 text-sm rounded-md flex items-center gap-2">
+          <div className="mb-3 p-3 bg-green-600/10 border border-green-600 text-green-600 text-sm rounded-md flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
             <span>{success}</span>
           </div>
@@ -255,7 +255,7 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
             setSuccess('');
           }}
           placeholder={dict.settings.mcpJsonConfigPlaceholder}
-          className="w-full h-48 px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary rounded-md font-mono text-sm resize-none"
+          className="w-full h-48 px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary rounded-md font-mono text-sm resize-none"
           disabled={isLoading || isSaving}
         />
 
@@ -263,7 +263,7 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
           <button
             onClick={handleSaveConfig}
             disabled={isLoading || isSaving || !jsonConfig.trim()}
-            className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+            className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
             aria-label={dict.settings.mcpConfirm}
           >
             <Save className="w-4 h-4" />
@@ -298,7 +298,7 @@ const MCPSettingsPanel = ({ className }: MCPSettingsPanelProps) => {
               return (
                 <div
                   key={tool.id}
-                  className="p-4 bg-card border-2 border-border rounded-md shadow-sm hover:shadow-md transition-all"
+                  className="p-4 bg-card border border-border rounded-md shadow-sm hover:shadow-md transition-all"
                 >
                   <div className="flex items-start justify-between gap-4">
                     {/* Tool Info */}

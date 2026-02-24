@@ -471,7 +471,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
             <button
               onClick={handleClearAllModels}
               disabled={isLoading || models.length === 0}
-              className="px-4 py-2 bg-destructive text-destructive-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 py-2 bg-destructive text-destructive-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               aria-label="Clear All Models"
               title="Clear All Models"
             >
@@ -481,7 +481,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
             <button
               onClick={handleShowAddForm}
               disabled={isLoading}
-              className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               aria-label="Add Model"
             >
               <Plus className="w-4 h-4" />
@@ -493,20 +493,20 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
 
       {/* Messages */}
       {error && (
-        <div className="mb-4 p-3 bg-destructive border-2 border-border text-destructive-foreground text-sm">
+        <div className="mb-4 p-3 bg-destructive border border-border rounded-md text-destructive-foreground text-sm">
           {error}
         </div>
       )}
       
       {success && (
-        <div className="mb-4 p-3 bg-secondary border-2 border-border text-secondary-foreground text-sm">
+        <div className="mb-4 p-3 bg-secondary border border-border rounded-md text-secondary-foreground text-sm">
           {success}
         </div>
       )}
 
       {/* Add/Edit Model Form */}
       {isFormVisible && (
-        <div className="mb-4 p-4 bg-card border-4 border-border shadow-sm">
+        <div className="mb-4 p-4 bg-card border border-border rounded-md shadow-sm">
           <h4 className="text-md font-bold text-foreground mb-3">
             {isEditMode ? 'Edit Model' : 'Add New Model'}
           </h4>
@@ -521,7 +521,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="e.g., GPT-4 Turbo"
-                className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                 disabled={isLoading}
               />
             </div>
@@ -535,7 +535,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
                 value={formApiUrl}
                 onChange={(e) => setFormApiUrl(e.target.value)}
                 placeholder="https://api.openai.com/v1"
-                className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                 disabled={isLoading}
               />
             </div>
@@ -549,7 +549,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
                 value={formModelName}
                 onChange={(e) => setFormModelName(e.target.value)}
                 placeholder="e.g., gpt-4-turbo"
-                className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                 disabled={isLoading}
               />
             </div>
@@ -563,7 +563,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
                 value={formApiKey}
                 onChange={(e) => setFormApiKey(e.target.value)}
                 placeholder="sk-..."
-                className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                 disabled={isLoading}
               />
             </div>
@@ -578,7 +578,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
                 onChange={(e) => setFormMaxToken(e.target.value)}
                 placeholder="Leave empty for default maximum"
                 min="1"
-                className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                 disabled={isLoading}
               />
               <p className="text-xs text-muted-foreground mt-1">
@@ -596,7 +596,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
                   !formApiKey.trim() ||
                   !formModelName.trim()
                 }
-                className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <Save className="w-4 h-4" />
                 <span className="font-medium">
@@ -606,7 +606,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
               <button
                 onClick={handleCancelForm}
                 disabled={isLoading}
-                className="px-4 py-2 bg-muted text-foreground border-2 border-border hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-muted text-foreground border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
@@ -630,7 +630,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
             {stagedModels.map((model) => (
               <div
                 key={model.id}
-                className={`p-4 bg-card border-4 border-border shadow-sm hover:shadow-md transition-all ${
+                className={`p-4 bg-card border border-border rounded-md shadow-sm hover:shadow-md transition-all ${
                   model.isEnabled === false ? 'opacity-60' : ''
                 }`}
               >
@@ -695,7 +695,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
                     <button
                       onClick={() => handleEditModel(model)}
                       disabled={isLoading || isFormVisible}
-                      className="p-2 bg-blue-600 text-white border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="p-2 bg-blue-600 text-white border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       aria-label="Edit Model"
                       title="Edit Model"
                     >
@@ -704,7 +704,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
                     <button
                       onClick={() => handleDeleteModel(model.id, model.name)}
                       disabled={isLoading || isFormVisible}
-                      className="p-2 bg-destructive text-destructive-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="p-2 bg-destructive text-destructive-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       aria-label="Delete Model"
                       title="Delete Model"
                     >
@@ -715,7 +715,7 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
                     <button
                       onClick={() => handleStagedToggleEnabled(model.id)}
                       disabled={isLoading || isFormVisible}
-                      className={`relative inline-flex h-8 w-14 items-center rounded-full border-2 border-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      className={`relative inline-flex h-8 w-14 items-center rounded-full border border-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                         model.isEnabled !== false
                           ? 'bg-green-600'
                           : 'bg-muted'
@@ -739,18 +739,18 @@ const ModelSettingsPanel = ({ className }: ModelSettingsPanelProps) => {
 
       {/* Bottom Action Bar - Confirm/Cancel Buttons */}
       {!isFormVisible && stagedModels.length > 0 && (
-        <div className="absolute bottom-0 left-0 right-0 bg-background border-t-4 border-border p-4 flex items-center justify-end gap-3">
+        <div className="absolute bottom-0 left-0 right-0 bg-background border-t border-border p-4 flex items-center justify-end gap-3">
           <button
             onClick={handleCancelChanges}
             disabled={!hasChanges || isLoading}
-            className="px-6 py-2 bg-muted text-foreground border-2 border-border hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            className="px-6 py-2 bg-muted text-foreground border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirmChanges}
             disabled={!hasChanges || isLoading}
-            className="px-6 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+            className="px-6 py-2 bg-primary text-primary-foreground border border-border rounded-md shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
           >
             <Check className="w-4 h-4" />
             Confirm Changes

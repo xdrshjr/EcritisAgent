@@ -219,7 +219,7 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
       {/* Edit Button - Always visible on hover */}
       <button
         onClick={handleEditClick}
-        className="absolute top-2 right-2 p-1.5 bg-card border-2 border-border rounded shadow-sm hover:bg-primary hover:text-primary-foreground transition-all opacity-0 group-hover:opacity-100 z-10"
+        className="absolute top-2 right-2 p-1.5 bg-card border border-border rounded shadow-sm hover:bg-primary hover:text-primary-foreground transition-all opacity-0 group-hover:opacity-100 z-10"
         aria-label="Edit image"
         title="Edit image"
       >
@@ -228,7 +228,7 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
 
       {/* Edit Panel - Shows when editing */}
       {isEditing && (
-        <div className="absolute top-2 right-2 bg-card border-2 border-border rounded shadow-lg p-3 z-20 min-w-[200px]">
+        <div className="absolute top-2 right-2 bg-card border border-border rounded shadow-lg p-3 z-20 min-w-[200px]">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-semibold text-foreground">Edit Image</h4>
             <button
@@ -249,7 +249,7 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
             <div className="flex items-center gap-2">
               <button
                 onClick={handleZoomOut}
-                className="p-1.5 border-2 border-border hover:bg-primary hover:text-primary-foreground transition-all"
+                className="p-1.5 border border-border hover:bg-primary hover:text-primary-foreground transition-all"
                 aria-label="Zoom out"
                 disabled={scale <= 10}
               >
@@ -260,7 +260,7 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
               </span>
               <button
                 onClick={handleZoomIn}
-                className="p-1.5 border-2 border-border hover:bg-primary hover:text-primary-foreground transition-all"
+                className="p-1.5 border border-border hover:bg-primary hover:text-primary-foreground transition-all"
                 aria-label="Zoom in"
                 disabled={scale >= 200}
               >
@@ -268,7 +268,7 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
               </button>
               <button
                 onClick={handleMinimize}
-                className="p-1.5 border-2 border-border hover:bg-primary hover:text-primary-foreground transition-all ml-1"
+                className="p-1.5 border border-border hover:bg-primary hover:text-primary-foreground transition-all ml-1"
                 aria-label="Minimize"
                 title="Minimize to 50%"
               >
@@ -276,7 +276,7 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
               </button>
               <button
                 onClick={handleMaximize}
-                className="p-1.5 border-2 border-border hover:bg-primary hover:text-primary-foreground transition-all"
+                className="p-1.5 border border-border hover:bg-primary hover:text-primary-foreground transition-all"
                 aria-label="Maximize"
                 title="Maximize to 200%"
               >
@@ -291,7 +291,7 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleAlignChange('left')}
-                className={`p-2 border-2 border-border transition-all ${
+                className={`p-2 border border-border transition-all ${
                   currentAlign === 'left' 
                     ? 'bg-primary text-primary-foreground' 
                     : 'bg-card hover:bg-muted'
@@ -303,7 +303,7 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
               </button>
               <button
                 onClick={() => handleAlignChange('center')}
-                className={`p-2 border-2 border-border transition-all ${
+                className={`p-2 border border-border transition-all ${
                   currentAlign === 'center' 
                     ? 'bg-primary text-primary-foreground' 
                     : 'bg-card hover:bg-muted'
@@ -315,7 +315,7 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
               </button>
               <button
                 onClick={() => handleAlignChange('right')}
-                className={`p-2 border-2 border-border transition-all ${
+                className={`p-2 border border-border transition-all ${
                   currentAlign === 'right' 
                     ? 'bg-primary text-primary-foreground' 
                     : 'bg-card hover:bg-muted'
@@ -331,7 +331,7 @@ const ImageEditor = ({ editor, src, alt, width, height, align = 'center', nodePo
           {/* Delete Button */}
           <button
             onClick={handleDelete}
-            className="w-full p-2 bg-destructive text-destructive-foreground border-2 border-border hover:opacity-90 transition-all flex items-center justify-center gap-2"
+            className="w-full p-2 bg-destructive text-destructive-foreground border border-border hover:opacity-90 transition-all flex items-center justify-center gap-2"
             aria-label="Delete image"
           >
             <Trash2 className="w-4 h-4" />

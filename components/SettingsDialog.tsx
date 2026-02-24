@@ -826,14 +826,14 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-background border-4 border-border shadow-lg w-[90%] h-[80%] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-background border border-border rounded-xl shadow-xl w-[90%] h-[80%] flex flex-col">
         {/* Header */}
-        <div className="h-12 bg-primary border-b-4 border-border flex items-center justify-between px-4">
+        <div className="h-12 bg-primary border-b border-border rounded-t-xl flex items-center justify-between px-4">
           <h2 className="text-lg font-bold text-primary-foreground">Settings</h2>
           <button
             onClick={handleClose}
-            className="w-8 h-8 flex items-center justify-center hover:bg-primary-foreground hover:bg-opacity-20 transition-colors"
+            className="w-8 h-8 flex items-center justify-center hover:bg-primary-foreground/20 transition-colors"
             aria-label="Close Settings"
           >
             <X className="w-5 h-5 text-primary-foreground" />
@@ -843,10 +843,10 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
         {/* Content Area */}
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar - 10% */}
-          <div className="w-[10%] bg-muted border-r-4 border-border flex flex-col">
+          <div className="w-[10%] bg-muted border-r border-border flex flex-col">
             <button
               onClick={() => setActiveTab('models')}
-              className={`px-3 py-3 text-left text-sm font-medium border-b-2 border-border transition-colors ${
+              className={`px-3 py-3 text-left text-sm font-medium border-b border-border rounded-md transition-colors ${
                 activeTab === 'models'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-foreground hover:bg-secondary'
@@ -856,7 +856,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
             </button>
             <button
               onClick={() => setActiveTab('mcp')}
-              className={`px-3 py-3 text-left text-sm font-medium border-b-2 border-border transition-colors ${
+              className={`px-3 py-3 text-left text-sm font-medium border-b border-border rounded-md transition-colors ${
                 activeTab === 'mcp'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-foreground hover:bg-secondary'
@@ -870,13 +870,13 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Messages */}
             {error && (
-              <div className="mx-4 mt-4 p-3 bg-destructive border-2 border-border text-destructive-foreground text-sm">
+              <div className="mx-4 mt-4 p-3 bg-destructive border border-border rounded-md text-destructive-foreground text-sm">
                 {error}
               </div>
             )}
             
             {success && (
-              <div className="mx-4 mt-4 p-3 bg-secondary border-2 border-border text-secondary-foreground text-sm">
+              <div className="mx-4 mt-4 p-3 bg-secondary border border-border rounded-md text-secondary-foreground text-sm">
                 {success}
               </div>
             )}
@@ -891,7 +891,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                       <button
                         onClick={handleClearAllModels}
                         disabled={isLoading || models.length === 0}
-                        className="px-4 py-2 bg-destructive text-destructive-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-4 py-2 bg-destructive text-destructive-foreground border border-border rounded-md hover:bg-accent/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         aria-label="Clear All Models"
                         title="Clear All Models"
                       >
@@ -901,7 +901,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                       <button
                         onClick={handleShowAddForm}
                         disabled={isLoading}
-                        className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         aria-label="Add Model"
                       >
                         <Plus className="w-4 h-4" />
@@ -913,7 +913,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
 
                 {/* Add/Edit Model Form */}
                 {isFormVisible && (
-                  <div className="mb-4 p-4 bg-card border-4 border-border shadow-sm">
+                  <div className="mb-4 p-4 bg-card border border-border rounded-md shadow-sm">
                     <h4 className="text-md font-bold text-foreground mb-3">
                       {isEditMode ? 'Edit Model' : 'Add New Model'}
                     </h4>
@@ -928,7 +928,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                           value={formName}
                           onChange={(e) => setFormName(e.target.value)}
                           placeholder="e.g., GPT-4 Turbo"
-                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                           disabled={isLoading}
                         />
                       </div>
@@ -942,7 +942,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                           value={formApiUrl}
                           onChange={(e) => setFormApiUrl(e.target.value)}
                           placeholder="https://api.openai.com/v1"
-                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                           disabled={isLoading}
                         />
                       </div>
@@ -956,7 +956,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                           value={formModelName}
                           onChange={(e) => setFormModelName(e.target.value)}
                           placeholder="e.g., gpt-4-turbo"
-                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                           disabled={isLoading}
                         />
                       </div>
@@ -970,7 +970,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                           value={formApiKey}
                           onChange={(e) => setFormApiKey(e.target.value)}
                           placeholder="sk-..."
-                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                           disabled={isLoading}
                         />
                       </div>
@@ -985,7 +985,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                             !formApiKey.trim() ||
                             !formModelName.trim()
                           }
-                          className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                           <Save className="w-4 h-4" />
                           <span className="font-medium">
@@ -995,7 +995,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                         <button
                           onClick={handleCancelForm}
                           disabled={isLoading}
-                          className="px-4 py-2 bg-muted text-foreground border-2 border-border hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-4 py-2 bg-muted text-foreground border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Cancel
                         </button>
@@ -1023,7 +1023,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                           onDragStart={() => handleDragStart(index)}
                           onDragOver={(e) => handleDragOver(e, index)}
                           onDragEnd={handleDragEnd}
-                          className={`p-4 bg-card border-4 border-border shadow-sm hover:shadow-md transition-all cursor-move ${
+                          className={`p-4 bg-card border border-border rounded-md shadow-sm hover:shadow-md transition-all cursor-move ${
                             model.isEnabled === false ? 'opacity-60' : ''
                           } ${draggedIndex === index ? 'opacity-50' : ''}`}
                         >
@@ -1070,7 +1070,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                               <button
                                 onClick={() => handleEditModel(model)}
                                 disabled={isLoading || isFormVisible}
-                                className="p-2 bg-blue-600 text-white border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-2 bg-blue-600 text-white border border-border rounded-md hover:bg-accent/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 aria-label="Edit Model"
                                 title="Edit Model"
                               >
@@ -1079,7 +1079,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                               <button
                                 onClick={() => handleDeleteModel(model.id, model.name)}
                                 disabled={isLoading || isFormVisible}
-                                className="p-2 bg-destructive text-destructive-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-2 bg-destructive text-destructive-foreground border border-border rounded-md hover:bg-accent/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 aria-label="Delete Model"
                                 title="Delete Model"
                               >
@@ -1090,7 +1090,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                               <button
                                 onClick={() => handleStagedToggleEnabled(model.id)}
                                 disabled={isLoading || isFormVisible}
-                                className={`relative inline-flex h-8 w-14 items-center rounded-full border-2 border-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                className={`relative inline-flex h-8 w-14 items-center rounded-full border border-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                                   model.isEnabled !== false
                                     ? 'bg-green-600'
                                     : 'bg-muted'
@@ -1114,18 +1114,18 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
 
                 {/* Bottom Action Bar - Confirm/Cancel Buttons */}
                 {!isFormVisible && stagedModels.length > 0 && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-background border-t-4 border-border p-4 flex items-center justify-end gap-3">
+                  <div className="absolute bottom-0 left-0 right-0 bg-background border-t border-border p-4 flex items-center justify-end gap-3">
                     <button
                       onClick={handleCancelChanges}
                       disabled={!hasChanges || isLoading}
-                      className="px-6 py-2 bg-muted text-foreground border-2 border-border hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                      className="px-6 py-2 bg-muted text-foreground border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleConfirmChanges}
                       disabled={!hasChanges || isLoading}
-                      className="px-6 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+                      className="px-6 py-2 bg-primary text-primary-foreground border border-border rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
                     >
                       <Check className="w-4 h-4" />
                       Confirm Changes
@@ -1145,7 +1145,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                       <button
                         onClick={handleShowAddMCPForm}
                         disabled={isLoading}
-                        className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         aria-label="Add MCP Server"
                       >
                         <Plus className="w-4 h-4" />
@@ -1157,7 +1157,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
 
                 {/* Add/Edit MCP Server Form */}
                 {isMCPFormVisible && (
-                  <div className="mb-4 p-4 bg-card border-4 border-border shadow-sm">
+                  <div className="mb-4 p-4 bg-card border border-border rounded-md shadow-sm">
                     <h4 className="text-md font-bold text-foreground mb-3">
                       {isMCPEditMode ? 'Edit MCP Server' : 'Add New MCP Server'}
                     </h4>
@@ -1172,7 +1172,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                           value={mcpFormName}
                           onChange={(e) => setMCPFormName(e.target.value)}
                           placeholder="e.g., tavily-ai-tavily-mcp"
-                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                           disabled={isLoading}
                         />
                       </div>
@@ -1186,7 +1186,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                           value={mcpFormCommand}
                           onChange={(e) => setMCPFormCommand(e.target.value)}
                           placeholder="e.g., npx"
-                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                           disabled={isLoading}
                         />
                       </div>
@@ -1200,7 +1200,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                           value={mcpFormArgs}
                           onChange={(e) => setMCPFormArgs(e.target.value)}
                           placeholder="e.g., -y, tavily-mcp@latest"
-                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary"
                           disabled={isLoading}
                         />
                         <p className="text-xs text-muted-foreground mt-1">
@@ -1216,7 +1216,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                           value={mcpFormEnv}
                           onChange={(e) => setMCPFormEnv(e.target.value)}
                           placeholder='{"TAVILY_API_KEY": "your-api-key-here"}'
-                          className="w-full px-3 py-2 bg-background border-2 border-border text-foreground focus:outline-none focus:border-primary font-mono text-sm"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-md text-foreground focus:outline-none focus:border-primary font-mono text-sm"
                           disabled={isLoading}
                           rows={4}
                         />
@@ -1234,7 +1234,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                             !mcpFormCommand.trim() ||
                             !mcpFormArgs.trim()
                           }
-                          className="px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          className="px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                           <Save className="w-4 h-4" />
                           <span className="font-medium">
@@ -1244,7 +1244,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                         <button
                           onClick={handleCancelMCPForm}
                           disabled={isLoading}
-                          className="px-4 py-2 bg-muted text-foreground border-2 border-border hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="px-4 py-2 bg-muted text-foreground border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Cancel
                         </button>
@@ -1270,7 +1270,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                         return (
                           <div
                             key={mcp.id}
-                            className={`p-4 bg-card border-4 border-border shadow-sm hover:shadow-md transition-all ${
+                            className={`p-4 bg-card border border-border rounded-md shadow-sm hover:shadow-md transition-all ${
                               !mcp.isEnabled ? 'opacity-60' : ''
                             }`}
                           >
@@ -1320,7 +1320,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                                 <button
                                   onClick={() => handleShowJSONPreview(mcp)}
                                   disabled={isLoading}
-                                  className="px-3 py-2 bg-secondary text-secondary-foreground border-2 border-border hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium"
+                                  className="px-3 py-2 bg-secondary text-secondary-foreground border border-border rounded-md hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium"
                                   aria-label="View JSON Configuration"
                                   title="View JSON Configuration"
                                 >
@@ -1329,7 +1329,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                                 <button
                                   onClick={() => handleEditMCPServer(mcp)}
                                   disabled={isLoading || isMCPFormVisible || isStarting}
-                                  className="p-2 bg-blue-600 text-white border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="p-2 bg-blue-600 text-white border border-border rounded-md hover:bg-accent/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                   aria-label="Edit MCP Server"
                                   title="Edit MCP Server"
                                 >
@@ -1338,7 +1338,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                                 <button
                                   onClick={() => handleDeleteMCPServer(mcp.id, mcp.name)}
                                   disabled={isLoading || isMCPFormVisible || mcp.isEnabled || isStarting}
-                                  className="p-2 bg-destructive text-destructive-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="p-2 bg-destructive text-destructive-foreground border border-border rounded-md hover:bg-accent/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                   aria-label="Delete MCP Server"
                                   title={mcp.isEnabled ? "Stop MCP server before deleting" : "Delete MCP Server"}
                                 >
@@ -1349,7 +1349,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                                 <button
                                   onClick={() => handleToggleMCPEnabled(mcp.id, mcp.name)}
                                   disabled={isLoading || isMCPFormVisible || isStarting}
-                                  className={`px-3 py-2 border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 ${
+                                  className={`px-3 py-2 border border-border rounded-md hover:bg-accent/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 ${
                                     mcp.isEnabled
                                       ? 'bg-red-600 text-white'
                                       : 'bg-green-600 text-white'
@@ -1387,14 +1387,14 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
 
       {/* JSON Preview Modal */}
       {mcpJsonPreview && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-70">
-          <div className="bg-background border-4 border-border shadow-lg w-[600px] max-h-[70%] flex flex-col">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70">
+          <div className="bg-background border border-border rounded-xl shadow-xl w-[600px] max-h-[70%] flex flex-col">
             {/* Header */}
-            <div className="h-12 bg-primary border-b-4 border-border flex items-center justify-between px-4">
+            <div className="h-12 bg-primary border-b border-border rounded-t-xl flex items-center justify-between px-4">
               <h3 className="text-lg font-bold text-primary-foreground">MCP JSON Configuration</h3>
               <button
                 onClick={handleCloseJSONPreview}
-                className="w-8 h-8 flex items-center justify-center hover:bg-primary-foreground hover:bg-opacity-20 transition-colors"
+                className="w-8 h-8 flex items-center justify-center hover:bg-primary-foreground/20 transition-colors"
                 aria-label="Close JSON Preview"
               >
                 <X className="w-5 h-5 text-primary-foreground" />
@@ -1406,7 +1406,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
               <p className="text-sm text-muted-foreground mb-3">
                 Copy this configuration to use in your MCP client configuration file:
               </p>
-              <pre className="bg-muted p-4 rounded border-2 border-border text-sm font-mono overflow-x-auto">
+              <pre className="bg-muted p-4 rounded-md border border-border text-sm font-mono overflow-x-auto">
                 {mcpJsonPreview}
               </pre>
               <button
@@ -1415,7 +1415,7 @@ const SettingsDialog = ({ isOpen, onClose }: SettingsDialogProps) => {
                   setSuccess('JSON configuration copied to clipboard!');
                   setTimeout(() => setSuccess(''), 2000);
                 }}
-                className="mt-4 px-4 py-2 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm transition-all flex items-center gap-2"
+                className="mt-4 px-4 py-2 bg-primary text-primary-foreground border border-border rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2"
               >
                 <span className="font-medium">Copy to Clipboard</span>
               </button>

@@ -197,11 +197,11 @@ const NewConversationDialog = ({ isOpen, onClose, onConfirm }: NewConversationDi
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-background border-2 border-border rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="bg-background border border-border rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-border bg-muted/30">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
           <h2 className="text-xl font-semibold text-foreground">
             {dict.chat.newConversationDialogTitle || 'Create New Conversation'}
           </h2>
@@ -226,7 +226,7 @@ const NewConversationDialog = ({ isOpen, onClose, onConfirm }: NewConversationDi
               
               <button
                 onClick={() => handleTypeSelect('basic')}
-                className="w-full p-4 border-2 border-border rounded-lg hover:border-primary/50 hover:bg-muted/50 transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border border-border rounded-lg hover:border-primary/50 hover:bg-muted/50 transition-all text-left flex items-center gap-4 group"
                 tabIndex={0}
               >
                 <div className="p-3 bg-blue-500/10 rounded-lg group-hover:bg-blue-500/20 transition-colors">
@@ -245,7 +245,7 @@ const NewConversationDialog = ({ isOpen, onClose, onConfirm }: NewConversationDi
 
               <button
                 onClick={() => handleTypeSelect('chatbot')}
-                className="w-full p-4 border-2 border-border rounded-lg hover:border-primary/50 hover:bg-muted/50 transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border border-border rounded-lg hover:border-primary/50 hover:bg-muted/50 transition-all text-left flex items-center gap-4 group"
                 tabIndex={0}
               >
                 <div className="p-3 bg-purple-500/10 rounded-lg group-hover:bg-purple-500/20 transition-colors">
@@ -264,7 +264,7 @@ const NewConversationDialog = ({ isOpen, onClose, onConfirm }: NewConversationDi
 
               <button
                 onClick={() => handleTypeSelect('agent')}
-                className="w-full p-4 border-2 border-border rounded-lg hover:border-primary/50 hover:bg-muted/50 transition-all text-left flex items-center gap-4 group"
+                className="w-full p-4 border border-border rounded-lg hover:border-primary/50 hover:bg-muted/50 transition-all text-left flex items-center gap-4 group"
                 tabIndex={0}
               >
                 <div className="p-3 bg-green-500/10 rounded-lg group-hover:bg-green-500/20 transition-colors">
@@ -339,7 +339,7 @@ const NewConversationDialog = ({ isOpen, onClose, onConfirm }: NewConversationDi
                     <button
                       key={bot.id}
                       onClick={() => handleChatBotSelect(bot.id)}
-                      className={`w-full p-4 border-2 rounded-lg transition-all text-left ${
+                      className={`w-full p-4 border rounded-lg transition-all text-left ${
                         selectedChatBotId === bot.id
                           ? 'border-primary bg-primary/10'
                           : 'border-border hover:border-primary/50 hover:bg-muted/50'
@@ -418,7 +418,7 @@ const NewConversationDialog = ({ isOpen, onClose, onConfirm }: NewConversationDi
                     <button
                       key={agent.type}
                       onClick={() => handleAgentSelect(agent.type)}
-                      className={`w-full p-4 border-2 rounded-lg transition-all text-left ${
+                      className={`w-full p-4 border rounded-lg transition-all text-left ${
                         selectedAgentType === agent.type
                           ? 'border-primary bg-primary/10'
                           : 'border-border hover:border-primary/50 hover:bg-muted/50'
@@ -443,10 +443,10 @@ const NewConversationDialog = ({ isOpen, onClose, onConfirm }: NewConversationDi
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t-2 border-border bg-muted/30 flex items-center justify-end gap-3">
+        <div className="px-6 py-4 border-t border-border bg-muted/30 flex items-center justify-end gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 border-2 border-border rounded-lg hover:bg-muted transition-colors text-sm font-medium"
+            className="px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors text-sm font-medium"
             tabIndex={0}
           >
             {dict.settings.cancel || 'Cancel'}

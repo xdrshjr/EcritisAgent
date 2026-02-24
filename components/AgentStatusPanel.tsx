@@ -153,7 +153,7 @@ const AgentStatusPanel = ({ status, isActive, defaultCollapsed = false }: AgentS
   const isCollapsible = status.phase === 'complete' || status.phase === 'error';
 
   return (
-    <div className="mb-4 p-4 border-2 border-border rounded-lg bg-muted/30">
+    <div className="mb-4 p-4 border border-border rounded-lg bg-muted/30">
       <div 
         className={`flex items-center gap-3 ${isCollapsible ? 'cursor-pointer hover:bg-muted/50 -m-4 p-4 rounded-lg transition-colors' : ''}`}
         onClick={isCollapsible ? handleToggleCollapse : undefined}
@@ -199,7 +199,7 @@ const AgentStatusPanel = ({ status, isActive, defaultCollapsed = false }: AgentS
           {status.timeline && status.timeline.length > 0 && (
             <div className="flex flex-wrap items-center gap-3 mb-4" aria-label="Execution timeline">
               {status.timeline.map((item, index) => {
-                const baseClasses = 'px-3 py-1 text-xs font-semibold transition-colors border-2';
+                const baseClasses = 'px-3 py-1 text-xs font-semibold transition-colors border rounded-md';
                 const stateClasses =
                   item.state === 'complete'
                     ? 'bg-green-500/10 text-green-600 border-green-500/50'
@@ -250,14 +250,14 @@ const AgentStatusPanel = ({ status, isActive, defaultCollapsed = false }: AgentS
                       statusColor = 'border-red-500/20 bg-red-500/5';
                       break;
                     default:
-                      statusIcon = <div className="w-4 h-4 rounded-full border-2 border-muted flex-shrink-0" />;
+                      statusIcon = <div className="w-4 h-4 rounded-full border border-muted flex-shrink-0" />;
                       statusColor = 'border-border bg-background/50';
                   }
 
                   return (
                     <div
                       key={todo.id || index}
-                      className={`p-3 rounded border-2 ${statusColor} transition-all`}
+                      className={`p-3 rounded border ${statusColor} transition-all`}
                     >
                       <div className="flex items-start gap-2">
                         {statusIcon}
@@ -289,7 +289,7 @@ const AgentStatusPanel = ({ status, isActive, defaultCollapsed = false }: AgentS
 
           {/* Summary with Markdown rendering */}
           {status.summary && (
-            <div className="mt-4 p-3 bg-green-500/10 border-2 border-green-500/20 rounded">
+            <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded">
               <h4 className="text-sm font-medium text-green-700 dark:text-green-300 mb-2">
                 Summary
               </h4>
@@ -362,7 +362,7 @@ const AgentStatusPanel = ({ status, isActive, defaultCollapsed = false }: AgentS
                     },
                     // Custom rendering for blockquotes
                     blockquote: ({ node, children, ...props }) => (
-                      <blockquote className="border-l-4 border-green-500 pl-3 italic my-2 text-foreground/80" {...props}>
+                      <blockquote className="border-l border-green-500 pl-3 italic my-2 text-foreground/80" {...props}>
                         {children}
                       </blockquote>
                     ),
@@ -376,7 +376,7 @@ const AgentStatusPanel = ({ status, isActive, defaultCollapsed = false }: AgentS
 
           {/* Error */}
           {status.error && (
-            <div className="mt-4 p-3 bg-red-500/10 border-2 border-red-500/20 rounded">
+            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded">
               <h4 className="text-sm font-medium text-red-700 dark:text-red-300 mb-2">
                 Error
               </h4>

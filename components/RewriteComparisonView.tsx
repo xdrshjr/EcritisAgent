@@ -53,17 +53,17 @@ const RewriteComparisonView = ({
 
   return (
     <div
-      className="bg-card border-2 border-border rounded shadow-lg p-4 rewrite-comparison-view max-w-2xl"
+      className="bg-card border border-border rounded shadow-lg p-4 rewrite-comparison-view max-w-2xl"
       style={panelStyle}
     >
       <div className="flex flex-col gap-4">
         {/* Header */}
-        <div className="flex items-center justify-between border-b-2 border-border pb-2">
+        <div className="flex items-center justify-between border-b border-border pb-2">
           <h3 className="text-sm font-semibold text-foreground">{title}</h3>
           <div className="flex items-center gap-2">
             <button
               onClick={handleAccept}
-              className="px-3 py-1.5 bg-primary text-primary-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm flex items-center gap-2 transition-all"
+              className="px-3 py-1.5 bg-primary text-primary-foreground border border-border rounded-md shadow-sm flex items-center gap-2 transition-all"
               aria-label="Accept rewrite"
               title="接受"
             >
@@ -72,7 +72,7 @@ const RewriteComparisonView = ({
             </button>
             <button
               onClick={handleReject}
-              className="px-3 py-1.5 bg-destructive text-destructive-foreground border-2 border-border hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none shadow-sm flex items-center gap-2 transition-all"
+              className="px-3 py-1.5 bg-destructive text-destructive-foreground border border-border rounded-md shadow-sm flex items-center gap-2 transition-all"
               aria-label="Reject rewrite"
               title="放弃"
             >
@@ -89,7 +89,7 @@ const RewriteComparisonView = ({
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               原文
             </div>
-            <div className="p-3 bg-muted rounded border-2 border-border text-sm text-foreground max-h-48 overflow-y-auto">
+            <div className="p-3 bg-muted rounded border border-border text-sm text-foreground max-h-48 overflow-y-auto">
               {originalText}
             </div>
           </div>
@@ -99,7 +99,7 @@ const RewriteComparisonView = ({
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {processedLabel}
             </div>
-            <div className="p-3 bg-primary/10 rounded border-2 border-primary text-sm text-foreground max-h-48 overflow-y-auto">
+            <div className="p-3 bg-primary/10 rounded border border-primary text-sm text-foreground max-h-48 overflow-y-auto">
               {processedText}
             </div>
           </div>

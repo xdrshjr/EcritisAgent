@@ -42,7 +42,7 @@ const Taskbar = ({ tasks, onTaskChange }: TaskbarProps) => {
   };
 
   return (
-    <aside className="w-12 bg-sidebar border-r-4 border-sidebar-border flex flex-col items-center pt-8 pb-3 gap-3">
+    <aside className="w-12 bg-sidebar border-r border-sidebar-border flex flex-col items-center pt-8 pb-3 gap-3">
       {tasks.map((task) => {
         const isHovered = hoveredTask === task.id;
         const isActive = task.isActive;
@@ -60,11 +60,10 @@ const Taskbar = ({ tasks, onTaskChange }: TaskbarProps) => {
               tabIndex={0}
               aria-label={task.title}
               className={cn(
-                'w-8 h-8 flex items-center justify-center',
-                'border-2 border-border bg-card transition-all duration-200',
-                'hover:translate-x-1 hover:translate-y-1 hover:shadow-none',
+                'w-8 h-8 flex items-center justify-center rounded-lg',
+                'transition-colors duration-200',
                 'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
-                isActive ? 'bg-primary text-primary-foreground shadow-md' : 'shadow-sm',
+                isActive ? 'bg-primary text-primary-foreground shadow-sm' : '',
                 !isActive && 'hover:bg-accent hover:text-accent-foreground'
               )}
             >
@@ -74,7 +73,7 @@ const Taskbar = ({ tasks, onTaskChange }: TaskbarProps) => {
             {/* Tooltip */}
             {isHovered && (
               <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 pointer-events-none">
-                <div className="bg-popover text-popover-foreground px-2 py-1 border-2 border-border shadow-md whitespace-nowrap">
+                <div className="bg-popover text-popover-foreground px-2 py-1 border border-border rounded-md shadow-md whitespace-nowrap">
                   <span className="text-xs font-medium">{task.title}</span>
                 </div>
               </div>

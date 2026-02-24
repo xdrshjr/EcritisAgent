@@ -52,7 +52,7 @@ const ConfirmDialog = ({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-50"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/50"
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -60,7 +60,7 @@ const ConfirmDialog = ({
       onKeyDown={handleKeyDown}
       tabIndex={-1}
     >
-      <div className="bg-background border-4 border-border rounded-lg shadow-xl w-[360px] max-w-[90%]">
+      <div className="bg-background border border-border rounded-xl shadow-xl w-[360px] max-w-[90%]">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/60">
           <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ const ConfirmDialog = ({
           </button>
           <button
             onClick={onConfirm}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md border shadow-sm hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-none transition-all ${confirmButtonClasses}`}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md border shadow-sm transition-all ${confirmButtonClasses}`}
             aria-label={confirmLabel}
             tabIndex={0}
           >

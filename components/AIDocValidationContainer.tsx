@@ -969,7 +969,7 @@ const AIDocValidationContainer = ({
           <button
             onClick={handleValidationClick}
             disabled={!hasDocument || isValidating}
-            className="w-12 h-12 rounded-full bg-primary text-primary-foreground border-2 border-border shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 group/btn"
+            className="w-12 h-12 rounded-full bg-primary text-primary-foreground border border-border shadow-lg hover:shadow-xl hover:scale-110 transition-all duration-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 group/btn"
             aria-label="AI Check"
             title="AI Check"
           >
