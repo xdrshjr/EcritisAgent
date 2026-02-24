@@ -724,7 +724,7 @@ const ChatMessage = ({
         )}
 
         <div
-          className={`relative px-4 py-3 shadow-sm transition-all hover:shadow-md group ${
+          className={`relative px-2 py-1.5 shadow-sm transition-all hover:shadow-md group ${
             isUser
               ? 'bg-primary/5 text-foreground rounded-2xl rounded-br-sm'
               : 'bg-card text-foreground border border-border/50 rounded-2xl rounded-bl-sm'
@@ -784,7 +784,7 @@ const ChatMessage = ({
             </div>
           )}
           {isUser ? (
-            <div className="text-sm leading-relaxed whitespace-pre-wrap break-words px-1 py-1 chat-message-user-content">
+            <div className="text-sm leading-relaxed whitespace-pre-wrap break-words chat-message-user-content">
               {isEditing ? (
                 <div className="space-y-2">
                   <textarea
@@ -834,7 +834,7 @@ const ChatMessage = ({
               )}
             </div>
           ) : (
-            <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert prose-pre:bg-[#0d1117] prose-pre:text-gray-100 prose-code:text-pink-500 prose-code:before:content-[''] prose-code:after:content-[''] px-3 py-2 chat-message-content-wrapper">
+            <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert prose-pre:bg-[#0d1117] prose-pre:text-gray-100 prose-code:text-pink-500 prose-code:before:content-[''] prose-code:after:content-[''] px-1.5 py-1 chat-message-content-wrapper">
               {markdownContent}
             </div>
           )}

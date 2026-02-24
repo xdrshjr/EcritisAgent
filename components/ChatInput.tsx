@@ -372,7 +372,7 @@ const ChatInput = ({
 
       {/* File Attachment Display */}
       {uploadedFile && (
-        <div className="px-3 pt-3 pb-2 border-b border-border/50">
+        <div className="px-3 pt-1.5 pb-1 border-b border-border/50">
           <FileAttachment
             filename={uploadedFile.filename}
             fileSize={uploadedFile.size}
@@ -382,7 +382,7 @@ const ChatInput = ({
       )}
 
       {/* Input Area */}
-      <div className={`flex gap-2 px-3 py-4 ${isExpanded && isAdvancedMode ? 'flex-1 items-stretch' : 'items-end'}`}>
+      <div className={`flex gap-2 px-3 py-2 ${isExpanded && isAdvancedMode ? 'flex-1 items-stretch' : 'items-end'}`}>
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
