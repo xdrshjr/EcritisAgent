@@ -82,6 +82,7 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
   
   // Agent mode state
   const [isAgentMode, setIsAgentMode] = useState(false);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const [agentStatus, setAgentStatus] = useState<AgentStatus | null>(null);
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   const [isAgentListOpen, setIsAgentListOpen] = useState(false);
@@ -1502,10 +1503,10 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
       aria-modal={isEmbedded ? undefined : 'true'}
       data-testid={isEmbedded ? 'chat-dialog-embedded' : 'chat-dialog-modal'}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border bg-muted/50">
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        {!isEmbedded && (
+      {/* Header - only shown in modal mode */}
+      {!isEmbedded && (
+        <div className="flex items-center justify-between p-4 border-b border-border bg-muted/50">
+          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
           <button
             onClick={handleClose}
             className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center transition-colors"
@@ -1514,8 +1515,8 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
           >
             <X className="w-4 h-4" />
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div
@@ -1665,11 +1666,28 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
             </div>
           )}
         </div>
-        <p className="text-xs text-muted-foreground">
-          {isAgentMode 
-            ? 'Agent will plan and execute document modifications' 
-            : 'Normal chat mode'}
-        </p>
+        {/* Advanced Mode Toggle - right side of Agent Mode row */}
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-muted-foreground font-medium cursor-pointer select-none" onClick={() => setIsAdvancedMode(!isAdvancedMode)}>
+            Advanced Mode
+          </label>
+          <button
+            onClick={() => setIsAdvancedMode(!isAdvancedMode)}
+            className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+              isAdvancedMode ? 'bg-primary' : 'bg-input'
+            }`}
+            role="switch"
+            aria-checked={isAdvancedMode}
+            aria-label="Toggle Advanced Mode"
+            disabled={isLoading || isAgentRunning}
+          >
+            <span
+              className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                isAdvancedMode ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Agent Status Panel - Last Execution */}
@@ -1687,9 +1705,12 @@ const ChatDialog = forwardRef<HTMLDivElement, ChatDialogProps>(({
       <ChatInput
         onSend={handleSendMessage}
         disabled={isLoading || isAgentRunning}
-        placeholder={isAgentMode 
-          ? "Describe what you want to do with the document..." 
+        placeholder={isAgentMode
+          ? "Describe what you want to do with the document..."
           : "Type your message..."}
+        isAdvancedMode={isAdvancedMode}
+        onAdvancedModeChange={setIsAdvancedMode}
+        hideInternalToggle={true}
       />
 
       {/* Agent List Dialog */}

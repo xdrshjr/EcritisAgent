@@ -1669,7 +1669,8 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
     <div className="h-full flex flex-col bg-background">
       {/* Toolbar */}
       <div className="border-b border-border bg-card shadow-sm rounded-b-md">
-        <div className="px-4 py-3 flex items-center gap-2 flex-wrap">
+        {/* Row 1: Custom Action Buttons */}
+        <div className="px-4 py-2 flex items-center gap-2 border-b border-border/50">
           {/* Upload Button */}
           <button
             onClick={handleUploadClick}
@@ -1677,160 +1678,20 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
             className="px-3 py-2 bg-primary text-primary-foreground border border-border rounded-md hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             aria-label={dict.docValidation.uploadDocument}
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-3 h-3" />
             <span className="text-sm font-medium">
               {isUploading ? dict.docValidation.uploading : dict.docValidation.uploadDocument}
             </span>
           </button>
 
-          <div className="w-px h-6 bg-border mx-2" />
-
-          {/* Format Buttons */}
-          <button
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
-              editor.isActive('bold') ? 'bg-primary text-primary-foreground' : 'bg-card'
-            }`}
-            aria-label={dict.docValidation.editorToolbar.bold}
-          >
-            <Bold className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
-              editor.isActive('italic') ? 'bg-primary text-primary-foreground' : 'bg-card'
-            }`}
-            aria-label={dict.docValidation.editorToolbar.italic}
-          >
-            <Italic className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => editor.chain().focus().toggleUnderline().run()}
-            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
-              editor.isActive('underline') ? 'bg-primary text-primary-foreground' : 'bg-card'
-            }`}
-            aria-label={dict.docValidation.editorToolbar.underline}
-          >
-            <UnderlineIcon className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
-              editor.isActive('strike') ? 'bg-primary text-primary-foreground' : 'bg-card'
-            }`}
-            aria-label={dict.docValidation.editorToolbar.strike}
-          >
-            <Strikethrough className="w-4 h-4" />
-          </button>
-
-          <div className="w-px h-6 bg-border mx-2" />
-
-          <button
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
-              editor.isActive('heading', { level: 1 }) ? 'bg-primary text-primary-foreground' : 'bg-card'
-            }`}
-            aria-label={dict.docValidation.editorToolbar.heading1}
-          >
-            <Heading1 className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
-              editor.isActive('heading', { level: 2 }) ? 'bg-primary text-primary-foreground' : 'bg-card'
-            }`}
-            aria-label={dict.docValidation.editorToolbar.heading2}
-          >
-            <Heading2 className="w-4 h-4" />
-          </button>
-
-          <div className="w-px h-6 bg-border mx-2" />
-
-          <button
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
-              editor.isActive('bulletList') ? 'bg-primary text-primary-foreground' : 'bg-card'
-            }`}
-            aria-label={dict.docValidation.editorToolbar.bulletList}
-          >
-            <List className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
-              editor.isActive('orderedList') ? 'bg-primary text-primary-foreground' : 'bg-card'
-            }`}
-            aria-label={dict.docValidation.editorToolbar.orderedList}
-          >
-            <ListOrdered className="w-4 h-4" />
-          </button>
-
-          <div className="w-px h-6 bg-border mx-2" />
-
-          <button
-            onClick={() => editor.chain().focus().setTextAlign('left').run()}
-            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
-              editor.isActive({ textAlign: 'left' }) ? 'bg-primary text-primary-foreground' : 'bg-card'
-            }`}
-            aria-label={dict.docValidation.editorToolbar.alignLeft}
-          >
-            <AlignLeft className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => editor.chain().focus().setTextAlign('center').run()}
-            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
-              editor.isActive({ textAlign: 'center' }) ? 'bg-primary text-primary-foreground' : 'bg-card'
-            }`}
-            aria-label={dict.docValidation.editorToolbar.alignCenter}
-          >
-            <AlignCenter className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => editor.chain().focus().setTextAlign('right').run()}
-            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
-              editor.isActive({ textAlign: 'right' }) ? 'bg-primary text-primary-foreground' : 'bg-card'
-            }`}
-            aria-label={dict.docValidation.editorToolbar.alignRight}
-          >
-            <AlignRight className="w-4 h-4" />
-          </button>
-
-          <div className="w-px h-6 bg-border mx-2" />
-
-          <button
-            onClick={() => editor.chain().focus().undo().run()}
-            disabled={!editor.can().undo()}
-            className="p-2 border border-border bg-card rounded-md hover:bg-accent/80 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label={dict.docValidation.editorToolbar.undo}
-          >
-            <Undo className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => editor.chain().focus().redo().run()}
-            disabled={!editor.can().redo()}
-            className="p-2 border border-border bg-card rounded-md hover:bg-accent/80 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label={dict.docValidation.editorToolbar.redo}
-          >
-            <Redo className="w-4 h-4" />
-          </button>
-
           {/* Insert Image Button */}
-          <div className="w-px h-6 bg-border mx-2" />
           <button
             onClick={handleOpenImageDialog}
             className="px-3 py-2 border border-border bg-card rounded-md hover:bg-accent/80 transition-colors shadow-sm flex items-center gap-2"
             aria-label={dict.docValidation.editorToolbar.insertImage}
             title={dict.docValidation.editorToolbar.insertImage}
           >
-            <ImageIcon className="w-4 h-4" />
+            <ImageIcon className="w-3 h-3" />
             <span className="text-sm font-medium">{dict.docValidation.editorToolbar.insertImage}</span>
           </button>
 
@@ -1853,9 +1714,10 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
             </>
           )}
 
-          {/* Export Button - Rightmost position */}
           <div className="flex-1" />
           <div className="w-px h-6 bg-border mx-2" />
+
+          {/* Export Button */}
           <button
             onClick={handleExport}
             disabled={isExporting || !editor}
@@ -1863,10 +1725,154 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
             aria-label={dict.docValidation.editorToolbar.export}
             title={dict.docValidation.editorToolbar.export}
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3 h-3" />
             <span className="text-sm font-medium">
               {isExporting ? (locale === 'zh' ? '导出中...' : 'Exporting...') : dict.docValidation.editorToolbar.export}
             </span>
+          </button>
+        </div>
+
+        {/* Row 2: Editor Formatting Buttons */}
+        <div className="px-4 py-2 flex items-center gap-2 flex-wrap">
+          {/* Bold, Italic, Underline, Strike */}
+          <button
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
+              editor.isActive('bold') ? 'bg-primary text-primary-foreground' : 'bg-card'
+            }`}
+            aria-label={dict.docValidation.editorToolbar.bold}
+          >
+            <Bold className="w-3 h-3" />
+          </button>
+
+          <button
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
+              editor.isActive('italic') ? 'bg-primary text-primary-foreground' : 'bg-card'
+            }`}
+            aria-label={dict.docValidation.editorToolbar.italic}
+          >
+            <Italic className="w-3 h-3" />
+          </button>
+
+          <button
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
+              editor.isActive('underline') ? 'bg-primary text-primary-foreground' : 'bg-card'
+            }`}
+            aria-label={dict.docValidation.editorToolbar.underline}
+          >
+            <UnderlineIcon className="w-3 h-3" />
+          </button>
+
+          <button
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
+              editor.isActive('strike') ? 'bg-primary text-primary-foreground' : 'bg-card'
+            }`}
+            aria-label={dict.docValidation.editorToolbar.strike}
+          >
+            <Strikethrough className="w-3 h-3" />
+          </button>
+
+          <div className="w-px h-6 bg-border mx-2" />
+
+          {/* H1, H2 */}
+          <button
+            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
+              editor.isActive('heading', { level: 1 }) ? 'bg-primary text-primary-foreground' : 'bg-card'
+            }`}
+            aria-label={dict.docValidation.editorToolbar.heading1}
+          >
+            <Heading1 className="w-3 h-3" />
+          </button>
+
+          <button
+            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
+              editor.isActive('heading', { level: 2 }) ? 'bg-primary text-primary-foreground' : 'bg-card'
+            }`}
+            aria-label={dict.docValidation.editorToolbar.heading2}
+          >
+            <Heading2 className="w-3 h-3" />
+          </button>
+
+          <div className="w-px h-6 bg-border mx-2" />
+
+          {/* Bullet List, Ordered List */}
+          <button
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
+              editor.isActive('bulletList') ? 'bg-primary text-primary-foreground' : 'bg-card'
+            }`}
+            aria-label={dict.docValidation.editorToolbar.bulletList}
+          >
+            <List className="w-3 h-3" />
+          </button>
+
+          <button
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
+              editor.isActive('orderedList') ? 'bg-primary text-primary-foreground' : 'bg-card'
+            }`}
+            aria-label={dict.docValidation.editorToolbar.orderedList}
+          >
+            <ListOrdered className="w-3 h-3" />
+          </button>
+
+          <div className="w-px h-6 bg-border mx-2" />
+
+          {/* Align Left, Center, Right */}
+          <button
+            onClick={() => editor.chain().focus().setTextAlign('left').run()}
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
+              editor.isActive({ textAlign: 'left' }) ? 'bg-primary text-primary-foreground' : 'bg-card'
+            }`}
+            aria-label={dict.docValidation.editorToolbar.alignLeft}
+          >
+            <AlignLeft className="w-3 h-3" />
+          </button>
+
+          <button
+            onClick={() => editor.chain().focus().setTextAlign('center').run()}
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
+              editor.isActive({ textAlign: 'center' }) ? 'bg-primary text-primary-foreground' : 'bg-card'
+            }`}
+            aria-label={dict.docValidation.editorToolbar.alignCenter}
+          >
+            <AlignCenter className="w-3 h-3" />
+          </button>
+
+          <button
+            onClick={() => editor.chain().focus().setTextAlign('right').run()}
+            className={`p-2 border border-border rounded-md hover:bg-accent/80 transition-colors shadow-sm ${
+              editor.isActive({ textAlign: 'right' }) ? 'bg-primary text-primary-foreground' : 'bg-card'
+            }`}
+            aria-label={dict.docValidation.editorToolbar.alignRight}
+          >
+            <AlignRight className="w-3 h-3" />
+          </button>
+
+          <div className="w-px h-6 bg-border mx-2" />
+
+          {/* Undo, Redo */}
+          <button
+            onClick={() => editor.chain().focus().undo().run()}
+            disabled={!editor.can().undo()}
+            className="p-2 border border-border bg-card rounded-md hover:bg-accent/80 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label={dict.docValidation.editorToolbar.undo}
+          >
+            <Undo className="w-3 h-3" />
+          </button>
+
+          <button
+            onClick={() => editor.chain().focus().redo().run()}
+            disabled={!editor.can().redo()}
+            className="p-2 border border-border bg-card rounded-md hover:bg-accent/80 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label={dict.docValidation.editorToolbar.redo}
+          >
+            <Redo className="w-3 h-3" />
           </button>
         </div>
 

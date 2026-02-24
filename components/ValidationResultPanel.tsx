@@ -162,55 +162,6 @@ const ValidationResultPanel = ({
   return (
     <div className="h-full flex flex-col bg-background">
       {/* Enhanced Header with Modern Design */}
-      <div className="border-b border-border px-8 py-5 bg-card/50 backdrop-blur-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 11l3 3L22 4" />
-                  <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-foreground tracking-tight">
-                  {dict.docValidation.validationResults}
-                </h2>
-                {hasResults && !isValidating && totalIssuesCount > 0 && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {dict.docValidation.detected} {totalIssuesCount} {totalIssuesCount === 1 ? dict.docValidation.issue : dict.docValidation.issues}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          {/* Enhanced Status Indicator */}
-          {isValidating && (
-            <div className="flex items-center gap-2.5 px-4 py-2 bg-primary/5 rounded-lg border border-primary/10">
-              <div className="relative w-4 h-4">
-                <div className="absolute inset-0 bg-primary rounded-full animate-ping opacity-20" />
-                <div className="absolute inset-0 bg-primary rounded-full animate-pulse" />
-              </div>
-              <span className="text-sm font-medium text-foreground">
-                {formatChunkProgress(currentChunk, totalChunks, dict.docValidation.chunkProgress)}
-              </span>
-            </div>
-          )}
-          
-          {/* Success Badge */}
-          {hasResults && !isValidating && totalIssuesCount === 0 && !results.some(r => r.error) && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-lg border border-green-200">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-              <span className="text-sm font-semibold text-green-700">{dict.docValidation.allClear}</span>
-            </div>
-          )}
-        </div>
-      </div>
-      
       {/* Enhanced Content Area - Scrollable with Better Spacing */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-8 py-6 validation-results-scrollbar">
         {!hasResults && !isValidating && (
