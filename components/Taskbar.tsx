@@ -42,7 +42,7 @@ const Taskbar = ({ tasks, onTaskChange }: TaskbarProps) => {
   };
 
   return (
-    <aside className="w-12 bg-sidebar border-r border-sidebar-border flex flex-col items-center pt-8 pb-3 gap-3">
+    <aside className="w-12 bg-sidebar border-r border-sidebar-border flex flex-col items-center pt-2 pb-2 gap-1.5">
       {tasks.map((task) => {
         const isHovered = hoveredTask === task.id;
         const isActive = task.isActive;

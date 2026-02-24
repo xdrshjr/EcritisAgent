@@ -161,7 +161,7 @@ const ConversationList = ({
   return (
     <aside className="h-full bg-sidebar border-r border-sidebar-border flex flex-col">
       {/* Header with New Conversation button */}
-      <div className="p-3 border-b border-sidebar-border">
+      <div className="px-3 py-2 border-b border-sidebar-border">
         <button
           onClick={handleNewConversationClick}
           onKeyDown={handleNewKeyDown}
@@ -189,7 +189,7 @@ const ConversationList = ({
             <p>No conversations yet</p>
           </div>
         ) : (
-          <div className="space-y-1 p-2">
+          <div className="space-y-0.5 p-2">
             {conversations.map((conversation) => {
               const isActive = conversation.id === activeConversationId;
 
