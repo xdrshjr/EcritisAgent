@@ -47,6 +47,10 @@ npm run build:desktop     # Build Electron app (outputs to dist/)
 npm run lint              # ESLint check
 ```
 
+### Prerequisites
+- Node.js 20+ (frontend and Electron)
+- Python 3.8+ (backend AI agents)
+
 ## Architecture Overview
 
 ### Multi-Agent AI System
@@ -126,6 +130,12 @@ Each domain has its own `routes.py` with Flask blueprint registration.
 - Use `cn()` utility from `@/lib/utils` for conditional classes
 - Custom theme system with CSS variables
 
+**Internationalization (i18n):**
+- Custom dictionary-based system in `lib/i18n/dictionaries.ts` (EN/ZH)
+- `LanguageProvider` context (`lib/i18n/LanguageContext.tsx`) wraps the app
+- Use `useLanguage()` hook to get current locale, then look up strings from dictionaries
+- Language preference persisted to localStorage
+
 ### Electron Desktop Packaging
 
 The app packages as a Windows desktop application with embedded Python:
@@ -171,7 +181,7 @@ const Component = ({ prop }: ComponentProps) => {
 export default Component;
 ```
 
-### Naming & Style (from .cursor/rules)
+### Naming & Style
 - Event handlers: "handle" prefix (handleClick, handleSubmit, handleKeyDown)
 - Variables: descriptive names (isLoading, streamingContent, not l, sc)
 - Use early returns to reduce nesting
@@ -193,6 +203,8 @@ try {
 
 ### Testing (Vitest)
 - Tests in `components/__tests__/`
+- Setup file: `vitest.setup.ts` (imports `@testing-library/jest-dom/vitest`)
+- Environment: jsdom with `@` path alias resolved to project root
 - Mock logger: `vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn() } }))`
 - Use `@testing-library/react` for component tests
 
@@ -247,6 +259,7 @@ Create `.env.local`:
 LLM_API_KEY=your_api_key
 LLM_API_URL=https://api.openai.com/v1
 LLM_MODEL_NAME=gpt-4
+LLM_API_TIMEOUT=30000
 ```
 
 ### Production/Electron
@@ -269,7 +282,7 @@ LLM_MODEL_NAME=gpt-4
 This project has a pre-generated index for quick codebase understanding.
 
 - **Location:** `.claude-index/index.md`
-- **Last Updated:** 2026-02-16
+- **Last Updated:** 2026-02-24
 - **Contents:** Project overview, feature map, file index, exported symbols, module dependencies
 
 **Usage:** Read `.claude-index/index.md` to quickly understand the project structure before making changes. The index provides a navigation map of the codebase without needing to explore every file.
