@@ -53,30 +53,6 @@ npm run lint              # ESLint check
 
 ## Architecture Overview
 
-### Multi-Agent AI System
-
-AIDocMaster uses LangGraph to orchestrate specialized AI agents through an intelligent routing system:
-
-**AgentRouter** (`backend/agent/agent_router.py`)
-- LLM-powered intent analysis to route requests to appropriate agents
-- Analyzes user intent and document context
-- Returns structured routing decision with reasoning
-
-**AutoWriterAgent** (`backend/agent/auto_writer_agent.py`)
-- Creates documents from scratch using multi-step LangGraph workflow:
-  1. Intent detection and parameter extraction
-  2. Outline generation
-  3. Parallel section drafting (concurrent execution)
-  4. Document refinement and compilation
-- Uses custom state management with typed LangGraph StateGraph
-
-**DocumentModifierAgent** (`backend/agent/document_agent.py`)
-- Modifies existing documents through three-phase workflow:
-  1. Planning: Analyzes user commands and creates modification plan
-  2. Execution: Uses tools to search, modify, add, delete content
-  3. Summarization: Explains changes made
-- Operates on HTML-based document representation
-
 ### System Flow
 
 ```
@@ -87,25 +63,91 @@ Next.js API Routes (/app/api/*)
 Flask Backend (port 5000)
     ↓ Domain blueprints
 Domain Services (DDD)
-    ├── Chat Service → LLM + MCP tools
+    ├── Chat Service → LLM Factory → OpenAI/Anthropic protocols
     ├── Agent Service → LangGraph workflows
     ├── Document Service → Parser (Word/PDF)
     └── Configuration Services (Model, MCP, Search, Image)
 ```
 
+### Multi-Agent AI System
+
+AIDocMaster uses LangGraph to orchestrate specialized AI agents through an intelligent routing system:
+
+**AgentRouter** (`backend/agent/agent_router.py`)
+- LLM-powered intent analysis to route requests to appropriate agents
+- Returns structured routing decision with reasoning
+
+**AutoWriterAgent** (`backend/agent/auto_writer_agent.py`)
+- Creates documents from scratch using multi-step LangGraph workflow:
+  1. Intent detection and parameter extraction
+  2. Outline generation
+  3. Parallel section drafting (concurrent execution)
+  4. Document refinement and compilation
+
+**DocumentModifierAgent** (`backend/agent/document_agent.py`)
+- Modifies existing documents through three-phase workflow:
+  1. Planning: Analyzes user commands and creates modification plan
+  2. Execution: Uses tools to search, modify, add, delete content
+  3. Summarization: Explains changes made
+
+### Multi-Type Model System
+
+The system supports three model types via a discriminated union pattern:
+
+| Type | Description | Storage | Example |
+|------|-------------|---------|---------|
+| `standard` | Pre-configured API providers | `userData/standard-models.json` | OpenAI, Anthropic, Gemini, DeepSeek |
+| `codingPlan` | Special protocol services | `userData/coding-plan-models.json` | Kimi K2.5 (Anthropic protocol) |
+| `custom` | Fully custom/self-hosted models | `userData/custom-models.json` | Any OpenAI-compatible endpoint |
+
+**Provider templates** are read-only definitions in `backend/config/providers.json` that supply API URLs, available models, protocol type, and default parameters for standard and codingPlan types.
+
+**Legacy migration**: Old `userData/model-configs.json` is auto-migrated to `userData/custom-models.json` on first run (backup created as `.bak`).
+
+### Protocol-Aware LLM Factory (`backend/llm_factory.py`)
+
+Central factory that creates LLM clients based on the `protocol` field in model config:
+
+- **`protocol: 'openai'`** → `ChatOpenAI` (LangChain) or OpenAI Chat Completions HTTP format
+- **`protocol: 'anthropic'`** → `ChatAnthropic` (LangChain) or Anthropic Messages API HTTP format
+
+Key functions:
+- `create_llm_client(call_config)` — Creates LangChain chat model for agent workflows
+- `build_http_request(call_config, messages)` — Builds raw HTTP request tuple for streaming pass-through
+- `iter_anthropic_as_openai_sse(response)` — Converts Anthropic streaming responses to OpenAI-compatible SSE so the frontend doesn't need protocol-specific parsing
+
+The `call_config` dict structure:
+```python
+{
+    'apiKey': str,
+    'apiUrl': str,
+    'modelName': str,
+    'protocol': 'openai' | 'anthropic',
+    'extraHeaders': dict,      # Optional, for Anthropic-protocol APIs
+    'defaultParams': dict,     # Optional (temperature, top_p, etc.)
+    'timeout': int
+}
+```
+
+### ConfigLoader (`backend/app.py`)
+
+The `ConfigLoader` class manages multi-file model storage:
+- `load_models_by_type(type)` / `save_models_by_type(type, data)` — Per-type CRUD
+- `get_llm_config(model_id=None)` — Resolves full call config with protocol, merging provider template data for codingPlan models
+- `set_default_model(model_id)` — Sets global default across all type files
+- `load_providers()` — Returns read-only provider templates
+
 ### Backend Domain-Driven Design
 
 Flask app (`backend/app.py`) registers domain blueprints from `backend/domains/`:
-- `chat/` - Chat with LLM and streaming SSE responses
+- `chat/` - Chat with LLM and streaming SSE responses (uses `llm_factory` for protocol-aware requests)
 - `agent/` - Agent routing and execution
 - `document/` - Document parsing (Word, PDF) and processing
-- `model/` - LLM model configuration (stored in `backend/config/models.json`)
+- `model/` - LLM model configuration with per-type and cross-type endpoints
 - `mcp/` - Model Context Protocol server management
 - `image_service/` - Image generation service integration
 - `search_service/` - Web search provider integration (Tavily, Baidu)
 - `system/` - System health and status
-
-Each domain has its own `routes.py` with Flask blueprint registration.
 
 ### Frontend Architecture
 
@@ -118,12 +160,27 @@ Each domain has its own `routes.py` with Flask blueprint registration.
 - `lib/` - Shared utilities and configuration clients
   - `apiConfig.ts` - Builds API URLs for development vs production vs Electron
   - `logger.ts` - Custom structured logging (USE THIS, not console.log)
-  - Configuration clients for models, MCP, search, image services
+  - `modelConfig.ts` - Model configuration with discriminated union types and type guards
+
+**Frontend Model Types** (`lib/modelConfig.ts`):
+```typescript
+type ModelType = 'standard' | 'codingPlan' | 'custom';
+type ModelConfig = StandardModelConfig | CodingPlanModelConfig | CustomModelConfig;
+
+// Type guards
+isStandardModel(m)  / isCodingPlanModel(m) / isCustomModel(m)
+// Field accessors (handle type differences)
+getModelApiUrl(m)   / getModelName(m)
+// Per-type API
+loadModelConfigsByType(type) / saveModelConfigsByType(type, data)
+loadProviders()              / getLLMConfigFromModel(m)
+```
 
 **State Management:**
 - React hooks (useState, useEffect, useCallback, useRef)
 - No global state library; component-local state with prop drilling
 - Persistent storage via localStorage for chat history and settings
+- Model config emits `docaimaster_model_configs_updated` event on changes
 
 **Styling:**
 - Tailwind CSS 4 exclusively (NO CSS files or inline styles)
@@ -134,20 +191,13 @@ Each domain has its own `routes.py` with Flask blueprint registration.
 - Custom dictionary-based system in `lib/i18n/dictionaries.ts` (EN/ZH)
 - `LanguageProvider` context (`lib/i18n/LanguageContext.tsx`) wraps the app
 - Use `useLanguage()` hook to get current locale, then look up strings from dictionaries
-- Language preference persisted to localStorage
 
 ### Electron Desktop Packaging
 
 The app packages as a Windows desktop application with embedded Python:
 - `electron/main.js` - Main process that spawns Flask subprocess
 - `python-embed/` - Embedded Python runtime (bundled via `scripts/bundle-python.js`)
-- `backend/` - Copied into `resources/backend` in packaged app
 - Flask runs as subprocess on dynamic port (communicated via IPC)
-
-**Key packaging scripts:**
-- `scripts/bundle-python.js` - Creates python-embed directory with dependencies
-- `scripts/build-desktop.js` - Orchestrates Next.js build + Electron Builder
-- `scripts/verify-desktop-setup.js` - Pre-build validation
 
 ## Frontend Code Standards
 
@@ -220,12 +270,16 @@ try {
 - Use StateGraph with clear node definitions
 - Streaming with `astream_events()` for real-time UI updates
 - Tool definitions use `@tool` decorator from langchain-core
+- Use `llm_factory.create_llm_client()` to get LangChain chat models (not direct ChatOpenAI/ChatAnthropic)
 
 ### Configuration Files
-- `backend/config/models.json` - LLM model configurations
+- `backend/config/providers.json` - Read-only provider/service templates (API URLs, models, protocols)
 - `backend/mcp_config.json` - MCP server definitions
 - `backend/config/search_config.json` - Search provider settings
 - `backend/config/image_config.json` - Image service settings
+- `userData/standard-models.json` - Standard API provider model configs
+- `userData/coding-plan-models.json` - Coding Plan service model configs
+- `userData/custom-models.json` - Custom/self-hosted model configs
 
 ## Key Integration Points
 
@@ -236,10 +290,18 @@ Next.js API routes (`/app/api/chat/route.ts`, etc.) act as proxies:
 3. Stream SSE responses back to client
 4. Handle CORS and error transformation
 
+### Model API Endpoints
+- `GET/POST /api/model-configs` — All models (merged view across types)
+- `GET/POST /api/model-configs/<type>` — Per-type model CRUD (`standard`, `codingPlan`, `custom`)
+- `POST /api/model-configs/default` — Set global default model (cross-file)
+- `GET /api/providers` — Read-only provider templates
+
 ### Streaming Responses
 - Backend uses Flask SSE: `data: {...}\n\n` format
-- Frontend uses `ReadableStream` with TextDecoder
+- Anthropic-protocol responses are converted to OpenAI SSE format via `iter_anthropic_as_openai_sse()`
+- Frontend uses `ReadableStream` with TextDecoder (protocol-agnostic)
 - Message types: `content` (chunks), `complete` (done), `error`, `tool_use`, `citation`
+- Chat requests accept optional `modelId` parameter to select a specific model
 
 ### MCP Tool Integration
 - Backend MCP client (`backend/mcp_client.py`) connects to external servers
@@ -263,7 +325,8 @@ LLM_API_TIMEOUT=30000
 ```
 
 ### Production/Electron
-- Settings stored in `backend/config/*.json`
+- Model configs stored in `userData/*.json` (per-type files)
+- Other settings in `backend/config/*.json`
 - Managed via Settings UI (React) → API routes → Flask domain services
 - Electron uses app data directory for config persistence
 
@@ -276,6 +339,8 @@ LLM_API_TIMEOUT=30000
 5. **Streaming**: All LLM interactions use streaming for real-time feedback
 6. **Desktop Builds**: Must run `npm run bundle:python` before `build:desktop`
 7. **Type Safety**: TypeScript strict mode - all function signatures and props must be typed
+8. **LLM Clients**: Always use `llm_factory` to create LLM clients — never instantiate `ChatOpenAI`/`ChatAnthropic` directly
+9. **Model Types**: When working with model configs, use the discriminated union type guards (`isStandardModel`, etc.) rather than checking fields manually
 
 ## Project Index
 
