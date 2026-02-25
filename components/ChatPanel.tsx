@@ -15,6 +15,11 @@ import ChatStopButton from './ChatStopButton';
 import ErrorDialog, { type ErrorDialogData } from './ErrorDialog';
 import MCPToolSelector from './MCPToolSelector';
 import NetworkSearchToggle from './NetworkSearchToggle';
+import AgentToggle from './AgentToggle';
+import AgentWorkDirBar from './AgentWorkDirBar';
+import AgentWorkDirDialog from './AgentWorkDirDialog';
+import AgentThinkingIndicator from './AgentThinkingIndicator';
+import AgentToolCallDisplay from './AgentToolCallDisplay';
 import { logger } from '@/lib/logger';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
@@ -22,6 +27,8 @@ import type { ChatMessage as ChatMessageType, StreamErrorEvent, isStreamErrorEve
 import { syncModelConfigsToCookies } from '@/lib/modelConfigSync';
 import { buildApiUrl } from '@/lib/apiConfig';
 import { loadModelConfigs, getDefaultModel, getModelConfigsUpdatedEventName, getModelApiUrl, getModelName, type ModelConfig } from '@/lib/modelConfig';
+import { getAgentLLMConfig } from '@/lib/agentLlmAdapter';
+import { processAgentSSEStream, type AgentToolCall } from '@/lib/agentStreamParser';
 import type { MCPConfig } from '@/lib/mcpConfig';
 import type { Conversation } from './ConversationList';
 import { getChatBotById } from '@/lib/chatBotConfig';
@@ -33,6 +40,7 @@ export interface Message extends ChatMessageType {
   context?: string; // Advanced mode context
   mcpExecutionSteps?: any[]; // MCP execution steps for this message
   networkSearchExecutionSteps?: any[]; // Network search execution steps for this message
+  agentToolCalls?: AgentToolCall[]; // Agent mode tool call records
 }
 
 interface ChatPanelProps {
@@ -75,6 +83,34 @@ const ChatPanel = ({
   const isUserScrollingRef = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Agent mode state
+  const [agentMode, setAgentMode] = useState(false);
+  const [agentWorkDir, setAgentWorkDir] = useState('');
+  const [agentWorkDirValid, setAgentWorkDirValid] = useState(true);
+  const [showWorkDirDialog, setShowWorkDirDialog] = useState(false);
+  const [streamingAgentToolCalls, setStreamingAgentToolCalls] = useState<AgentToolCall[]>([]);
+
+  // Load agent work dir from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('aidocmaster.agentWorkDir');
+    if (saved) setAgentWorkDir(saved);
+  }, []);
+
+  const handleAgentModeChange = useCallback((enabled: boolean) => {
+    setAgentMode(enabled);
+    if (enabled && !agentWorkDir) {
+      setShowWorkDirDialog(true);
+    }
+    logger.info('Agent mode toggled', { enabled, hasWorkDir: !!agentWorkDir }, 'ChatPanel');
+  }, [agentWorkDir]);
+
+  const handleWorkDirConfirm = useCallback((dir: string) => {
+    setAgentWorkDir(dir);
+    setAgentWorkDirValid(true);
+    setShowWorkDirDialog(false);
+    logger.info('Agent work directory set', { dir }, 'ChatPanel');
+  }, []);
 
   const loadModels = useCallback(async () => {
     setIsLoadingModels(true);
@@ -373,6 +409,188 @@ const ChatPanel = ({
     }
   }, [messages, onMessagesChange]);
 
+  // ── Agent mode send ─────────────────────────────────────────────────────────
+  const handleAgentSend = async (
+    content: string,
+    convId: string,
+    currentMap: Map<string, Message[]>,
+  ) => {
+    if (!selectedModel) {
+      logger.error('No model selected for agent mode', undefined, 'ChatPanel');
+      return;
+    }
+
+    if (!agentWorkDir) {
+      setShowWorkDirDialog(true);
+      return;
+    }
+
+    setIsLoading(true);
+    setStreamingContent('');
+    setStreamingAgentToolCalls([]);
+    setIsStopping(false);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    let latestMap = currentMap;
+
+    logger.info('Agent mode: sending message', {
+      workDir: agentWorkDir,
+      modelId: selectedModel.id,
+      contentLength: content.length,
+    }, 'ChatPanel');
+
+    // Track tool calls and content locally (declared outside try so catch can access them)
+    let assistantContent = '';
+    const toolCalls: AgentToolCall[] = [];
+
+    try {
+      // Build LLM config for the agent
+      const llmConfig = getAgentLLMConfig(selectedModel);
+
+      const requestBody = {
+        message: content,
+        workDir: agentWorkDir,
+        llmConfig: {
+          model: llmConfig.model,
+          streamOptions: llmConfig.streamOptions,
+        },
+      };
+
+      const response = await fetch('/api/agent-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`Agent API error (${response.status}): ${errorText}`);
+      }
+
+      if (!response.body) throw new Error('Response body is empty');
+
+      await processAgentSSEStream(response.body, {
+        onAgentStart: () => {
+          setCurrentSessionId(`agent-${Date.now()}`);
+        },
+        onContent: (text) => {
+          assistantContent += text;
+          flushSync(() => {
+            setStreamingContent(assistantContent);
+          });
+        },
+        onToolUse: (tool) => {
+          // Only add if not already present (toolcall_end + tool_execution_start can fire for same ID)
+          if (!toolCalls.find(tc => tc.id === tool.toolId)) {
+            const tc: AgentToolCall = {
+              id: tool.toolId,
+              toolName: tool.toolName,
+              toolInput: tool.toolInput,
+              status: 'running',
+              startTime: Date.now(),
+            };
+            toolCalls.push(tc);
+            flushSync(() => {
+              setStreamingAgentToolCalls([...toolCalls]);
+            });
+          }
+        },
+        onToolUpdate: (update) => {
+          const tc = toolCalls.find(t => t.id === update.toolId);
+          if (tc) {
+            tc.result = (tc.result || '') + update.content;
+            flushSync(() => {
+              setStreamingAgentToolCalls([...toolCalls]);
+            });
+          }
+        },
+        onToolResult: (result) => {
+          const tc = toolCalls.find(t => t.id === result.toolId);
+          if (tc) {
+            tc.status = result.isError ? 'error' : 'complete';
+            tc.result = result.content;
+            tc.isError = result.isError;
+            tc.endTime = Date.now();
+            flushSync(() => {
+              setStreamingAgentToolCalls([...toolCalls]);
+            });
+          }
+        },
+        onComplete: () => {
+          logger.success('Agent loop completed', {
+            contentLength: assistantContent.length,
+            toolCallCount: toolCalls.length,
+          }, 'ChatPanel');
+        },
+        onError: (error) => {
+          logger.error('Agent stream error', { error }, 'ChatPanel');
+        },
+      });
+
+      // Add assistant message to conversation
+      if (assistantContent || toolCalls.length > 0) {
+        const assistantMessage: Message = {
+          id: `agent-${Date.now()}`,
+          role: 'assistant',
+          content: assistantContent,
+          timestamp: new Date(),
+          agentToolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+        };
+
+        const newMap = new Map(latestMap);
+        const msgs = newMap.get(convId) || [];
+        newMap.set(convId, [...msgs, assistantMessage]);
+        latestMap = newMap;
+        onMessagesMapChange(newMap);
+      }
+    } catch (error) {
+      const isAbort = error instanceof Error &&
+        (error.name === 'AbortError' || error.message.toLowerCase().includes('abort'));
+
+      if (isAbort) {
+        logger.info('Agent request aborted', undefined, 'ChatPanel');
+        // Save partial content (use local vars, not stale state closures)
+        if (assistantContent.trim()) {
+          const partial: Message = {
+            id: `agent-${Date.now()}-aborted`,
+            role: 'assistant',
+            content: assistantContent,
+            timestamp: new Date(),
+            agentToolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+          };
+          const newMap = new Map(latestMap);
+          const msgs = newMap.get(convId) || [];
+          newMap.set(convId, [...msgs, partial]);
+          onMessagesMapChange(newMap);
+        }
+      } else {
+        logger.error('Agent send failed', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }, 'ChatPanel');
+
+        // Add error message
+        const errorMsg: Message = {
+          id: `agent-error-${Date.now()}`,
+          role: 'assistant',
+          content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          timestamp: new Date(),
+        };
+        const newMap = new Map(latestMap);
+        const msgs = newMap.get(convId) || [];
+        newMap.set(convId, [...msgs, errorMsg]);
+        onMessagesMapChange(newMap);
+      }
+    } finally {
+      setIsLoading(false);
+      setStreamingContent('');
+      setStreamingAgentToolCalls([]);
+      setCurrentSessionId(null);
+      abortControllerRef.current = null;
+    }
+  };
+
   const handleSendMessage = async (content: string, fileContext?: UploadedFile, context?: string) => {
     if (!content.trim() || isLoading) {
       logger.debug('Message send blocked', { 
@@ -437,7 +655,13 @@ const ChatPanel = ({
       mapSize: newMapForUser.size,
       messagesInConversation: newMapForUser.get(conversationId)?.length || 0,
     }, 'ChatPanel');
-    
+
+    // ── Agent mode branch ──────────────────────────────────────────────
+    if (agentMode) {
+      await handleAgentSend(content, conversationId, newMapForUser);
+      return;
+    }
+
     setIsLoading(true);
     setStreamingContent('');
     setStreamingMcpSteps([]); // Clear previous MCP steps when starting new request
@@ -1695,11 +1919,21 @@ const ChatPanel = ({
                 context={message.context}
                 mcpExecutionSteps={message.mcpExecutionSteps}
                 networkSearchExecutionSteps={message.networkSearchExecutionSteps}
+                agentToolCalls={message.agentToolCalls}
                 onEditMessage={handleEditMessage}
                 onDeleteMessage={handleDeleteMessage}
                 onResendMessage={handleResendMessage}
               />
             ))}
+
+            {/* Agent mode: streaming tool calls */}
+            {agentMode && streamingAgentToolCalls.length > 0 && isLoading && (
+              <div className="ml-14 mb-2">
+                {streamingAgentToolCalls.map((tc) => (
+                  <AgentToolCallDisplay key={tc.id} toolCall={tc} />
+                ))}
+              </div>
+            )}
 
             {/* Streaming message with typing indicator */}
             {streamingContent && (
@@ -1711,12 +1945,13 @@ const ChatPanel = ({
                   networkSearchExecutionSteps={streamingNetworkSearchSteps.length > 0 ? streamingNetworkSearchSteps : undefined}
                   isMcpStreaming={isLoading}
                   isNetworkSearchStreaming={isLoading}
+                  agentToolCalls={streamingAgentToolCalls.length > 0 ? streamingAgentToolCalls : undefined}
                 />
                 {/* Blinking cursor to indicate active streaming */}
                 <div className="inline-block w-1.5 h-4 bg-purple-500 ml-1 animate-pulse rounded-sm" />
               </div>
             )}
-            
+
             {/* Show MCP steps or network search steps even before content starts streaming */}
             {!streamingContent && (streamingMcpSteps.length > 0 || streamingNetworkSearchSteps.length > 0) && isLoading && (
               <div className="relative">
@@ -1732,11 +1967,16 @@ const ChatPanel = ({
             )}
 
             {/* Loading indicator */}
-            {isLoading && !streamingContent && (
+            {isLoading && !streamingContent && !agentMode && (
               <div className="flex items-center gap-2.5 text-muted-foreground ml-14 mb-4">
                 <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
                 <span className="text-sm">{dict.chat.thinking}</span>
               </div>
+            )}
+
+            {/* Agent thinking indicator */}
+            {isLoading && !streamingContent && agentMode && streamingAgentToolCalls.length === 0 && (
+              <AgentThinkingIndicator />
             )}
 
             <div ref={messagesEndRef} />
@@ -1823,6 +2063,13 @@ const ChatPanel = ({
             disabled={isLoading}
             onNetworkSearchStateChange={setNetworkSearchEnabled}
           />
+
+          {/* Agent Mode Toggle */}
+          <AgentToggle
+            enabled={agentMode}
+            onChange={handleAgentModeChange}
+            disabled={isLoading}
+          />
         </div>
 
         {/* Clear Buttons - Right */}
@@ -1873,6 +2120,16 @@ const ChatPanel = ({
         </div>
       </div>
 
+      {/* Agent Work Dir Bar - shown when agent mode is active */}
+      {agentMode && (
+        <AgentWorkDirBar
+          workDir={agentWorkDir}
+          isValid={agentWorkDirValid}
+          onChangeDir={() => setShowWorkDirDialog(true)}
+          disabled={isLoading}
+        />
+      )}
+
       {/* Input Area */}
       <ChatInput
         onSend={handleSendMessage}
@@ -1881,6 +2138,17 @@ const ChatPanel = ({
         isAdvancedMode={isAdvancedMode}
         onAdvancedModeChange={setIsAdvancedMode}
         hideInternalToggle={true}
+      />
+
+      {/* Agent Work Dir Dialog */}
+      <AgentWorkDirDialog
+        open={showWorkDirDialog}
+        currentDir={agentWorkDir}
+        onConfirm={handleWorkDirConfirm}
+        onCancel={() => {
+          setShowWorkDirDialog(false);
+          if (!agentWorkDir) setAgentMode(false);
+        }}
       />
 
       {/* Error Dialog */}

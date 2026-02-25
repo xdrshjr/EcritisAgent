@@ -114,6 +114,21 @@ const electronAPI = {
   },
 
   /**
+   * Select a directory via native dialog
+   */
+  selectDirectory: async () => {
+    try {
+      logger.debug('Calling selectDirectory');
+      const result = await ipcRenderer.invoke('select-directory');
+      logger.debug('Directory selection result', { result });
+      return result;
+    } catch (error) {
+      logger.error('Failed to select directory', { error: error.message });
+      return null;
+    }
+  },
+
+  /**
    * Load model configurations from file system
    */
   loadModelConfigs: async () => {

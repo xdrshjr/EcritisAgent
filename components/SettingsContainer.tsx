@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bot, Settings as SettingsIcon, Image as ImageIcon, Cpu, Search as SearchIcon, Monitor } from 'lucide-react';
+import { Bot, Settings as SettingsIcon, Image as ImageIcon, Cpu, Search as SearchIcon, Monitor, Terminal } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import ChatBotManager from './ChatBotManager';
 import MCPSettingsPanel from './MCPSettingsPanel';
@@ -14,6 +14,7 @@ import ImageServiceSettingsPanel from './ImageServiceSettingsPanel';
 import SearchServiceSettingsPanel from './SearchServiceSettingsPanel';
 import ModelSettingsPanel from './ModelSettingsPanel';
 import DisplaySettingsPanel from './DisplaySettingsPanel';
+import AgentSettingsPanel from './AgentSettingsPanel';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getDictionary } from '@/lib/i18n/dictionaries';
@@ -22,7 +23,7 @@ interface SettingsContainerProps {
   className?: string;
 }
 
-type SettingsSection = 'model-settings' | 'chat-bots' | 'mcp' | 'image-services' | 'search-services' | 'display';
+type SettingsSection = 'model-settings' | 'chat-bots' | 'mcp' | 'image-services' | 'search-services' | 'display' | 'agent';
 
 interface SettingsMenuItem {
   id: SettingsSection;
@@ -69,6 +70,11 @@ const SettingsContainer = ({ className }: SettingsContainerProps) => {
       id: 'display',
       label: dict.settings.display || 'Display',
       icon: <Monitor className="w-4 h-4" />,
+    },
+    {
+      id: 'agent',
+      label: dict.settings.agentSettings?.nav || 'Agent',
+      icon: <Terminal className="w-4 h-4" />,
     },
   ];
 
@@ -124,6 +130,7 @@ const SettingsContainer = ({ className }: SettingsContainerProps) => {
         {activeSection === 'image-services' && <ImageServiceSettingsPanel className="h-full" />}
         {activeSection === 'search-services' && <SearchServiceSettingsPanel className="h-full" />}
         {activeSection === 'display' && <DisplaySettingsPanel className="h-full" />}
+        {activeSection === 'agent' && <AgentSettingsPanel className="h-full" />}
       </main>
     </div>
   );

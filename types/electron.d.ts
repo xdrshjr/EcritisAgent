@@ -274,6 +274,7 @@ interface ElectronAPI {
       };
     };
   }>;
+  selectDirectory: () => Promise<string | null>;
   saveDisplayConfig: (config: {
     fontSize: {
       level: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';

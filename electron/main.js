@@ -14,7 +14,7 @@
  * - Auto-maximize: If screen resolution is smaller than default, window will be maximized
  */
 
-const { app, BrowserWindow, ipcMain, Menu, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, screen, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const ElectronAPIServer = require('./api-server');
@@ -599,6 +599,14 @@ function getDisplayConfigPath() {
 /**
  * IPC Handlers
  */
+ipcMain.handle('select-directory', async () => {
+  logger.debug('IPC: select-directory called');
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+  });
+  return result.canceled ? null : result.filePaths[0];
+});
+
 ipcMain.handle('get-app-version', () => {
   logger.debug('IPC: get-app-version called');
   return app.getVersion();

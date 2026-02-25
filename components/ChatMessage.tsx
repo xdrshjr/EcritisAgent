@@ -15,6 +15,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import MCPToolExecutionDisplay from './MCPToolExecutionDisplay';
 import NetworkSearchExecutionDisplay from './NetworkSearchExecutionDisplay';
+import AgentToolCallDisplay from './AgentToolCallDisplay';
 import ContextMenu from './ContextMenu';
 import { logger } from '@/lib/logger';
 import { buildApiUrl } from '@/lib/apiConfig';
@@ -22,6 +23,7 @@ import { getDefaultModel } from '@/lib/modelConfig';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import type { ChatMessage as ChatMessageType } from '@/lib/chatClient';
+import type { AgentToolCall } from '@/lib/agentStreamParser';
 import 'highlight.js/styles/github-dark.css';
 
 export interface ChatMessageProps {
@@ -38,6 +40,7 @@ export interface ChatMessageProps {
     content: string;
     score?: number;
   }>; // References for auto-writer agent
+  agentToolCalls?: AgentToolCall[]; // Agent mode tool call records
   messageId?: string; // Unique identifier for the message
   context?: string; // Advanced mode context
   onEditMessage?: (messageId: string, newContent: string) => void; // Callback for editing messages
@@ -54,6 +57,7 @@ const ChatMessage = ({
   isMcpStreaming = false,
   isNetworkSearchStreaming = false,
   references,
+  agentToolCalls,
   messageId,
   context,
   onEditMessage,
@@ -721,6 +725,15 @@ const ChatMessage = ({
             steps={mcpExecutionSteps}
             isComplete={!isMcpStreaming}
           />
+        )}
+
+        {/* Agent Tool Calls (for assistant messages only) */}
+        {!isUser && agentToolCalls && agentToolCalls.length > 0 && (
+          <div className="mb-2">
+            {agentToolCalls.map((tc) => (
+              <AgentToolCallDisplay key={tc.id} toolCall={tc} />
+            ))}
+          </div>
         )}
 
         <div
