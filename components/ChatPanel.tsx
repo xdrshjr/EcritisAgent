@@ -19,7 +19,7 @@ import AgentToggle from './AgentToggle';
 import AgentWorkDirBar from './AgentWorkDirBar';
 import AgentWorkDirDialog from './AgentWorkDirDialog';
 import AgentThinkingIndicator from './AgentThinkingIndicator';
-import AgentToolCallDisplay from './AgentToolCallDisplay';
+import AgentExecutionTimeline from './AgentExecutionTimeline';
 import { logger } from '@/lib/logger';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
@@ -29,6 +29,15 @@ import { buildApiUrl } from '@/lib/apiConfig';
 import { loadModelConfigs, getDefaultModel, getModelConfigsUpdatedEventName, getModelApiUrl, getModelName, type ModelConfig } from '@/lib/modelConfig';
 import { getAgentLLMConfig } from '@/lib/agentLlmAdapter';
 import { processAgentSSEStream, type AgentToolCall } from '@/lib/agentStreamParser';
+import {
+  type AgentExecutionBlock,
+  type AgentContentBlock,
+  type AgentToolUseBlock,
+  isFileProducingTool,
+  extractFilePath,
+  resetBlockCounter,
+  createBlock,
+} from '@/lib/agentExecutionBlock';
 import type { MCPConfig } from '@/lib/mcpConfig';
 import type { Conversation } from './ConversationList';
 import { getChatBotById } from '@/lib/chatBotConfig';
@@ -40,7 +49,8 @@ export interface Message extends ChatMessageType {
   context?: string; // Advanced mode context
   mcpExecutionSteps?: any[]; // MCP execution steps for this message
   networkSearchExecutionSteps?: any[]; // Network search execution steps for this message
-  agentToolCalls?: AgentToolCall[]; // Agent mode tool call records
+  agentToolCalls?: AgentToolCall[]; // Agent mode tool call records (legacy)
+  agentExecutionBlocks?: AgentExecutionBlock[]; // Ordered execution blocks (new)
 }
 
 interface ChatPanelProps {
@@ -90,6 +100,7 @@ const ChatPanel = ({
   const [agentWorkDirValid, setAgentWorkDirValid] = useState(true);
   const [showWorkDirDialog, setShowWorkDirDialog] = useState(false);
   const [streamingAgentToolCalls, setStreamingAgentToolCalls] = useState<AgentToolCall[]>([]);
+  const [streamingAgentBlocks, setStreamingAgentBlocks] = useState<AgentExecutionBlock[]>([]);
 
   // Load agent work dir from localStorage on mount
   useEffect(() => {
@@ -428,6 +439,7 @@ const ChatPanel = ({
     setIsLoading(true);
     setStreamingContent('');
     setStreamingAgentToolCalls([]);
+    setStreamingAgentBlocks([]);
     setIsStopping(false);
 
     const abortController = new AbortController();
@@ -440,9 +452,28 @@ const ChatPanel = ({
       contentLength: content.length,
     }, 'ChatPanel');
 
-    // Track tool calls and content locally (declared outside try so catch can access them)
+    // Track ordered execution blocks + legacy tool calls
+    resetBlockCounter();
+    const blocks: AgentExecutionBlock[] = [];
+    let currentContentBlock: AgentContentBlock | null = null;
     let assistantContent = '';
     const toolCalls: AgentToolCall[] = [];
+    let turnNumber = 1;
+
+    /** Close the active content block (if any) and push it to the blocks array */
+    const closeContentBlock = () => {
+      if (currentContentBlock && currentContentBlock.text.trim()) {
+        blocks.push(currentContentBlock);
+      }
+      currentContentBlock = null;
+    };
+
+    /** Flush blocks to React state */
+    const flushBlocks = () => {
+      flushSync(() => {
+        setStreamingAgentBlocks([...blocks]);
+      });
+    };
 
     try {
       // Build LLM config for the agent
@@ -475,14 +506,40 @@ const ChatPanel = ({
         onAgentStart: () => {
           setCurrentSessionId(`agent-${Date.now()}`);
         },
+
         onContent: (text) => {
           assistantContent += text;
+          // Append to current content block, or create a new one
+          if (!currentContentBlock) {
+            currentContentBlock = createBlock({ type: 'content', text: '' }) as AgentContentBlock;
+          }
+          currentContentBlock.text += text;
+
+          // Also update legacy streamingContent for the blinking cursor
           flushSync(() => {
             setStreamingContent(assistantContent);
+            setStreamingAgentBlocks([...blocks, currentContentBlock!]);
           });
         },
+
+        onThinking: (text) => {
+          // Accumulate thinking into a thinking block
+          const lastBlock = blocks[blocks.length - 1];
+          if (lastBlock && lastBlock.type === 'thinking') {
+            // Replace with new object so React detects the change
+            blocks[blocks.length - 1] = { ...lastBlock, text: lastBlock.text + text };
+          } else {
+            closeContentBlock();
+            blocks.push(createBlock({ type: 'thinking', text }));
+          }
+          flushBlocks();
+        },
+
         onToolUse: (tool) => {
-          // Only add if not already present (toolcall_end + tool_execution_start can fire for same ID)
+          // Close any open content block first
+          closeContentBlock();
+
+          // Only add if not already present
           if (!toolCalls.find(tc => tc.id === tool.toolId)) {
             const tc: AgentToolCall = {
               id: tool.toolId,
@@ -492,51 +549,122 @@ const ChatPanel = ({
               startTime: Date.now(),
             };
             toolCalls.push(tc);
+
+            // Add tool_use block to ordered blocks
+            const toolBlock = createBlock({
+              type: 'tool_use',
+              toolCallId: tool.toolId,
+              toolName: tool.toolName,
+              toolInput: tool.toolInput,
+              status: 'running',
+              startTime: Date.now(),
+            });
+            blocks.push(toolBlock);
+
             flushSync(() => {
               setStreamingAgentToolCalls([...toolCalls]);
+              setStreamingAgentBlocks([...blocks]);
             });
           }
         },
+
         onToolUpdate: (update) => {
+          // Update legacy tool call
           const tc = toolCalls.find(t => t.id === update.toolId);
           if (tc) {
             tc.result = (tc.result || '') + update.content;
-            flushSync(() => {
-              setStreamingAgentToolCalls([...toolCalls]);
-            });
           }
+          // Update the corresponding block (replace with new object for React)
+          const idx = blocks.findIndex(
+            (b): b is AgentToolUseBlock => b.type === 'tool_use' && b.toolCallId === update.toolId,
+          );
+          if (idx !== -1) {
+            const old = blocks[idx] as AgentToolUseBlock;
+            blocks[idx] = { ...old, result: (old.result || '') + update.content };
+          }
+          flushSync(() => {
+            setStreamingAgentToolCalls([...toolCalls]);
+            setStreamingAgentBlocks([...blocks]);
+          });
         },
+
         onToolResult: (result) => {
+          // Update legacy tool call
           const tc = toolCalls.find(t => t.id === result.toolId);
           if (tc) {
             tc.status = result.isError ? 'error' : 'complete';
             tc.result = result.content;
             tc.isError = result.isError;
             tc.endTime = Date.now();
-            flushSync(() => {
-              setStreamingAgentToolCalls([...toolCalls]);
-            });
           }
+          // Update the corresponding block (replace with new object for React)
+          const idx = blocks.findIndex(
+            (b): b is AgentToolUseBlock => b.type === 'tool_use' && b.toolCallId === result.toolId,
+          );
+          if (idx !== -1) {
+            const old = blocks[idx] as AgentToolUseBlock;
+            const updated: AgentToolUseBlock = {
+              ...old,
+              status: result.isError ? 'error' : 'complete',
+              result: result.content,
+              isError: result.isError,
+              endTime: Date.now(),
+            };
+            blocks[idx] = updated;
+
+            // If file-producing tool succeeded, add a file output block
+            if (!result.isError && isFileProducingTool(updated.toolName)) {
+              const filePath = extractFilePath(updated.toolName, updated.toolInput);
+              if (filePath) {
+                blocks.push(createBlock({
+                  type: 'file_output',
+                  filePath,
+                  operation: updated.toolName === 'write' ? 'write' : 'edit',
+                  toolCallId: updated.toolCallId,
+                }));
+              }
+            }
+          }
+          flushSync(() => {
+            setStreamingAgentToolCalls([...toolCalls]);
+            setStreamingAgentBlocks([...blocks]);
+          });
         },
+
+        onTurnEnd: () => {
+          closeContentBlock();
+          const separator = createBlock({
+            type: 'turn_separator',
+            turnNumber,
+          });
+          blocks.push(separator);
+          turnNumber++;
+          flushBlocks();
+        },
+
         onComplete: () => {
+          closeContentBlock();
           logger.success('Agent loop completed', {
             contentLength: assistantContent.length,
             toolCallCount: toolCalls.length,
+            blockCount: blocks.length,
           }, 'ChatPanel');
         },
+
         onError: (error) => {
           logger.error('Agent stream error', { error }, 'ChatPanel');
         },
       });
 
       // Add assistant message to conversation
-      if (assistantContent || toolCalls.length > 0) {
+      if (assistantContent || blocks.length > 0) {
         const assistantMessage: Message = {
           id: `agent-${Date.now()}`,
           role: 'assistant',
           content: assistantContent,
           timestamp: new Date(),
           agentToolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+          agentExecutionBlocks: blocks.length > 0 ? blocks : undefined,
         };
 
         const newMap = new Map(latestMap);
@@ -551,14 +679,15 @@ const ChatPanel = ({
 
       if (isAbort) {
         logger.info('Agent request aborted', undefined, 'ChatPanel');
-        // Save partial content (use local vars, not stale state closures)
-        if (assistantContent.trim()) {
+        closeContentBlock();
+        if (assistantContent.trim() || blocks.length > 0) {
           const partial: Message = {
             id: `agent-${Date.now()}-aborted`,
             role: 'assistant',
             content: assistantContent,
             timestamp: new Date(),
             agentToolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+            agentExecutionBlocks: blocks.length > 0 ? blocks : undefined,
           };
           const newMap = new Map(latestMap);
           const msgs = newMap.get(convId) || [];
@@ -586,6 +715,7 @@ const ChatPanel = ({
       setIsLoading(false);
       setStreamingContent('');
       setStreamingAgentToolCalls([]);
+      setStreamingAgentBlocks([]);
       setCurrentSessionId(null);
       abortControllerRef.current = null;
     }
@@ -1920,23 +2050,36 @@ const ChatPanel = ({
                 mcpExecutionSteps={message.mcpExecutionSteps}
                 networkSearchExecutionSteps={message.networkSearchExecutionSteps}
                 agentToolCalls={message.agentToolCalls}
+                agentExecutionBlocks={message.agentExecutionBlocks}
+                agentWorkDir={agentWorkDir}
                 onEditMessage={handleEditMessage}
                 onDeleteMessage={handleDeleteMessage}
                 onResendMessage={handleResendMessage}
               />
             ))}
 
-            {/* Agent mode: streaming tool calls */}
-            {agentMode && streamingAgentToolCalls.length > 0 && isLoading && (
-              <div className="ml-14 mb-2">
-                {streamingAgentToolCalls.map((tc) => (
-                  <AgentToolCallDisplay key={tc.id} toolCall={tc} />
-                ))}
+            {/* Agent mode: streaming execution timeline (new sequential display) */}
+            {agentMode && streamingAgentBlocks.length > 0 && isLoading && (
+              <div className="flex gap-4 mb-6 animate-fadeIn flex-row">
+                {/* Bot Avatar */}
+                <div className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center shadow-sm bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+                  <Bot className="w-5 h-5" />
+                </div>
+                {/* Timeline content */}
+                <div className="flex-1 max-w-[80%]">
+                  <AgentExecutionTimeline
+                    blocks={streamingAgentBlocks}
+                    isStreaming={true}
+                    workDir={agentWorkDir}
+                  />
+                  {/* Blinking cursor */}
+                  <div className="inline-block w-1.5 h-4 bg-purple-500 ml-1 animate-pulse rounded-sm" />
+                </div>
               </div>
             )}
 
-            {/* Streaming message with typing indicator */}
-            {streamingContent && (
+            {/* Streaming message with typing indicator (non-agent mode, or agent without blocks) */}
+            {streamingContent && !(agentMode && streamingAgentBlocks.length > 0) && (
               <div className="relative">
                 <ChatMessage
                   role="assistant"
@@ -1975,7 +2118,7 @@ const ChatPanel = ({
             )}
 
             {/* Agent thinking indicator */}
-            {isLoading && !streamingContent && agentMode && streamingAgentToolCalls.length === 0 && (
+            {isLoading && !streamingContent && agentMode && streamingAgentToolCalls.length === 0 && streamingAgentBlocks.length === 0 && (
               <AgentThinkingIndicator />
             )}
 

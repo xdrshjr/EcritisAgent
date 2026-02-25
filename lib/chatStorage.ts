@@ -35,6 +35,8 @@ interface SerializedMessage {
   isCleared?: boolean;
   mcpExecutionSteps?: unknown[];
   networkSearchExecutionSteps?: unknown[];
+  agentToolCalls?: unknown[];
+  agentExecutionBlocks?: unknown[];
 }
 
 interface SerializedAIChatState {
@@ -87,6 +89,8 @@ const serializeAIChatState = (state: AIChatState): SerializedAIChatState => {
         isCleared: msg.isCleared,
         mcpExecutionSteps: msg.mcpExecutionSteps,
         networkSearchExecutionSteps: msg.networkSearchExecutionSteps,
+        agentToolCalls: msg.agentToolCalls,
+        agentExecutionBlocks: msg.agentExecutionBlocks,
       };
       
       // Count network search steps for statistics
@@ -149,6 +153,8 @@ const deserializeAIChatState = (serialized: SerializedAIChatState): AIChatState 
         isCleared: msg.isCleared,
         mcpExecutionSteps: msg.mcpExecutionSteps,
         networkSearchExecutionSteps: msg.networkSearchExecutionSteps,
+        agentToolCalls: msg.agentToolCalls as Message['agentToolCalls'],
+        agentExecutionBlocks: msg.agentExecutionBlocks as Message['agentExecutionBlocks'],
       };
       
       // Count and log network search steps deserialization for debugging

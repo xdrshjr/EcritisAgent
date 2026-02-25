@@ -232,6 +232,10 @@ const en = {
     agentToolComplete: 'Completed',
     agentToolError: 'Error',
     agentNoWorkDir: 'Please set a working directory first',
+    agentFileCreated: 'Created',
+    agentFileModified: 'Modified',
+    agentFileDownload: 'Download',
+    agentTurn: 'Turn',
   },
   settings: {
     title: 'Settings',
@@ -631,6 +635,10 @@ const zh = {
     agentToolComplete: '已完成',
     agentToolError: '错误',
     agentNoWorkDir: '请先设置工作目录',
+    agentFileCreated: '已创建',
+    agentFileModified: '已修改',
+    agentFileDownload: '下载',
+    agentTurn: '轮次',
   },
   settings: {
     title: '设置',
