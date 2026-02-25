@@ -55,7 +55,9 @@
   "asar": true,
   "asarUnpack": [
     "**/*.node",
-    "backend/**/*"
+    "backend/**/*",
+    "node_modules/@mariozechner/**/*",
+    "node_modules/@sinclair/**/*"
   ],
   "extraResources": [
     {
