@@ -39,12 +39,17 @@ const AgentWorkDirDialog = ({ open, currentDir, onConfirm, onCancel }: AgentWork
         setInputDir(currentDir);
       } else {
         // Fetch user home directory as default
-        fetch('/api/agent-chat/home-dir')
-          .then(r => r.json())
-          .then(data => {
-            if (data.homeDir) setInputDir(data.homeDir);
-          })
-          .catch(() => { /* ignore, user can still type manually */ });
+        const electronAPI = window.electronAPI;
+        if (electronAPI?.getHomeDir) {
+          electronAPI.getHomeDir().then(homeDir => {
+            if (homeDir) setInputDir(homeDir);
+          }).catch(() => { /* ignore, user can still type manually */ });
+        } else {
+          fetch('/api/agent-chat/home-dir')
+            .then(r => r.json())
+            .then(data => { if (data.homeDir) setInputDir(data.homeDir); })
+            .catch(() => { /* ignore, user can still type manually */ });
+        }
       }
 
       // Focus the input
@@ -74,7 +79,12 @@ const AgentWorkDirDialog = ({ open, currentDir, onConfirm, onCancel }: AgentWork
           // In web mode, we set the directory name as a visual indicator.
           // Actual server-side path validation requires manual input.
           setInputDir(dirHandle.name);
-          setValidationError(null);
+          setValidationError(dict.chat.agentBrowserPathWarning);
+          // Focus and select so user can immediately type the full path
+          setTimeout(() => {
+            inputRef.current?.focus();
+            inputRef.current?.select();
+          }, 50);
           logger.info('Directory selected via File System Access API', { name: dirHandle.name }, 'AgentWorkDirDialog');
         } catch (err) {
           // User cancelled the picker
@@ -105,8 +115,14 @@ const AgentWorkDirDialog = ({ open, currentDir, onConfirm, onCancel }: AgentWork
     setValidationError(null);
 
     try {
-      const response = await fetch(`/api/agent-chat/validate-dir?path=${encodeURIComponent(trimmed)}`);
-      const result = await response.json();
+      const electronAPI = window.electronAPI;
+      let result;
+      if (electronAPI?.validateDirectory) {
+        result = await electronAPI.validateDirectory(trimmed);
+      } else {
+        const response = await fetch(`/api/agent-chat/validate-dir?path=${encodeURIComponent(trimmed)}`);
+        result = await response.json();
+      }
 
       if (result.valid) {
         // Use the resolved absolute path from server (handles relative paths)
@@ -175,9 +191,9 @@ const AgentWorkDirDialog = ({ open, currentDir, onConfirm, onCancel }: AgentWork
             </button>
           </div>
 
-          {/* Validation error */}
+          {/* Validation error / warning */}
           {validationError && (
-            <p className="text-xs text-red-500">{validationError}</p>
+            <p className={`text-xs ${validationError === dict.chat.agentBrowserPathWarning ? 'text-amber-500' : 'text-red-500'}`}>{validationError}</p>
           )}
 
           {/* Recent directories */}

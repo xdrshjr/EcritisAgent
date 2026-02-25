@@ -17,6 +17,7 @@
 const { app, BrowserWindow, ipcMain, Menu, screen, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const ElectronAPIServer = require('./api-server');
 const FlaskBackendManager = require('./flask-launcher');
 
@@ -605,6 +606,28 @@ ipcMain.handle('select-directory', async () => {
     properties: ['openDirectory'],
   });
   return result.canceled ? null : result.filePaths[0];
+});
+
+ipcMain.handle('get-home-dir', () => {
+  logger.debug('IPC: get-home-dir called');
+  return os.homedir();
+});
+
+ipcMain.handle('validate-directory', async (event, dirPath) => {
+  logger.debug('IPC: validate-directory called', { dirPath });
+  try {
+    const resolved = path.isAbsolute(dirPath)
+      ? dirPath
+      : path.resolve(os.homedir(), dirPath);
+    const stat = fs.statSync(resolved);
+    if (!stat.isDirectory()) {
+      return { valid: false, error: 'Path is not a directory' };
+    }
+    fs.readdirSync(resolved);
+    return { valid: true, resolvedPath: resolved };
+  } catch (error) {
+    return { valid: false, error: `Path is not accessible: ${error.message}` };
+  }
 });
 
 ipcMain.handle('get-app-version', () => {

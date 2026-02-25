@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Terminal, FolderOpen, X } from 'lucide-react';
 import { logger } from '@/lib/logger';
 import {
@@ -31,6 +31,7 @@ const AgentSettingsPanel = ({ className }: AgentSettingsPanelProps) => {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [validating, setValidating] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     logger.component('AgentSettingsPanel', 'mounted');
@@ -58,7 +59,12 @@ const AgentSettingsPanel = ({ className }: AgentSettingsPanelProps) => {
         try {
           const dirHandle = await (window as unknown as { showDirectoryPicker: () => Promise<{ name: string }> }).showDirectoryPicker();
           setWorkDir(dirHandle.name);
-          setError('');
+          setError(dict.chat.agentBrowserPathWarning);
+          // Focus and select so user can immediately type the full path
+          setTimeout(() => {
+            inputRef.current?.focus();
+            inputRef.current?.select();
+          }, 50);
         } catch (err) {
           if (err instanceof Error && err.name === 'AbortError') return;
           throw err;
@@ -84,8 +90,14 @@ const AgentSettingsPanel = ({ className }: AgentSettingsPanelProps) => {
     setSuccess('');
 
     try {
-      const response = await fetch(`/api/agent-chat/validate-dir?path=${encodeURIComponent(trimmed)}`);
-      const result = await response.json();
+      const electronAPI = window.electronAPI;
+      let result;
+      if (electronAPI?.validateDirectory) {
+        result = await electronAPI.validateDirectory(trimmed);
+      } else {
+        const response = await fetch(`/api/agent-chat/validate-dir?path=${encodeURIComponent(trimmed)}`);
+        result = await response.json();
+      }
 
       if (result.valid) {
         const confirmedPath = result.resolvedPath || trimmed;
@@ -127,7 +139,12 @@ const AgentSettingsPanel = ({ className }: AgentSettingsPanelProps) => {
 
       {/* Messages */}
       {error && (
-        <div className="mb-4 p-3 bg-destructive border border-border text-destructive-foreground text-sm rounded">
+        <div className={cn(
+          "mb-4 p-3 border border-border text-sm rounded",
+          error === dict.chat.agentBrowserPathWarning
+            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+            : 'bg-destructive text-destructive-foreground'
+        )}>
           {error}
         </div>
       )}
@@ -155,6 +172,7 @@ const AgentSettingsPanel = ({ className }: AgentSettingsPanelProps) => {
 
             <div className="flex gap-2">
               <input
+                ref={inputRef}
                 type="text"
                 value={workDir}
                 onChange={(e) => { setWorkDir(e.target.value); setError(''); }}

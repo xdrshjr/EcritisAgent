@@ -1,4 +1,16 @@
 {
-  "models": [],
-  "defaultModelId": null
+  "models": [
+    {
+      "apiKey": "sk-kimi-1QJ3IiZ7yLoTHfS5yIq3xoQV3o7f4hvaSrhqlOc52sxuDqeY5ieobDLPVU4IpF10",
+      "createdAt": "2026-02-25T10:59:27.412Z",
+      "id": "model_1772017167412_t04swn2",
+      "isDefault": false,
+      "isEnabled": true,
+      "name": "Kimi Coding Plan - kimi-k2.5",
+      "serviceId": "kimi",
+      "type": "codingPlan",
+      "updatedAt": "2026-02-25T11:00:18.883Z"
+    }
+  ],
+  "defaultModelId": "model_1764159883753_cvm2a81"
 }

@@ -1,6 +1,6 @@
 """
 System Domain Routes
-Handles system-level operations like health checks and logs
+Handles system-level operations like health checks, logs, and filesystem utilities
 """
 
 import os

@@ -275,6 +275,8 @@ interface ElectronAPI {
     };
   }>;
   selectDirectory: () => Promise<string | null>;
+  getHomeDir: () => Promise<string | null>;
+  validateDirectory: (dirPath: string) => Promise<{ valid: boolean; resolvedPath?: string; error?: string }>;
   saveDisplayConfig: (config: {
     fontSize: {
       level: 'small' | 'medium' | 'large' | 'xlarge' | 'xxlarge';

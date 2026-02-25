@@ -90,6 +90,35 @@ AIDocMaster uses LangGraph to orchestrate specialized AI agents through an intel
   2. Execution: Uses tools to search, modify, add, delete content
   3. Summarization: Explains changes made
 
+### Pi-Agent Coding Mode
+
+A standalone AI coding agent built on `@mariozechner/pi-agent-core` / `@mariozechner/pi-coding-agent`. Unlike the LangGraph document agents, this mode runs an autonomous agent loop that can read/write files and execute shell commands in a user-specified working directory.
+
+**API Routes** (`app/api/agent-chat/`)
+- `POST /api/agent-chat` — Runs the pi-agent loop; streams `AgentEvent` objects back as SSE
+- `GET /api/agent-chat/home-dir` — Returns the user's home directory
+- `POST /api/agent-chat/validate-dir` — Validates that a path is an accessible directory
+- `GET /api/agent-file` — File reading utility for the agent UI
+
+**Agent Tools** (`lib/agentTools.ts`)
+- `createAgentTools(workDir)` — Wraps `createCodingTools(workDir)` (read, bash, edit, write) plus `grep`, `find`, `ls` from pi-coding-agent; all tools are bound to the working directory
+
+**Pi-Agent Lib Utilities:**
+- `lib/agentConfig.ts` — Working directory persistence in localStorage (`aidocmaster.agentWorkDir`, `aidocmaster.agentRecentDirs`); emits `aidocmaster_agent_config_updated` custom event
+- `lib/agentEventMapper.ts` — Converts pi-agent `AgentEvent` objects to SSE frames for streaming
+- `lib/agentStreamParser.ts` — Frontend SSE parser for agent event streams
+- `lib/agentLlmAdapter.ts` — Adapts app model configs to `pi-ai` `Model` + `StreamOptions`
+- `lib/agentExecutionBlock.ts` — Execution block state tracking for the UI timeline
+
+**New Components:**
+- `AgentWorkDirDialog.tsx` — Modal for choosing the working directory (Electron native dialog → Web File System Access API → manual input fallback)
+- `AgentSettingsPanel.tsx` — Settings panel for default work dir and recent dirs list
+
+**Electron IPC** (added to `window.electronAPI`):
+- `selectDirectory()` — Opens native folder picker
+- `getHomeDir()` — Returns user home directory
+- `validateDirectory(path)` — Checks that a path is an accessible directory
+
 ### Multi-Type Model System
 
 The system supports three model types via a discriminated union pattern:
@@ -156,11 +185,19 @@ Flask app (`backend/app.py`) registers domain blueprints from `backend/domains/`
   - Taskbar-based multi-task interface (chat, document editor, auto-writer, settings)
   - TipTap v3 WYSIWYG editor with custom extensions
   - Streaming chat with SSE response handling
-- `app/api/` - Next.js API routes that proxy to Flask backend
+- `app/api/` - Next.js API routes (Flask proxies + pi-agent routes)
+  - `agent-chat/` - Pi-agent coding mode routes (run agent loop, home dir, validate dir)
+  - `agent-file/` - File reading for agent UI
 - `lib/` - Shared utilities and configuration clients
   - `apiConfig.ts` - Builds API URLs for development vs production vs Electron
   - `logger.ts` - Custom structured logging (USE THIS, not console.log)
   - `modelConfig.ts` - Model configuration with discriminated union types and type guards
+  - `agentConfig.ts` - Pi-agent working directory persistence (localStorage)
+  - `agentTools.ts` - Pi-agent tool factory (read, bash, edit, write, grep, find, ls)
+  - `agentEventMapper.ts` - Maps pi-agent events to SSE frames
+  - `agentLlmAdapter.ts` - Adapts model configs to pi-ai protocol
+  - `agentStreamParser.ts` - Frontend parser for agent SSE streams
+  - `agentExecutionBlock.ts` - Execution block state for agent UI timeline
 
 **Frontend Model Types** (`lib/modelConfig.ts`):
 ```typescript
@@ -341,13 +378,14 @@ LLM_API_TIMEOUT=30000
 7. **Type Safety**: TypeScript strict mode - all function signatures and props must be typed
 8. **LLM Clients**: Always use `llm_factory` to create LLM clients — never instantiate `ChatOpenAI`/`ChatAnthropic` directly
 9. **Model Types**: When working with model configs, use the discriminated union type guards (`isStandardModel`, etc.) rather than checking fields manually
+10. **Pi-Agent Tools**: Never instantiate pi-agent tools directly — always use `createAgentTools(workDir)` from `lib/agentTools.ts` to get the full tool set bound to the correct directory
 
 ## Project Index
 
 This project has a pre-generated index for quick codebase understanding.
 
 - **Location:** `.claude-index/index.md`
-- **Last Updated:** 2026-02-24
+- **Last Updated:** 2026-02-25
 - **Contents:** Project overview, feature map, file index, exported symbols, module dependencies
 
 **Usage:** Read `.claude-index/index.md` to quickly understand the project structure before making changes. The index provides a navigation map of the codebase without needing to explore every file.

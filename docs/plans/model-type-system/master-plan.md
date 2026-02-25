@@ -234,4 +234,4 @@ Kimi 使用 Anthropic Messages API 格式但有特殊 Headers 要求。通过 `p
 | 01 | `specs/01-data-model-and-storage.md` | 数据模型、TypeScript 接口、JSON 存储结构、迁移策略 |
 | 02 | `specs/02-backend-api-and-protocol.md` | 后端 API 路由、供应商模板加载、协议适配层 |
 | 03 | `specs/03-frontend-settings-ui.md` | 三 Tab 设置面板 UI、表单交互、供应商选择流程 |
-| 04 | `specs/04-model-selector-integration.md` | 聊天界面模型选择器改造、分组显示、类型透明调用 |
+| 04 | `specs/04-model-selector-integration.md` | 聊天界面模型选择器改造、分组显示、类型透明调用 |__

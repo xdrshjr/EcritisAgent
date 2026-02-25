@@ -129,6 +129,32 @@ const electronAPI = {
   },
 
   /**
+   * Get user home directory
+   */
+  getHomeDir: async () => {
+    try {
+      logger.debug('Calling getHomeDir');
+      return await ipcRenderer.invoke('get-home-dir');
+    } catch (error) {
+      logger.error('Failed to get home dir', { error: error.message });
+      return null;
+    }
+  },
+
+  /**
+   * Validate a directory path
+   */
+  validateDirectory: async (dirPath) => {
+    try {
+      logger.debug('Calling validateDirectory', { dirPath });
+      return await ipcRenderer.invoke('validate-directory', dirPath);
+    } catch (error) {
+      logger.error('Failed to validate directory', { error: error.message });
+      return { valid: false, error: error.message };
+    }
+  },
+
+  /**
    * Load model configurations from file system
    */
   loadModelConfigs: async () => {
