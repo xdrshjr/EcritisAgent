@@ -10,7 +10,9 @@
     "out/**/*",
     "electron/**/*",
     "backend/**/*",
-    "package.json"
+    "package.json",
+    "node_modules/@mariozechner/**/*",
+    "node_modules/@sinclair/**/*"
   ],
   "extraMetadata": {
     "main": "electron/main.js"
@@ -52,7 +54,7 @@
     "artifactName": "${productName}-${version}-Portable.${ext}"
   },
   "compression": "maximum",
-  "asar": true,
+  "asar": false,
   "asarUnpack": [
     "**/*.node",
     "backend/**/*",
@@ -70,6 +72,13 @@
     {
       "from": "backend",
       "to": "backend",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "node_modules/@sinclair/typebox",
+      "to": "app/node_modules/@sinclair/typebox",
       "filter": [
         "**/*"
       ]
