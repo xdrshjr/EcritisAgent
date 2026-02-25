@@ -305,6 +305,149 @@ class APIRouteHandlers {
     // Proxy to Flask backend's auto-writer-agent endpoint
     this.proxyToFlask('/api/auto-writer-agent', 'POST', reqBody, res);
   }
+
+  /**
+   * Handle POST /api/agent-chat
+   *
+   * Runs a pi-agent coding agent loop and streams AgentEvents back as SSE.
+   * This is a port of app/api/agent-chat/route.ts for packaged Electron mode
+   * where the Next.js API server is not available.
+   */
+  async handleAgentChatRequest(reqBody, res) {
+    const { message, workDir, history, llmConfig } = reqBody;
+
+    // Basic validation
+    if (!message || !workDir || !llmConfig?.model || !llmConfig?.streamOptions?.apiKey) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'message, workDir, and llmConfig are required' }));
+      return;
+    }
+
+    // Validate workDir
+    const fs = require('fs');
+    try {
+      const stat = fs.statSync(workDir);
+      if (!stat.isDirectory()) throw new Error('Not a directory');
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: `workDir is not accessible: ${workDir}` }));
+      return;
+    }
+
+    // Dynamic import (packages may be ESM) — must happen BEFORE committing SSE headers
+    // so we can still send a proper JSON error response if the import fails.
+    let Agent, convertToLlm, createCodingTools, createGrepTool, createFindTool, createLsTool;
+    try {
+      ({ Agent } = await import('@mariozechner/pi-agent-core'));
+      ({ convertToLlm, createCodingTools, createGrepTool, createFindTool, createLsTool } =
+        await import('@mariozechner/pi-coding-agent'));
+    } catch (importErr) {
+      this.logger.error('Failed to load pi-agent packages', { error: importErr.message });
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Failed to load agent modules', details: importErr.message }));
+      return;
+    }
+
+    // All validation passed — now commit SSE headers (cannot send JSON errors after this point)
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+
+    const tools = [
+      ...createCodingTools(workDir),
+      createGrepTool(workDir),
+      createFindTool(workDir),
+      createLsTool(workDir),
+    ];
+
+    const systemPrompt =
+      `You are an AI coding assistant working in the directory: ${workDir}\n\n` +
+      `You have access to tools for reading/writing files, executing shell commands,\n` +
+      `searching code, and more. Use these tools to help the user with their\ncoding tasks.\n\n` +
+      `Guidelines:\n` +
+      `- Always read files before modifying them\n` +
+      `- Explain what you're doing before taking actions\n` +
+      `- Show file changes clearly\n` +
+      `- Report errors clearly if they occur\n\n` +
+      `Current working directory: ${workDir}\n` +
+      `Operating system: ${process.platform}`;
+
+    const { model, streamOptions } = llmConfig;
+
+    const agent = new Agent({
+      initialState: { systemPrompt, model, tools, thinkingLevel: 'off' },
+      convertToLlm: (messages) => convertToLlm(messages),
+      getApiKey: () => streamOptions.apiKey,
+    });
+
+    if (history && history.length > 0) {
+      agent.replaceMessages(history);
+    }
+
+    // SSE helpers — inline port of lib/agentEventMapper.ts
+    const mapEvent = (event) => {
+      switch (event.type) {
+        case 'agent_start':   return [{ type: 'agent_start' }];
+        case 'agent_end':     return [{ type: 'complete' }];
+        case 'turn_start':    return [];
+        case 'turn_end':      return [{ type: 'turn_end' }];
+        case 'message_start': return [{ type: 'thinking_start' }];
+        case 'message_end':   return [{ type: 'thinking_end' }];
+        case 'message_update': {
+          const sub = event.assistantMessageEvent;
+          const out = [];
+          if (sub.type === 'text_delta')     out.push({ type: 'content', content: sub.delta });
+          if (sub.type === 'thinking_delta') out.push({ type: 'thinking', content: sub.delta });
+          if (sub.type === 'toolcall_end')   out.push({ type: 'tool_use', toolName: sub.toolCall.name, toolInput: sub.toolCall.arguments, toolId: sub.toolCall.id });
+          if (sub.type === 'error')          out.push({ type: 'error', error: sub.error.errorMessage ?? 'Unknown LLM error' });
+          return out;
+        }
+        case 'tool_execution_start':
+          return [{ type: 'tool_use', toolName: event.toolName, toolInput: event.args, toolId: event.toolCallId }];
+        case 'tool_execution_update':
+          return [{ type: 'tool_update', toolId: event.toolCallId, toolName: event.toolName, content: typeof event.partialResult === 'string' ? event.partialResult : JSON.stringify(event.partialResult) }];
+        case 'tool_execution_end': {
+          const content = event.result?.content
+            ? event.result.content.filter(c => c.type === 'text').map(c => c.text).join('')
+            : typeof event.result === 'string' ? event.result : JSON.stringify(event.result);
+          return [{ type: 'tool_result', toolId: event.toolCallId, toolName: event.toolName, content, isError: event.isError }];
+        }
+        default: return [];
+      }
+    };
+
+    const writeSse = (payloads) => {
+      if (!res.writableEnded) {
+        payloads.forEach(p => res.write(`data: ${JSON.stringify(p)}\n\n`));
+      }
+    };
+
+    // Handle client disconnect → abort agent
+    let aborted = false;
+    res.on('close', () => {
+      aborted = true;
+      agent.abort();
+    });
+
+    const unsubscribe = agent.subscribe((event) => {
+      if (aborted) return;
+      writeSse(mapEvent(event));
+      if (event.type === 'agent_end') {
+        unsubscribe();
+        if (!res.writableEnded) res.end();
+      }
+    });
+
+    agent.prompt(message).catch((err) => {
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: 'error', error: err.message ?? 'Agent error' })}\n\n`);
+        res.end();
+      }
+      unsubscribe();
+    });
+  }
 }
 
 /**
@@ -458,6 +601,16 @@ class ElectronAPIServer {
           await this.routeHandlers.handleAutoWriterRequest(body, res);
         } else {
           this.logger.warn('Method not allowed for /api/auto-writer', { method });
+          res.writeHead(405, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+        }
+      } else if (normalizedPath === '/api/agent-chat') {
+        if (method === 'POST') {
+          this.logger.info('Handling POST /api/agent-chat request');
+          const body = await this.parseRequestBody(req);
+          await this.routeHandlers.handleAgentChatRequest(body, res);
+        } else {
+          this.logger.warn('Method not allowed for /api/agent-chat', { method });
           res.writeHead(405, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Method not allowed' }));
         }

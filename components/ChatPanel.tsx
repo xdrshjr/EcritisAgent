@@ -488,7 +488,8 @@ const ChatPanel = ({
         },
       };
 
-      const response = await fetch('/api/agent-chat', {
+      const agentChatUrl = await buildApiUrl('/api/agent-chat');
+      const response = await fetch(agentChatUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
