@@ -9,7 +9,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Copy, Languages, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -30,6 +30,14 @@ interface AgentExecutionTimelineProps {
   blocks: AgentExecutionBlock[];
   isStreaming?: boolean;
   workDir?: string;
+  onCopy?: () => void;
+  onTranslate?: () => void;
+  copySuccess?: boolean;
+  isTranslating?: boolean;
+  showTranslation?: boolean;
+  translationLines?: string[];
+  hasTranslation?: boolean;
+  fullContent?: string;
 }
 
 /** Convert a tool-use block to the AgentToolCall shape expected by AgentToolCallDisplay */
@@ -164,54 +172,142 @@ const TimelineDot = ({ type }: { type: AgentExecutionBlock['type'] }) => {
 
 // ── Main timeline component ──────────────────────────────────────────────────
 
-const AgentExecutionTimeline = ({ blocks, isStreaming, workDir }: AgentExecutionTimelineProps) => {
+const AgentExecutionTimeline = ({ blocks, isStreaming, workDir, onCopy, onTranslate, copySuccess, isTranslating, showTranslation, translationLines, hasTranslation, fullContent }: AgentExecutionTimelineProps) => {
+  const { locale } = useLanguage();
+  const dict = getDictionary(locale);
+
   if (!blocks.length) return null;
 
+  // During streaming: render ALL blocks chronologically so tool calls appear
+  // below content and are visible with auto-scroll. After streaming completes,
+  // extract the last content block as a styled bubble (existing behavior).
+  let lastContentIdx = -1;
+  let lastContentBlock: AgentContentBlock | null = null;
+  let hasLastContentBubble = false;
+  let timelineBlocks: AgentExecutionBlock[];
+
+  if (isStreaming) {
+    // Streaming: everything in the timeline, no bubble
+    timelineBlocks = blocks;
+  } else {
+    // Completed: extract last content as bubble
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      if (blocks[i].type === 'content') { lastContentIdx = i; break; }
+    }
+    lastContentBlock = lastContentIdx >= 0 ? (blocks[lastContentIdx] as AgentContentBlock) : null;
+    hasLastContentBubble = !!(lastContentBlock && lastContentBlock.text.trim());
+    timelineBlocks = blocks.filter((_, i) => i !== lastContentIdx);
+  }
+
   return (
-    <div className="relative pl-4 mb-2">
-      {/* Timeline connector line */}
-      <div className="absolute left-[3px] top-1 bottom-1 w-px bg-border/50" />
+    <div className="mb-2">
+      {/* Timeline section */}
+      {timelineBlocks.length > 0 && (
+        <div className="relative pl-4">
+          <div className="absolute left-[3px] top-1 bottom-1 w-px bg-border/50" />
 
-      {blocks.map((block) => (
-        <div key={block.id} className="relative mb-1.5 last:mb-0">
-          {/* Timeline dot */}
-          <div className="absolute -left-4 top-2 flex items-center justify-center">
-            <TimelineDot type={block.type} />
-          </div>
+          {timelineBlocks.map((block) => (
+            <div key={block.id} className="relative mb-1.5 last:mb-0">
+              <div className="absolute -left-4 top-2 flex items-center justify-center">
+                <TimelineDot type={block.type} />
+              </div>
+              {block.type === 'content' && <ContentBlockView block={block} />}
+              {block.type === 'tool_use' && <AgentToolCallDisplay toolCall={toToolCall(block)} defaultExpanded={block.status === 'running'} />}
+              {block.type === 'file_output' && (
+                <AgentFileOutputCard filePath={block.filePath} operation={block.operation} workDir={workDir} />
+              )}
+              {block.type === 'thinking' && <ThinkingBlockView block={block} />}
+              {block.type === 'turn_separator' && <TurnSeparatorView block={block} />}
+            </div>
+          ))}
 
-          {/* Block content */}
-          {block.type === 'content' && (
-            <ContentBlockView block={block} />
+          {/* Streaming activity indicator */}
+          {isStreaming && (
+            <div className="relative mb-1.5">
+              <div className="absolute -left-4 top-2 flex items-center justify-center">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+              </div>
+              <div className="flex items-center gap-2 py-1.5">
+                <Loader2 className="w-3.5 h-3.5 text-purple-500 animate-spin" />
+                <span className="text-xs text-purple-500 font-medium">{dict.chat.agentToolRunning}</span>
+              </div>
+            </div>
           )}
-
-          {block.type === 'tool_use' && (
-            <AgentToolCallDisplay toolCall={toToolCall(block)} />
-          )}
-
-          {block.type === 'file_output' && (
-            <AgentFileOutputCard
-              filePath={block.filePath}
-              operation={block.operation}
-              workDir={workDir}
-            />
-          )}
-
-          {block.type === 'thinking' && (
-            <ThinkingBlockView block={block} />
-          )}
-
-          {block.type === 'turn_separator' && (
-            <TurnSeparatorView block={block} />
-          )}
-        </div>
-      ))}
-
-      {/* Streaming pulse indicator */}
-      {isStreaming && (
-        <div className="absolute -left-4 bottom-0 flex items-center justify-center">
-          <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
         </div>
       )}
+
+      {/* Last content block rendered as a chat bubble */}
+      {hasLastContentBubble && lastContentBlock && (
+        <div className="relative px-2 py-1.5 shadow-sm transition-all hover:shadow-md group bg-card text-foreground border border-border/50 rounded-2xl rounded-bl-sm mt-1.5">
+          {/* Action Buttons — Copy / Translate */}
+          {(onCopy || onTranslate) && (
+            <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-200 z-10">
+              {onCopy && (
+                <button
+                  onClick={onCopy}
+                  className={`p-1.5 rounded-md transition-all duration-200 hover:bg-muted/90 text-muted-foreground/80 hover:text-foreground bg-background/50 backdrop-blur-sm border border-border/30 ${copySuccess ? 'bg-green-500/20' : ''} shadow-sm hover:shadow-md`}
+                  aria-label="Copy message"
+                  tabIndex={0}
+                  title={copySuccess ? 'Copied!' : 'Copy message'}
+                >
+                  {copySuccess ? (
+                    <span className="text-xs font-semibold">✓</span>
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              )}
+              {onTranslate && (
+                <button
+                  onClick={onTranslate}
+                  disabled={isTranslating}
+                  className={`p-1.5 rounded-md transition-all duration-200 hover:bg-muted/90 text-muted-foreground/80 hover:text-foreground bg-background/50 backdrop-blur-sm border border-border/30 ${showTranslation && hasTranslation ? 'bg-purple-500/20' : ''} disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md`}
+                  aria-label={showTranslation ? 'Hide translation' : 'Translate message'}
+                  tabIndex={0}
+                  title={showTranslation ? 'Hide translation' : 'Translate message'}
+                >
+                  {isTranslating ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Languages className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Bubble content */}
+          <div className="px-1.5 py-1">
+            <ContentBlockView block={lastContentBlock} />
+          </div>
+
+          {/* Translation Display */}
+          {showTranslation && hasTranslation && translationLines && translationLines.length > 0 && fullContent && (
+            <div className="mt-3 pt-3 border-t border-border/60">
+              <div className="text-xs mb-2.5 font-medium text-muted-foreground/80">
+                Translation:
+              </div>
+              <div className="text-sm leading-relaxed text-muted-foreground/90">
+                {fullContent.split('\n').map((originalLine, index) => {
+                  const translationLine = translationLines[index] || '';
+                  if (!originalLine.trim() && !translationLine.trim()) {
+                    return <div key={index} className="h-2" />;
+                  }
+                  if (translationLine.trim()) {
+                    return (
+                      <div key={index} className="mb-1.5 whitespace-pre-wrap break-words">
+                        {translationLine}
+                      </div>
+                    );
+                  }
+                  return <div key={index} className="h-2" />;
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
     </div>
   );
 };

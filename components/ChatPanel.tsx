@@ -27,7 +27,7 @@ import type { ChatMessage as ChatMessageType, StreamErrorEvent, isStreamErrorEve
 import { syncModelConfigsToCookies } from '@/lib/modelConfigSync';
 import { buildApiUrl } from '@/lib/apiConfig';
 import { loadModelConfigs, getDefaultModel, getModelConfigsUpdatedEventName, getModelApiUrl, getModelName, type ModelConfig } from '@/lib/modelConfig';
-import { getAgentLLMConfig } from '@/lib/agentLlmAdapter';
+import { resolveAgentLLMConfig } from '@/lib/agentLlmAdapter';
 import { processAgentSSEStream, type AgentToolCall } from '@/lib/agentStreamParser';
 import {
   type AgentExecutionBlock,
@@ -406,7 +406,7 @@ const ChatPanel = ({
         hasStreamingContent: !!streamingContent,
       }, 'ChatPanel');
     }
-  }, [messages, streamingContent, shouldAutoScroll]);
+  }, [messages, streamingContent, streamingAgentBlocks, shouldAutoScroll]);
 
   // Notify parent of message changes
   // Use a ref to track previous messages length to avoid infinite loops
@@ -477,7 +477,7 @@ const ChatPanel = ({
 
     try {
       // Build LLM config for the agent
-      const llmConfig = getAgentLLMConfig(selectedModel);
+      const llmConfig = await resolveAgentLLMConfig(selectedModel);
 
       const requestBody = {
         message: content,
@@ -2073,8 +2073,6 @@ const ChatPanel = ({
                     isStreaming={true}
                     workDir={agentWorkDir}
                   />
-                  {/* Blinking cursor */}
-                  <div className="inline-block w-1.5 h-4 bg-purple-500 ml-1 animate-pulse rounded-sm" />
                 </div>
               </div>
             )}
