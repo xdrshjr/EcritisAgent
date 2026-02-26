@@ -9,7 +9,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Sparkles, Copy, Languages, Loader2 } from 'lucide-react';
+import { Sparkles, Copy, Languages, Loader2, FolderOpen } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -38,6 +38,7 @@ interface AgentExecutionTimelineProps {
   translationLines?: string[];
   hasTranslation?: boolean;
   fullContent?: string;
+  onOpenWorkDir?: () => void;
 }
 
 /** Convert a tool-use block to the AgentToolCall shape expected by AgentToolCallDisplay */
@@ -172,11 +173,13 @@ const TimelineDot = ({ type }: { type: AgentExecutionBlock['type'] }) => {
 
 // ── Main timeline component ──────────────────────────────────────────────────
 
-const AgentExecutionTimeline = ({ blocks, isStreaming, workDir, onCopy, onTranslate, copySuccess, isTranslating, showTranslation, translationLines, hasTranslation, fullContent }: AgentExecutionTimelineProps) => {
+const AgentExecutionTimeline = ({ blocks, isStreaming, workDir, onCopy, onTranslate, copySuccess, isTranslating, showTranslation, translationLines, hasTranslation, fullContent, onOpenWorkDir }: AgentExecutionTimelineProps) => {
   const { locale } = useLanguage();
   const dict = getDictionary(locale);
 
   if (!blocks.length) return null;
+
+  const hasFileOutput = blocks.some(b => b.type === 'file_output');
 
   // During streaming: render ALL blocks chronologically so tool calls appear
   // below content and are visible with auto-scroll. After streaming completes,
@@ -305,6 +308,23 @@ const AgentExecutionTimeline = ({ blocks, isStreaming, workDir, onCopy, onTransl
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Open work directory banner — shown after completion when file outputs exist */}
+      {!isStreaming && hasFileOutput && onOpenWorkDir && (
+        <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+          <FolderOpen className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+          <span className="text-xs text-emerald-700 dark:text-emerald-300 flex-1">
+            {dict.chat.agentOpenWorkDirHint}
+          </span>
+          <button
+            onClick={onOpenWorkDir}
+            className="flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 transition-colors"
+            aria-label={dict.chat.agentOpenWorkDir}
+          >
+            {dict.chat.agentOpenWorkDir}
+          </button>
         </div>
       )}
 

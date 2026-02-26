@@ -6,7 +6,7 @@
 
 'use client';
 
-import { FolderOpen, Check, X } from 'lucide-react';
+import { FolderOpen, ExternalLink, Check, X } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 
@@ -14,10 +14,11 @@ interface AgentWorkDirBarProps {
   workDir: string;
   isValid?: boolean;
   onChangeDir: () => void;
+  onOpenDir?: () => void;
   disabled?: boolean;
 }
 
-const AgentWorkDirBar = ({ workDir, isValid = true, onChangeDir, disabled = false }: AgentWorkDirBarProps) => {
+const AgentWorkDirBar = ({ workDir, isValid = true, onChangeDir, onOpenDir, disabled = false }: AgentWorkDirBarProps) => {
   const { locale } = useLanguage();
   const dict = getDictionary(locale);
 
@@ -37,6 +38,19 @@ const AgentWorkDirBar = ({ workDir, isValid = true, onChangeDir, disabled = fals
       >
         {workDir || dict.chat.agentNoWorkDir}
       </span>
+
+      {/* Open directory in file manager */}
+      {onOpenDir && workDir && (
+        <button
+          onClick={onOpenDir}
+          disabled={disabled}
+          className="flex-shrink-0 p-1 rounded hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label={dict.chat.agentOpenWorkDir}
+          title={dict.chat.agentOpenWorkDir}
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+        </button>
+      )}
 
       {/* Change directory button */}
       <button

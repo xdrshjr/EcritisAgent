@@ -155,6 +155,19 @@ const electronAPI = {
   },
 
   /**
+   * Open a directory in the system file manager
+   */
+  openDirectory: async (dirPath) => {
+    try {
+      logger.debug('Calling openDirectory', { dirPath });
+      return await ipcRenderer.invoke('open-directory', dirPath);
+    } catch (error) {
+      logger.error('Failed to open directory', { error: error.message });
+      return error.message;
+    }
+  },
+
+  /**
    * Load model configurations from file system
    */
   loadModelConfigs: async () => {

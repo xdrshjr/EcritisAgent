@@ -14,11 +14,11 @@
  * - Auto-maximize: If screen resolution is smaller than default, window will be maximized
  */
 
-const { app, BrowserWindow, ipcMain, Menu, screen, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, screen, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const ElectronAPIServer = require('./api-server');
+const ElectronAPIServer = require(app.isPackaged ? './api-server.cjs' : './api-server');
 const FlaskBackendManager = require('./flask-launcher');
 
 // Window configuration constants
@@ -628,6 +628,11 @@ ipcMain.handle('validate-directory', async (event, dirPath) => {
   } catch (error) {
     return { valid: false, error: `Path is not accessible: ${error.message}` };
   }
+});
+
+ipcMain.handle('open-directory', async (event, dirPath) => {
+  logger.debug('IPC: open-directory called', { dirPath });
+  return shell.openPath(dirPath);
 });
 
 ipcMain.handle('get-app-version', () => {

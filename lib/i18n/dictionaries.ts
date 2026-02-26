@@ -237,6 +237,9 @@ const en = {
     agentFileModified: 'Modified',
     agentFileDownload: 'Download',
     agentTurn: 'Turn',
+    agentOpenWorkDir: 'Open Directory',
+    agentOpenWorkDirHint: 'Agent has created/modified files. Open the working directory to view results.',
+    agentPathCopied: 'Path copied to clipboard',
   },
   settings: {
     title: 'Settings',
@@ -641,6 +644,9 @@ const zh = {
     agentFileModified: '已修改',
     agentFileDownload: '下载',
     agentTurn: '轮次',
+    agentOpenWorkDir: '打开目录',
+    agentOpenWorkDirHint: 'Agent 已创建/修改文件，打开工作目录查看执行结果。',
+    agentPathCopied: '路径已复制到剪贴板',
   },
   settings: {
     title: '设置',

@@ -101,6 +101,7 @@ const ChatPanel = ({
   const [showWorkDirDialog, setShowWorkDirDialog] = useState(false);
   const [streamingAgentToolCalls, setStreamingAgentToolCalls] = useState<AgentToolCall[]>([]);
   const [streamingAgentBlocks, setStreamingAgentBlocks] = useState<AgentExecutionBlock[]>([]);
+  const [pathCopiedToast, setPathCopiedToast] = useState(false);
 
   // Load agent work dir from localStorage on mount
   useEffect(() => {
@@ -721,6 +722,29 @@ const ChatPanel = ({
       abortControllerRef.current = null;
     }
   };
+
+  const handleOpenWorkDir = useCallback(async () => {
+    if (!agentWorkDir) return;
+
+    const electronAPI = (window as Window & { electronAPI?: ElectronAPI }).electronAPI;
+    if (electronAPI?.openDirectory) {
+      const result = await electronAPI.openDirectory(agentWorkDir);
+      if (result) {
+        logger.warn('Failed to open directory via Electron', { error: result }, 'ChatPanel');
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(agentWorkDir);
+        logger.info('Work dir path copied to clipboard', { path: agentWorkDir }, 'ChatPanel');
+        setPathCopiedToast(true);
+        setTimeout(() => setPathCopiedToast(false), 2500);
+      } catch (error) {
+        logger.error('Failed to copy path to clipboard', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }, 'ChatPanel');
+      }
+    }
+  }, [agentWorkDir]);
 
   const handleSendMessage = async (content: string, fileContext?: UploadedFile, context?: string) => {
     if (!content.trim() || isLoading) {
@@ -2053,6 +2077,7 @@ const ChatPanel = ({
                 agentToolCalls={message.agentToolCalls}
                 agentExecutionBlocks={message.agentExecutionBlocks}
                 agentWorkDir={agentWorkDir}
+                onOpenWorkDir={agentWorkDir ? handleOpenWorkDir : undefined}
                 onEditMessage={handleEditMessage}
                 onDeleteMessage={handleDeleteMessage}
                 onResendMessage={handleResendMessage}
@@ -2268,6 +2293,7 @@ const ChatPanel = ({
           workDir={agentWorkDir}
           isValid={agentWorkDirValid}
           onChangeDir={() => setShowWorkDirDialog(true)}
+          onOpenDir={handleOpenWorkDir}
           disabled={isLoading}
         />
       )}
@@ -2304,6 +2330,13 @@ const ChatPanel = ({
         }}
         error={errorDialogData}
       />
+
+      {/* Path copied toast */}
+      {pathCopiedToast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-md bg-foreground text-background text-xs font-medium shadow-lg animate-fadeIn z-50">
+          {dict.chat.agentPathCopied}
+        </div>
+      )}
     </div>
   );
 };

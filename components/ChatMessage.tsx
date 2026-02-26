@@ -50,6 +50,7 @@ export interface ChatMessageProps {
   onEditMessage?: (messageId: string, newContent: string) => void; // Callback for editing messages
   onDeleteMessage?: (messageId: string) => void; // Callback for deleting messages
   onResendMessage?: (messageId: string, content: string) => void; // Callback for resending messages
+  onOpenWorkDir?: () => void; // Callback for opening agent work directory
 }
 
 const ChatMessage = ({
@@ -68,7 +69,8 @@ const ChatMessage = ({
   context,
   onEditMessage,
   onDeleteMessage,
-  onResendMessage
+  onResendMessage,
+  onOpenWorkDir
 }: ChatMessageProps) => {
   const { locale } = useLanguage();
   const dict = getDictionary(locale);
@@ -735,7 +737,19 @@ const ChatMessage = ({
 
         {/* Agent Execution Timeline (new ordered blocks) */}
         {!isUser && agentExecutionBlocks && agentExecutionBlocks.length > 0 && (
-          <AgentExecutionTimeline blocks={agentExecutionBlocks} workDir={agentWorkDir} />
+          <AgentExecutionTimeline
+            blocks={agentExecutionBlocks}
+            workDir={agentWorkDir}
+            onCopy={handleCopy}
+            onTranslate={handleTranslate}
+            copySuccess={copySuccess}
+            isTranslating={isTranslating}
+            showTranslation={showTranslation}
+            translationLines={translationLines}
+            hasTranslation={hasTranslation}
+            fullContent={content}
+            onOpenWorkDir={onOpenWorkDir}
+          />
         )}
 
         {/* Legacy: Agent Tool Calls (for old saved messages without execution blocks) */}
@@ -747,6 +761,8 @@ const ChatMessage = ({
           </div>
         )}
 
+        {/* Hide content bubble when agent execution blocks are present (timeline handles display) */}
+        {!(agentExecutionBlocks && agentExecutionBlocks.length > 0 && !isUser) && (
         <div
           className={`relative px-2 py-1.5 shadow-sm transition-all hover:shadow-md group ${
             isUser
@@ -995,6 +1011,7 @@ const ChatMessage = ({
             </div>
           )}
         </div>
+        )}
 
         {/* Timestamp */}
         {timestamp && (
