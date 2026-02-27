@@ -4,7 +4,7 @@
  */
 
 import { logger } from './logger';
-import { buildFlaskApiUrl } from './flaskConfig';
+import { buildApiUrl } from './apiConfig';
 
 export type TextProcessingType = 'polish' | 'rewrite' | 'check';
 
@@ -42,7 +42,7 @@ export const processText = async (
   }, 'TextProcessingAPI');
 
   try {
-    const apiUrl = '/api/text-processing';
+    const apiUrl = await buildApiUrl('/api/text-processing');
     logger.debug('Calling text processing API', {
       url: apiUrl,
       type: request.type,
@@ -142,7 +142,7 @@ export const checkText = async (
   }, 'TextProcessingAPI');
 
   try {
-    const apiUrl = '/api/text-processing';
+    const apiUrl = await buildApiUrl('/api/text-processing');
     logger.debug('Calling text check API', {
       url: apiUrl,
       textLength: text.length,

@@ -18,7 +18,7 @@ const { app, BrowserWindow, ipcMain, Menu, screen, dialog, shell } = require('el
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const ElectronAPIServer = require(app.isPackaged ? './api-server.cjs' : './api-server');
+const ElectronAPIServer = require('./api-server');
 const FlaskBackendManager = require('./flask-launcher');
 
 // Window configuration constants

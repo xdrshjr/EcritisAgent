@@ -237,7 +237,7 @@ const DocAgentPanel = ({
         );
         break;
       case 'insert_image':
-        if (update.imageUrl && update.imageDescription) {
+        if (update.sectionIndex != null && update.imageUrl && update.imageDescription) {
           insertImageAfterSection(
             update.sectionIndex,
             update.imageUrl,
@@ -437,16 +437,18 @@ const DocAgentPanel = ({
           // 1. Apply to editor
           handleDocUpdate(update);
 
-          // 2. Add doc_update block to timeline
-          closeContentBlock();
-          blocks.push(createBlock({
-            type: 'doc_update',
-            operation: update.operation,
-            sectionIndex: update.sectionIndex,
-            title: update.title,
-            imageUrl: update.imageUrl,
-          }));
-          flushBlocks();
+          // 2. Add doc_update block to timeline (skip clear_all — no section info)
+          if (update.operation !== 'clear_all') {
+            closeContentBlock();
+            blocks.push(createBlock({
+              type: 'doc_update',
+              operation: update.operation,
+              sectionIndex: update.sectionIndex ?? 0,
+              title: update.title,
+              imageUrl: update.imageUrl,
+            }));
+            flushBlocks();
+          }
         },
 
         onTurnEnd: () => {

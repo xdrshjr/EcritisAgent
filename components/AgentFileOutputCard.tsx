@@ -11,6 +11,7 @@ import { useCallback } from 'react';
 import { FileCode, FileText, Download } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getDictionary } from '@/lib/i18n/dictionaries';
+import { buildApiUrl } from '@/lib/apiConfig';
 import { logger } from '@/lib/logger';
 
 interface AgentFileOutputCardProps {
@@ -39,11 +40,12 @@ const AgentFileOutputCard = ({ filePath, operation, workDir }: AgentFileOutputCa
     ? filePath.slice(workDir.length).replace(/^[\\/]/, '')
     : filePath;
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     const params = new URLSearchParams({ path: filePath });
     if (workDir) params.set('workDir', workDir);
 
-    const url = `/api/agent-file?${params.toString()}`;
+    const baseUrl = await buildApiUrl('/api/agent-file');
+    const url = `${baseUrl}?${params.toString()}`;
 
     logger.info('Agent file download initiated', { filePath, operation }, 'AgentFileOutputCard');
 
