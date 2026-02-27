@@ -263,14 +263,15 @@ def chat():
         logger.info(f'[Chat Domain] Connecting to LLM API for session {session_id}')
         
         try:
-            llm_response = requests.post(
+            from llm_factory import llm_post
+            llm_response = llm_post(
                 endpoint,
                 headers=headers,
                 json=payload,
                 stream=True,
                 timeout=(10, config['timeout'])
             )
-            
+
             # Check status code before starting streaming
             if llm_response.status_code != 200:
                 error_text = llm_response.text

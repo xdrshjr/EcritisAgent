@@ -9,6 +9,7 @@ Provides two layers:
 
 import json
 import logging
+import requests as _requests
 
 logger = logging.getLogger(__name__)
 
@@ -292,3 +293,22 @@ def iter_anthropic_as_openai_sse(response):
         elif evt_type == 'message_stop':
             yield b'data: [DONE]\n\n'
             return
+
+
+# ── Proxy-resilient HTTP helper ─────────────────────────────────────────────
+
+
+def llm_post(url: str, *, headers: dict, json: dict, stream: bool = True, timeout=None):
+    """
+    ``requests.post`` wrapper that automatically retries without proxy
+    when a ProxyError occurs.  Useful for Chinese LLM APIs (e.g. Kimi)
+    that are accessible directly but may fail through a VPN/proxy.
+    """
+    try:
+        return _requests.post(url, headers=headers, json=json, stream=stream, timeout=timeout)
+    except _requests.exceptions.ProxyError:
+        logger.warning('Proxy error, retrying without proxy', extra={'url': url})
+        return _requests.post(
+            url, headers=headers, json=json, stream=stream, timeout=timeout,
+            proxies={'http': None, 'https': None},
+        )

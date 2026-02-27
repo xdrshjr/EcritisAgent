@@ -243,7 +243,8 @@ Important: Return ONLY the JSON object, no additional text or explanations. If n
             try:
                 logger.info(f'[Document Domain] Starting LLM API validation streaming request for chunk {chunk_index}')
                 
-                with requests.post(
+                from llm_factory import llm_post
+                with llm_post(
                     endpoint,
                     headers=headers,
                     json=payload,
@@ -456,7 +457,8 @@ def text_processing():
             'messages_count': len(messages),
         })
         
-        response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+        from llm_factory import llm_post
+        response = llm_post(endpoint, headers=headers, json=payload, stream=False, timeout=120)
         
         if response.status_code != 200:
             logger.error('[Document Domain] [TextProcessing] LLM API error', extra={
