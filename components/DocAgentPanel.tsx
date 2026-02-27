@@ -18,7 +18,7 @@ import { logger } from '@/lib/logger';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { buildApiUrl } from '@/lib/apiConfig';
-import { loadModelConfigs, getDefaultModel, getModelConfigsUpdatedEventName, type ModelConfig } from '@/lib/modelConfig';
+import { loadModelConfigs, getDefaultModel, getModelConfigsUpdatedEventName, getModelName, type ModelConfig } from '@/lib/modelConfig';
 import { getAgentLLMConfig } from '@/lib/agentLlmAdapter';
 import { processDocAgentSSEStream, type DocUpdatePayload } from '@/lib/docAgentStreamParser';
 import type { AgentToolCall } from '@/lib/agentStreamParser';
@@ -141,6 +141,7 @@ const DocAgentPanel = ({
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Model
+  const [availableModels, setAvailableModels] = useState<ModelConfig[]>([]);
   const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
 
   // Agent mode (true = use tools, false = Q&A only)
@@ -149,6 +150,17 @@ const DocAgentPanel = ({
     const saved = localStorage.getItem(AGENT_MODE_KEY);
     return saved !== null ? saved === 'true' : true;
   });
+
+  // ── Model change ────────────────────────────────────────────────────────
+
+  const handleModelChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const modelId = e.target.value;
+    const found = availableModels.find(m => m.id === modelId);
+    if (found) {
+      setSelectedModel(found);
+      logger.info('Doc agent model changed', { modelId, modelName: found.name }, 'DocAgentPanel');
+    }
+  }, [availableModels]);
 
   // ── Agent mode toggle ───────────────────────────────────────────────────
 
@@ -175,13 +187,14 @@ const DocAgentPanel = ({
     }
   }, [messages]);
 
-  // ── Load model ──────────────────────────────────────────────────────────
+  // ── Load models ─────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const loadModel = async () => {
+    const loadModels = async () => {
       try {
         const configList = await loadModelConfigs();
         const enabledModels = configList.models.filter(m => m.isEnabled !== false);
+        setAvailableModels(enabledModels);
 
         if (selectedModelId) {
           const found = enabledModels.find(m => m.id === selectedModelId);
@@ -204,9 +217,9 @@ const DocAgentPanel = ({
       }
     };
 
-    loadModel();
+    loadModels();
 
-    const handleModelUpdate = () => { loadModel(); };
+    const handleModelUpdate = () => { loadModels(); };
     window.addEventListener(getModelConfigsUpdatedEventName(), handleModelUpdate);
     return () => window.removeEventListener(getModelConfigsUpdatedEventName(), handleModelUpdate);
   }, [selectedModelId]);
@@ -652,16 +665,34 @@ const DocAgentPanel = ({
 
       {/* Input area */}
       <div className="border-t border-border px-4 py-3">
-        {/* Agent mode toggle + Clear button */}
+        {/* Model selector + Agent toggle + Clear button */}
         <div className="flex items-center justify-between mb-2">
-          <div
-            title={agentMode ? dict.chat.docAgentModeOn : dict.chat.docAgentModeOff}
-          >
-            <AgentToggle
-              enabled={agentMode}
-              onChange={handleAgentModeChange}
-              disabled={isStreaming}
-            />
+          <div className="flex items-center gap-3">
+            {availableModels.length > 0 && (
+              <select
+                value={selectedModel?.id || ''}
+                onChange={handleModelChange}
+                disabled={isStreaming}
+                className="px-2 py-1 text-xs border border-border bg-card text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed max-w-[140px] truncate"
+                aria-label={dict.chat.modelSelector}
+                title={selectedModel ? (getModelName(selectedModel) || selectedModel.name) : ''}
+              >
+                {availableModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <div
+              title={agentMode ? dict.chat.docAgentModeOn : dict.chat.docAgentModeOff}
+            >
+              <AgentToggle
+                enabled={agentMode}
+                onChange={handleAgentModeChange}
+                disabled={isStreaming}
+              />
+            </div>
           </div>
           <button
             onClick={handleClearHistory}
