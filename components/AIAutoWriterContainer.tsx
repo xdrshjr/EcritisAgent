@@ -9,6 +9,7 @@ import {
   appendSectionToEditor,
   insertSectionInEditor,
   deleteSectionFromEditor,
+  clearAllSectionsInEditor,
 } from '@/lib/docEditorOperations';
 
 interface AIAutoWriterContainerProps {
@@ -50,7 +51,7 @@ const AIAutoWriterContainer = ({
 
   const handleSectionUpdate = useCallback((
     operation: string,
-    sectionIndex: number,
+    sectionIndex: number | undefined,
     title?: string,
     content?: string,
   ) => {
@@ -62,16 +63,19 @@ const AIAutoWriterContainer = ({
 
     switch (operation) {
       case 'replace':
-        replaceSectionInEditor(editor, sectionIndex, title, content);
+        replaceSectionInEditor(editor, sectionIndex ?? 0, title, content);
         break;
       case 'append':
-        appendSectionToEditor(editor, title, content);
+        appendSectionToEditor(editor, title, content, sectionIndex);
         break;
       case 'insert':
-        insertSectionInEditor(editor, sectionIndex, title, content);
+        insertSectionInEditor(editor, sectionIndex ?? 0, title, content);
         break;
       case 'delete':
-        deleteSectionFromEditor(editor, sectionIndex);
+        deleteSectionFromEditor(editor, sectionIndex ?? 0);
+        break;
+      case 'clear_all':
+        clearAllSectionsInEditor(editor);
         break;
       default:
         logger.warn('Unknown section operation', { operation }, 'AIAutoWriterContainer');

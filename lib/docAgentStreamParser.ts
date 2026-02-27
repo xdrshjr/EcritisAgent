@@ -12,8 +12,8 @@ import type { AgentStreamCallbacks } from './agentStreamParser';
 // ── Doc Update payload ────────────────────────────────────────────────────────
 
 export interface DocUpdatePayload {
-  operation: 'replace' | 'append' | 'insert' | 'delete' | 'insert_image';
-  sectionIndex: number;
+  operation: 'replace' | 'append' | 'insert' | 'delete' | 'insert_image' | 'clear_all';
+  sectionIndex?: number;
   title?: string;
   content?: string;
   imageUrl?: string;

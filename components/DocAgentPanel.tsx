@@ -45,7 +45,7 @@ interface DocAgentPanelProps {
   /** Apply a section-level update to the editor. */
   updateSectionContent: (
     operation: string,
-    sectionIndex: number,
+    sectionIndex: number | undefined,
     title?: string,
     content?: string,
   ) => void;
@@ -228,6 +228,7 @@ const DocAgentPanel = ({
       case 'append':
       case 'insert':
       case 'delete':
+      case 'clear_all':
         updateSectionContent(
           update.operation,
           update.sectionIndex,

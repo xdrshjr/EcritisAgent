@@ -39,7 +39,7 @@ export interface SSEController {
 /** Payload shape for doc_update SSE events sent to the frontend. */
 export interface DocUpdateEvent {
   type: 'doc_update';
-  operation: 'replace' | 'append' | 'insert' | 'delete' | 'insert_image';
+  operation: 'replace' | 'append' | 'insert' | 'delete' | 'insert_image' | 'clear_all';
   sectionIndex?: number;
   title?: string;
   content?: string;
@@ -82,7 +82,8 @@ const UpdateSectionParams = Type.Object({
     Type.Literal('append'),
     Type.Literal('insert'),
     Type.Literal('delete'),
-  ], { description: 'Operation type: replace, append, insert, or delete' }),
+    Type.Literal('clear_all'),
+  ], { description: 'Operation type: replace, append, insert, delete, or clear_all' }),
   sectionIndex: Type.Optional(Type.Number({
     description: 'Target section index (0-based). Required for replace, insert, delete.',
   })),
@@ -191,11 +192,12 @@ export const createDocAgentTools = (
     name: 'update_section',
     label: 'Update Section',
     description:
-      '对文档进行章节级别的编辑操作。支持四种操作：' +
+      '对文档进行章节级别的编辑操作。支持五种操作：' +
       'replace(替换指定章节的标题和内容)、' +
       'append(在文档末尾追加新章节)、' +
       'insert(在指定位置之前插入新章节)、' +
-      'delete(删除指定章节，不可删除section 0)。' +
+      'delete(删除指定章节，不可删除section 0)、' +
+      'clear_all(清空整个文档，用于重新编写时先清除旧内容)。' +
       '内容使用HTML格式(p, ul, ol, li, strong, em等标签)。',
     parameters: UpdateSectionParams,
     execute: async (_toolCallId, params) => {
@@ -331,9 +333,24 @@ export const createDocAgentTools = (
           );
         }
 
+        case 'clear_all': {
+          sections = [];
+          rebuildHtml();
+
+          sendDocUpdate(sseController, {
+            type: 'doc_update',
+            operation: 'clear_all',
+          });
+
+          return textResult(
+            'Document has been cleared. You can now build the document from scratch using append.',
+            { operation: 'clear_all' },
+          );
+        }
+
         default:
           return errorResult(
-            `Unknown operation '${operation}'. Use replace, append, insert, or delete.`,
+            `Unknown operation '${operation}'. Use replace, append, insert, delete, or clear_all.`,
             {},
           );
       }

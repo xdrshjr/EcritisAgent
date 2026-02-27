@@ -120,18 +120,26 @@ export const replaceSectionInEditor = (
 
 /**
  * Append a new section at the end of the document.
+ *
+ * @param editor TipTap editor instance
+ * @param title Section title text
+ * @param content HTML content body
+ * @param sectionIndex The index this section will occupy. When 0, the title
+ *                     is wrapped in h1 (document title); otherwise h2.
  */
 export const appendSectionToEditor = (
   editor: Editor,
   title?: string,
   content?: string,
+  sectionIndex?: number,
 ): boolean => {
   const doc = editor.state.doc;
   const insertPos = doc.content.size;
 
+  const headingTag = sectionIndex === 0 ? 'h1' : 'h2';
   let html = '';
   if (title) {
-    html += `<h2>${title}</h2>`;
+    html += `<${headingTag}>${title}</${headingTag}>`;
   }
   html += content || '';
 
@@ -238,6 +246,22 @@ export const deleteSectionFromEditor = (
   } catch (err) {
     logger.error('Failed to delete section', {
       sectionIndex,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    }, 'DocEditorOps');
+    return false;
+  }
+};
+
+/**
+ * Clear all content from the editor, leaving it empty for a fresh document.
+ */
+export const clearAllSectionsInEditor = (editor: Editor): boolean => {
+  try {
+    editor.commands.clearContent();
+    logger.info('All sections cleared', undefined, 'DocEditorOps');
+    return true;
+  } catch (err) {
+    logger.error('Failed to clear all sections', {
       error: err instanceof Error ? err.message : 'Unknown error',
     }, 'DocEditorOps');
     return false;
