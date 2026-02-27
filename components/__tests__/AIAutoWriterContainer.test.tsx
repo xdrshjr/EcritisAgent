@@ -13,10 +13,10 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('../ChatDialog', () => ({
+vi.mock('../DocAgentPanel', () => ({
   __esModule: true,
   default: (props: any) => (
-    <div data-testid="embedded-chat-mock">{props.title}</div>
+    <div data-testid="doc-agent-panel-mock">DocAgentPanel</div>
   ),
 }));
 
@@ -33,6 +33,7 @@ vi.mock('../WordEditorPanel', () => {
           },
         },
       }),
+      insertImageAfterSection: vi.fn(() => true),
     }));
 
     useEffect(() => {
@@ -50,28 +51,26 @@ vi.mock('../WordEditorPanel', () => {
   };
 });
 
+vi.mock('@/lib/docEditorOperations', () => ({
+  replaceSectionInEditor: vi.fn(),
+  appendSectionToEditor: vi.fn(),
+  insertSectionInEditor: vi.fn(),
+  deleteSectionFromEditor: vi.fn(),
+}));
+
 describe('AIAutoWriterContainer', () => {
-  it('exposes document functions and renders both panels', async () => {
+  it('renders both panels (editor + doc agent)', () => {
     const handleWidthChange = vi.fn();
-    const handleDocFns = vi.fn();
 
     render(
       <AIAutoWriterContainer
         leftPanelWidth={55}
         onLeftPanelWidthChange={handleWidthChange}
-        onDocumentFunctionsReady={handleDocFns}
       />
     );
 
     expect(screen.getByTestId('word-editor-panel-mock')).toBeInTheDocument();
-    expect(screen.getByTestId('embedded-chat-mock')).toBeInTheDocument();
-
-    await waitFor(() => expect(handleDocFns).toHaveBeenCalled());
-
-    const [getContent, updateContent] = handleDocFns.mock.calls[0];
-    expect(getContent()).toBe('<p>initial</p>');
-    updateContent('<p>updated</p>');
-    expect(getContent()).toBe('<p>updated</p>');
+    expect(screen.getByTestId('doc-agent-panel-mock')).toBeInTheDocument();
   });
 
   it('updates width when user drags the resizer', async () => {
@@ -103,4 +102,3 @@ describe('AIAutoWriterContainer', () => {
     fireEvent.mouseUp(document);
   });
 });
-

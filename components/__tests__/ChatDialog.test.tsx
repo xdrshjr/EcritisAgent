@@ -17,11 +17,6 @@ vi.mock('../ChatInput', () => ({
   ),
 }));
 
-vi.mock('../AgentStatusPanel', () => ({
-  __esModule: true,
-  default: () => <div data-testid="agent-status-panel-mock" />,
-}));
-
 vi.mock('@/lib/logger', () => ({
   logger: {
     component: vi.fn(),

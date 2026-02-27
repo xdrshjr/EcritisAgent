@@ -30,7 +30,6 @@ CORS(app)
 try:
     from domains.chat.routes import chat_bp
     from domains.document.routes import document_bp
-    from domains.agent.routes import agent_bp
     from domains.model.routes import model_bp
     from domains.mcp.routes import mcp_bp
     from domains.image_service.routes import image_service_bp
@@ -40,7 +39,6 @@ try:
     # Register all domain blueprints
     app.register_blueprint(chat_bp)
     app.register_blueprint(document_bp)
-    app.register_blueprint(agent_bp)
     app.register_blueprint(model_bp)
     app.register_blueprint(mcp_bp)
     app.register_blueprint(image_service_bp)

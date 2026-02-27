@@ -15,6 +15,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import AgentToolCallDisplay from './AgentToolCallDisplay';
 import AgentFileOutputCard from './AgentFileOutputCard';
+import DocUpdateBlockDisplay from './DocUpdateBlockDisplay';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import type {
@@ -23,6 +24,7 @@ import type {
   AgentToolUseBlock,
   AgentThinkingBlock,
   AgentTurnSeparatorBlock,
+  DocUpdateBlock,
 } from '@/lib/agentExecutionBlock';
 import type { AgentToolCall } from '@/lib/agentStreamParser';
 
@@ -167,6 +169,7 @@ const TimelineDot = ({ type }: { type: AgentExecutionBlock['type'] }) => {
     file_output: 'bg-emerald-500',
     thinking: 'bg-purple-400',
     turn_separator: 'bg-border',
+    doc_update: 'bg-amber-500',
   };
 
   return (
@@ -224,6 +227,7 @@ const AgentExecutionTimeline = ({ blocks, isStreaming, workDir, onCopy, onTransl
               )}
               {block.type === 'thinking' && <ThinkingBlockView block={block} />}
               {block.type === 'turn_separator' && <TurnSeparatorView block={block} />}
+              {block.type === 'doc_update' && <DocUpdateBlockDisplay block={block as DocUpdateBlock} />}
             </div>
           ))}
 

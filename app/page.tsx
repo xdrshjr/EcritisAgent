@@ -368,8 +368,8 @@ export default function Home() {
             <AIAutoWriterContainer
               leftPanelWidth={autoWriterLeftPanelWidth}
               onLeftPanelWidthChange={setAutoWriterLeftPanelWidth}
-              onDocumentFunctionsReady={handleDocumentFunctionsReady}
               onContentChange={handleContentChange}
+              selectedModelId={selectedModelId}
             />
           )}
           {activeTaskId === 'settings' && (
@@ -381,10 +381,8 @@ export default function Home() {
       <Footer copyright={dict.footer.copyright} />
       
       {/* Floating Chat Button - only visible when NOT in AI Chat task */}
-      <FloatingChatButton 
-        isVisible={activeTaskId !== 'ai-chat' && activeTaskId !== 'ai-auto-writer'} 
-        getDocumentContent={getDocumentContentFn}
-        updateDocumentContent={updateDocumentContentFn}
+      <FloatingChatButton
+        isVisible={activeTaskId !== 'ai-chat' && activeTaskId !== 'ai-auto-writer'}
       />
     </div>
   );

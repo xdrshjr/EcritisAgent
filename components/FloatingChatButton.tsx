@@ -10,22 +10,17 @@ import { useState, useEffect, useRef } from 'react';
 import { MessageCircle, X } from 'lucide-react';
 import ChatDialog from './ChatDialog';
 import { logger } from '@/lib/logger';
-import type { DocumentParagraph } from '@/lib/documentUtils';
 
 export interface FloatingChatButtonProps {
   title?: string;
   welcomeMessage?: string;
   isVisible?: boolean;
-  getDocumentContent?: () => string | DocumentParagraph[];
-  updateDocumentContent?: (content: string | DocumentParagraph[]) => void;
 }
 
-const FloatingChatButton = ({ 
+const FloatingChatButton = ({
   title = 'AI Assistant',
   welcomeMessage = 'Hello! I\'m your AI assistant. How can I help you today?',
   isVisible = true,
-  getDocumentContent,
-  updateDocumentContent,
 }: FloatingChatButtonProps) => {
   // Always call hooks in the same order - never conditionally
   const [isOpen, setIsOpen] = useState(false);
@@ -45,10 +40,10 @@ const FloatingChatButton = ({
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      
+
       // Check if click is outside both the dialog and the button
       if (
-        dialogRef.current && 
+        dialogRef.current &&
         !dialogRef.current.contains(target) &&
         buttonRef.current &&
         !buttonRef.current.contains(target)
@@ -106,8 +101,6 @@ const FloatingChatButton = ({
         onClose={() => setIsOpen(false)}
         title={title}
         welcomeMessage={welcomeMessage}
-        getDocumentContent={getDocumentContent}
-        updateDocumentContent={updateDocumentContent}
         ref={dialogRef}
       />
 
@@ -128,7 +121,7 @@ const FloatingChatButton = ({
         ) : (
           <MessageCircle className="w-6 h-6 transition-transform duration-200" />
         )}
-        
+
         {/* Pulse animation when closed */}
         {!isOpen && (
           <span className="absolute inset-0 rounded-full bg-primary animate-ping opacity-20" />
@@ -139,4 +132,3 @@ const FloatingChatButton = ({
 };
 
 export default FloatingChatButton;
-

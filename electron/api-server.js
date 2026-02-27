@@ -7,7 +7,6 @@
  * Handles:
  * - /api/chat - Proxies to Flask backend for AI chat completions
  * - /api/document-validation - Proxies to Flask backend for document validation
- * - /api/agent-validation - Proxies to Flask backend for agent-based document validation
  * - /api/logs - Proxies to Flask backend for log file access
  * 
  * This server only runs in packaged mode. In development mode, the Next.js
@@ -227,19 +226,6 @@ class APIRouteHandlers {
   }
 
   /**
-   * Handle POST /api/agent-validation
-   */
-  async handleAgentValidationRequest(reqBody, res) {
-    this.logger.info('Agent validation request received', {
-      hasCommand: !!reqBody?.command,
-      hasContent: !!reqBody?.content,
-      commandLength: reqBody?.command?.length || 0,
-      contentLength: reqBody?.content?.length || 0,
-    });
-    this.proxyToFlask('/api/agent-validation', 'POST', reqBody, res);
-  }
-
-  /**
    * Handle GET /api/chat (health check)
    */
   async handleChatHealthCheck(res) {
@@ -261,49 +247,6 @@ class APIRouteHandlers {
   async handleLogsRequest(queryParams, res) {
     this.logger.info('Logs request received', { queryParams });
     this.proxyToFlask('/api/logs', 'GET', null, res, queryParams);
-  }
-
-  /**
-   * Handle GET /api/agents
-   */
-  async handleAgentsRequest(res) {
-    this.logger.info('Agents list request received');
-    this.proxyToFlask('/api/agents', 'GET', null, res);
-  }
-
-  /**
-   * Handle POST /api/agent-route
-   */
-  async handleAgentRouteRequest(reqBody, res) {
-    this.logger.info('Agent route request received', {
-      hasRequest: !!reqBody?.request,
-      hasContent: !!reqBody?.content,
-      requestPreview: reqBody?.request?.substring(0, 50),
-    });
-    this.proxyToFlask('/api/agent-route', 'POST', reqBody, res);
-  }
-
-  /**
-   * Handle POST /api/auto-writer-agent
-   */
-  async handleAutoWriterAgentRequest(reqBody, res) {
-    this.logger.info('Auto writer agent request received', {
-      hasPrompt: !!reqBody?.prompt,
-      promptPreview: reqBody?.prompt?.substring(0, 50),
-    });
-    this.proxyToFlask('/api/auto-writer-agent', 'POST', reqBody, res);
-  }
-
-  /**
-   * Handle POST /api/auto-writer (alias for /api/auto-writer-agent)
-   */
-  async handleAutoWriterRequest(reqBody, res) {
-    this.logger.info('Auto writer request received (aliased to auto-writer-agent)', {
-      hasPrompt: !!reqBody?.prompt,
-      promptPreview: reqBody?.prompt?.substring(0, 50),
-    });
-    // Proxy to Flask backend's auto-writer-agent endpoint
-    this.proxyToFlask('/api/auto-writer-agent', 'POST', reqBody, res);
   }
 
   /**
@@ -545,62 +488,10 @@ class ElectronAPIServer {
           res.writeHead(405, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Method not allowed' }));
         }
-      } else if (normalizedPath === '/api/agent-validation') {
-        if (method === 'POST') {
-          this.logger.info('Received agent validation request', {
-            method,
-            path: normalizedPath,
-          });
-          const body = await this.parseRequestBody(req);
-          await this.routeHandlers.handleAgentValidationRequest(body, res);
-        } else {
-          this.logger.warn('Method not allowed for agent-validation endpoint', { method });
-          res.writeHead(405, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Method not allowed' }));
-        }
       } else if (normalizedPath === '/api/logs') {
         if (method === 'GET') {
           await this.routeHandlers.handleLogsRequest(queryString, res);
         } else {
-          res.writeHead(405, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Method not allowed' }));
-        }
-      } else if (normalizedPath === '/api/agents') {
-        if (method === 'GET') {
-          this.logger.info('Handling GET /api/agents request');
-          await this.routeHandlers.handleAgentsRequest(res);
-        } else {
-          this.logger.warn('Method not allowed for /api/agents', { method });
-          res.writeHead(405, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Method not allowed' }));
-        }
-      } else if (normalizedPath === '/api/agent-route') {
-        if (method === 'POST') {
-          this.logger.info('Handling POST /api/agent-route request');
-          const body = await this.parseRequestBody(req);
-          await this.routeHandlers.handleAgentRouteRequest(body, res);
-        } else {
-          this.logger.warn('Method not allowed for /api/agent-route', { method });
-          res.writeHead(405, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Method not allowed' }));
-        }
-      } else if (normalizedPath === '/api/auto-writer-agent') {
-        if (method === 'POST') {
-          this.logger.info('Handling POST /api/auto-writer-agent request');
-          const body = await this.parseRequestBody(req);
-          await this.routeHandlers.handleAutoWriterAgentRequest(body, res);
-        } else {
-          this.logger.warn('Method not allowed for /api/auto-writer-agent', { method });
-          res.writeHead(405, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Method not allowed' }));
-        }
-      } else if (normalizedPath === '/api/auto-writer') {
-        if (method === 'POST') {
-          this.logger.info('Handling POST /api/auto-writer request');
-          const body = await this.parseRequestBody(req);
-          await this.routeHandlers.handleAutoWriterRequest(body, res);
-        } else {
-          this.logger.warn('Method not allowed for /api/auto-writer', { method });
           res.writeHead(405, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Method not allowed' }));
         }

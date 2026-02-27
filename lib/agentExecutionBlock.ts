@@ -50,6 +50,14 @@ export interface AgentTurnSeparatorBlock extends AgentBlockBase {
   turnNumber: number;
 }
 
+export interface DocUpdateBlock extends AgentBlockBase {
+  type: 'doc_update';
+  operation: 'replace' | 'append' | 'insert' | 'delete' | 'insert_image';
+  sectionIndex: number;
+  title?: string;
+  imageUrl?: string;
+}
+
 // ── Discriminated union ──────────────────────────────────────────────────────
 
 export type AgentExecutionBlock =
@@ -57,7 +65,8 @@ export type AgentExecutionBlock =
   | AgentToolUseBlock
   | AgentFileOutputBlock
   | AgentThinkingBlock
-  | AgentTurnSeparatorBlock;
+  | AgentTurnSeparatorBlock
+  | DocUpdateBlock;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -95,6 +104,9 @@ export const isThinkingBlock = (block: AgentExecutionBlock): block is AgentThink
 
 export const isTurnSeparatorBlock = (block: AgentExecutionBlock): block is AgentTurnSeparatorBlock =>
   block.type === 'turn_separator';
+
+export const isDocUpdateBlock = (block: AgentExecutionBlock): block is DocUpdateBlock =>
+  block.type === 'doc_update';
 
 // ── Factory helpers ──────────────────────────────────────────────────────────
 

@@ -27,7 +27,7 @@ import type { ChatMessage as ChatMessageType, StreamErrorEvent, isStreamErrorEve
 import { syncModelConfigsToCookies } from '@/lib/modelConfigSync';
 import { buildApiUrl } from '@/lib/apiConfig';
 import { loadModelConfigs, getDefaultModel, getModelConfigsUpdatedEventName, getModelApiUrl, getModelName, type ModelConfig } from '@/lib/modelConfig';
-import { resolveAgentLLMConfig } from '@/lib/agentLlmAdapter';
+import { getAgentLLMConfig } from '@/lib/agentLlmAdapter';
 import { processAgentSSEStream, type AgentToolCall } from '@/lib/agentStreamParser';
 import {
   type AgentExecutionBlock,
@@ -478,7 +478,7 @@ const ChatPanel = ({
 
     try {
       // Build LLM config for the agent
-      const llmConfig = await resolveAgentLLMConfig(selectedModel);
+      const llmConfig = await getAgentLLMConfig(selectedModel);
 
       const requestBody = {
         message: content,
