@@ -8,6 +8,7 @@
 import { createCodingTools, createGrepTool, createFindTool, createLsTool } from '@mariozechner/pi-coding-agent';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { logger } from './logger';
+import { ensureShellConfigured } from './agentShellConfig';
 
 /**
  * Create the full set of coding agent tools bound to the given working directory.
@@ -17,6 +18,7 @@ import { logger } from './logger';
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const createAgentTools = (workDir: string): AgentTool<any>[] => {
+  ensureShellConfigured();
   logger.info('Creating agent tools', { workDir }, 'AgentTools');
 
   // Core coding tools (read, bash, edit, write) — all bound to workDir

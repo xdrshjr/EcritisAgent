@@ -50,31 +50,17 @@ export const buildFlaskApiUrl = (endpoint: string): string => {
  */
 export const checkFlaskBackendHealth = async (): Promise<boolean> => {
   try {
-    const healthUrl = buildFlaskApiUrl('/health');
-    logger.info('Checking Flask backend health', { url: healthUrl }, 'FlaskConfig');
+    logger.info('Checking Flask backend health', undefined, 'FlaskConfig');
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-
-    const response = await fetch(healthUrl, {
-      method: 'GET',
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
+    const response = await fetchFlask('/health', { method: 'GET', timeout: 5000 });
     const isHealthy = response.ok;
 
     if (isHealthy) {
-      logger.success('Flask backend is healthy', {
-        status: response.status,
-        url: healthUrl,
-      }, 'FlaskConfig');
+      logger.success('Flask backend is healthy', { status: response.status }, 'FlaskConfig');
     } else {
       logger.warn('Flask backend health check returned non-OK status', {
         status: response.status,
         statusText: response.statusText,
-        url: healthUrl,
       }, 'FlaskConfig');
     }
 
@@ -137,6 +123,9 @@ export const fetchFlask = (endpoint: string, init?: FetchFlaskInit): Promise<Fet
       return;
     }
 
+    // Declare abort handler before http.request so it can be cleaned up in the response callback
+    let onAbort: (() => void) | undefined;
+
     const req = http.request(
       {
         hostname: flaskHost,
@@ -149,6 +138,11 @@ export const fetchFlask = (endpoint: string, init?: FetchFlaskInit): Promise<Fet
         },
       },
       (res) => {
+        // Clean up external abort listener on successful connection
+        if (onAbort && init?.signal) {
+          init.signal.removeEventListener('abort', onAbort);
+        }
+
         const status = res.statusCode ?? 500;
         const statusText = res.statusMessage ?? '';
         const ok = status >= 200 && status < 300;
@@ -223,14 +217,16 @@ export const fetchFlask = (endpoint: string, init?: FetchFlaskInit): Promise<Fet
     });
 
     // External abort signal
-    const onAbort = () => {
+    onAbort = () => {
       req.destroy();
       reject(new DOMException('The operation was aborted.', 'AbortError'));
     };
     init?.signal?.addEventListener('abort', onAbort, { once: true });
 
     req.on('error', (err) => {
-      init?.signal?.removeEventListener('abort', onAbort);
+      if (onAbort && init?.signal) {
+        init.signal.removeEventListener('abort', onAbort);
+      }
       reject(new TypeError(`fetch failed: ${err.message}`));
     });
 
@@ -241,12 +237,4 @@ export const fetchFlask = (endpoint: string, init?: FetchFlaskInit): Promise<Fet
     req.end();
   });
 };
-
-
-
-
-
-
-
-
 

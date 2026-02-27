@@ -6,7 +6,7 @@
 
 import { NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
-import { buildFlaskApiUrl, checkFlaskBackendHealth, fetchFlask } from '@/lib/flaskConfig';
+import { buildFlaskApiUrl, fetchFlask } from '@/lib/flaskConfig';
 import type { ChatMessage } from '@/lib/chatClient';
 
 // Use Node.js runtime for proper HTTP streaming support

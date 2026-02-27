@@ -71,6 +71,21 @@ export const processDocAgentSSEStream = async (
           try {
             const data = JSON.parse(jsonStr);
             dispatchDocEvent(data, callbacks);
+            // After a doc_update event, yield to the browser event loop so it
+            // can repaint the editor changes.  Without this, multiple doc_update
+            // events arriving in a single network chunk are processed in a
+            // tight synchronous loop and the user only sees the final state.
+            // This is especially important in Electron production builds where
+            // TCP buffering batches SSE frames together.
+            if (data.type === 'doc_update') {
+              await new Promise<void>(r => {
+                if (typeof requestAnimationFrame === 'function') {
+                  requestAnimationFrame(() => setTimeout(r, 0));
+                } else {
+                  setTimeout(r, 0);
+                }
+              });
+            }
           } catch (parseError) {
             logger.warn('Failed to parse doc agent SSE data', {
               raw: jsonStr.substring(0, 200),

@@ -101,8 +101,9 @@ export const replaceSectionInEditor = (
   html += content || '';
 
   try {
+    // Don't use .focus() as it can cause transaction mismatch errors
+    // when the editor is not focused (e.g. user is in the agent panel)
     editor.chain()
-      .focus()
       .deleteRange({ from: range.from, to: range.to })
       .insertContentAt(range.from, html)
       .run();
@@ -236,8 +237,9 @@ export const deleteSectionFromEditor = (
   const range = ranges[sectionIndex];
 
   try {
+    // Don't use .focus() as it can cause transaction mismatch errors
+    // when the editor is not focused (e.g. user is in the agent panel)
     editor.chain()
-      .focus()
       .deleteRange({ from: range.from, to: range.to })
       .run();
 

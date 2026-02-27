@@ -22,6 +22,68 @@
 
 const http = require('http');
 const { URL } = require('url');
+const nodePath = require('path');
+const nodeOs = require('os');
+const nodeFs = require('fs');
+
+// ── Shell detection (Windows only) ──────────────────────────────────────────
+// Mirrors lib/agentShellConfig.ts in plain CommonJS for the Electron build.
+
+function ensureShellConfiguredJs(log) {
+  if (process.platform !== 'win32') return;
+
+  const { execSync } = require('child_process');
+  const piSettingsDir = nodePath.join(nodeOs.homedir(), '.pi', 'agent');
+  const piSettingsFile = nodePath.join(piSettingsDir, 'settings.json');
+
+  // 1. Check cached settings
+  let settings = {};
+  try {
+    settings = JSON.parse(nodeFs.readFileSync(piSettingsFile, 'utf-8'));
+  } catch { /* no file yet */ }
+
+  if (settings.shellPath && typeof settings.shellPath === 'string' && nodeFs.existsSync(settings.shellPath)) {
+    return;
+  }
+
+  const persist = (shellPath) => {
+    if (log) log.info('Bash found, persisting to settings', { path: shellPath });
+    nodeFs.mkdirSync(piSettingsDir, { recursive: true });
+    nodeFs.writeFileSync(piSettingsFile, JSON.stringify({ ...settings, shellPath }, null, 2), 'utf-8');
+  };
+
+  const whereFirst = (exe) => {
+    try {
+      const line = execSync(`where ${exe}`, { encoding: 'utf-8', timeout: 5000 })
+        .trim().split('\n')[0].trim();
+      return (line && nodeFs.existsSync(line)) ? line : null;
+    } catch { return null; }
+  };
+
+  // 2. Derive bash from git.exe location (most reliable)
+  const gitPath = whereFirst('git.exe');
+  if (gitPath) {
+    const gitRoot = nodePath.dirname(nodePath.dirname(gitPath));
+    for (const rel of ['usr\\bin\\bash.exe', 'bin\\bash.exe']) {
+      const bp = nodePath.join(gitRoot, rel);
+      if (nodeFs.existsSync(bp)) { persist(bp); return; }
+    }
+  }
+
+  // 3. Direct bash lookup on PATH
+  const bashPath = whereFirst('bash.exe');
+  if (bashPath) { persist(bashPath); return; }
+
+  // 4. Fallback: standard install location (Git not added to PATH)
+  const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+  for (const rel of ['usr\\bin\\bash.exe', 'bin\\bash.exe']) {
+    const bp = nodePath.join(programFiles, 'Git', rel);
+    if (nodeFs.existsSync(bp)) { persist(bp); return; }
+  }
+
+  // Nothing found — let pi-coding-agent try its own detection
+  if (log) log.warn('Could not locate bash');
+}
 
 /**
  * API Server Logger
@@ -298,12 +360,22 @@ class APIRouteHandlers {
       return;
     }
 
+    // Best-effort: expand bash detection for non-standard install locations
+    ensureShellConfiguredJs(this.logger);
+
     // All validation passed — now commit SSE headers (cannot send JSON errors after this point)
+    // Disable buffering for real-time streaming
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
     });
+    res.flushHeaders();
+    // Disable Nagle's algorithm so small SSE frames are sent immediately
+    if (res.socket) {
+      res.socket.setNoDelay(true);
+    }
 
     const tools = [
       ...createCodingTools(workDir),
@@ -456,7 +528,7 @@ class APIRouteHandlers {
 
   // ── Doc Agent Tools factory (inline port of lib/docAgentTools.ts) ─────────
 
-  _createDocAgentTools(documentContent, writeSse, Type) {
+  _createDocAgentTools(documentContent, writeSse, writeSseAndFlush, Type) {
     let sections = this._parseHtmlToSections(documentContent);
     let currentHtml = documentContent;
     const self = this;
@@ -476,7 +548,7 @@ class APIRouteHandlers {
     });
 
     const sendDocUpdate = (event) => {
-      writeSse([event]);
+      return writeSseAndFlush(event);
     };
 
     const getDocument = {
@@ -497,79 +569,105 @@ class APIRouteHandlers {
       },
     };
 
-    const updateSection = {
-      name: 'update_section',
-      label: 'Update Section',
+    const clearDocument = {
+      name: 'clear_document',
+      label: 'Clear Document',
       description:
-        '对文档进行章节级别的编辑操作。支持五种操作：' +
-        'replace(替换指定章节的标题和内容)、' +
-        'append(在文档末尾追加新章节)、' +
-        'insert(在指定位置之前插入新章节)、' +
-        'delete(删除指定章节，不可删除section 0)、' +
-        'clear_all(清空整个文档，用于重新编写时先清除旧内容)。' +
+        '清空整个文档的所有章节。通常在创建新文档之前调用，以清除编辑器中的旧内容。',
+      parameters: Type.Object({}),
+      execute: async () => {
+        sections = [];
+        rebuildHtml();
+        await sendDocUpdate({ type: 'doc_update', operation: 'clear_all' });
+        return textResult('Document has been cleared. You can now build the document from scratch using append_section.', { operation: 'clear_all' });
+      },
+    };
+
+    const appendSection = {
+      name: 'append_section',
+      label: 'Append Section',
+      description:
+        '在文档末尾追加一个新章节。需要提供章节标题(title)和HTML内容(content)。' +
         '内容使用HTML格式(p, ul, ol, li, strong, em等标签)。',
       parameters: Type.Object({
-        operation: Type.Union([
-          Type.Literal('replace'),
-          Type.Literal('append'),
-          Type.Literal('insert'),
-          Type.Literal('delete'),
-          Type.Literal('clear_all'),
-        ], { description: 'Operation type: replace, append, insert, delete, or clear_all' }),
-        sectionIndex: Type.Optional(Type.Number({ description: 'Target section index (0-based).' })),
-        title: Type.Optional(Type.String({ description: 'Section title (plain text).' })),
-        content: Type.Optional(Type.String({ description: 'Section HTML content.' })),
+        title: Type.String({ description: 'Section title (plain text, will be wrapped in h1/h2)' }),
+        content: Type.String({ description: 'Section HTML content (paragraphs, lists, etc. wrapped in <p> tags)' }),
       }),
       execute: async (_toolCallId, params) => {
-        const { operation, sectionIndex, title, content } = params;
-        switch (operation) {
-          case 'replace': {
-            if (sectionIndex === undefined || sectionIndex === null) return errorResult('replace requires sectionIndex', {});
-            if (sectionIndex < 0 || sectionIndex >= sections.length) return errorResult(`sectionIndex ${sectionIndex} out of range (0-${sections.length - 1})`, {});
-            if (!content) return errorResult('replace requires content', {});
-            sections[sectionIndex] = { ...sections[sectionIndex], content, ...(title !== undefined ? { title } : {}) };
-            rebuildHtml();
-            sendDocUpdate({ type: 'doc_update', operation: 'replace', sectionIndex, title: sections[sectionIndex].title, content });
-            return textResult(`Section ${sectionIndex} '${sections[sectionIndex].title}' updated.`, { operation: 'replace', sectionIndex });
-          }
-          case 'append': {
-            if (!title) return errorResult('append requires title', {});
-            if (!content) return errorResult('append requires content', {});
-            const newIndex = sections.length;
-            sections.push({ index: newIndex, title, content });
-            rebuildHtml();
-            sendDocUpdate({ type: 'doc_update', operation: 'append', sectionIndex: newIndex, title, content });
-            return textResult(`New section '${title}' appended as Section ${newIndex}.`, { operation: 'append', sectionIndex: newIndex });
-          }
-          case 'insert': {
-            if (sectionIndex === undefined || sectionIndex === null) return errorResult('insert requires sectionIndex', {});
-            if (sectionIndex < 0 || sectionIndex > sections.length) return errorResult(`sectionIndex ${sectionIndex} out of range for insert (0-${sections.length})`, {});
-            if (!title) return errorResult('insert requires title', {});
-            if (!content) return errorResult('insert requires content', {});
-            sections.splice(sectionIndex, 0, { index: sectionIndex, title, content });
-            rebuildHtml();
-            sendDocUpdate({ type: 'doc_update', operation: 'insert', sectionIndex, title, content });
-            return textResult(`New section '${title}' inserted at position ${sectionIndex}.`, { operation: 'insert', sectionIndex });
-          }
-          case 'delete': {
-            if (sectionIndex === undefined || sectionIndex === null) return errorResult('delete requires sectionIndex', {});
-            if (sectionIndex === 0) return errorResult('Cannot delete Section 0', {});
-            if (sectionIndex < 0 || sectionIndex >= sections.length) return errorResult(`sectionIndex ${sectionIndex} out of range (1-${sections.length - 1})`, {});
-            const deletedTitle = sections[sectionIndex].title;
-            sections.splice(sectionIndex, 1);
-            rebuildHtml();
-            sendDocUpdate({ type: 'doc_update', operation: 'delete', sectionIndex });
-            return textResult(`Section ${sectionIndex} '${deletedTitle}' deleted.`, { operation: 'delete', sectionIndex });
-          }
-          case 'clear_all': {
-            sections = [];
-            rebuildHtml();
-            sendDocUpdate({ type: 'doc_update', operation: 'clear_all' });
-            return textResult('Document cleared. Use append to build from scratch.', { operation: 'clear_all' });
-          }
-          default:
-            return errorResult(`Unknown operation '${operation}'.`, {});
-        }
+        const { title, content } = params;
+        if (!title) return errorResult('append_section requires title', {});
+        if (!content) return errorResult('append_section requires content', {});
+        const newIndex = sections.length;
+        sections.push({ index: newIndex, title, content });
+        rebuildHtml();
+        await sendDocUpdate({ type: 'doc_update', operation: 'append', sectionIndex: newIndex, title, content });
+        return textResult(`New section '${title}' appended as Section ${newIndex}.`, { operation: 'append', sectionIndex: newIndex });
+      },
+    };
+
+    const replaceSection = {
+      name: 'replace_section',
+      label: 'Replace Section',
+      description:
+        '替换指定章节的标题和内容。需要提供sectionIndex(章节索引)、title(标题)和content(新内容)。' +
+        '如果不需要修改标题，请传入原标题。' +
+        '内容使用HTML格式(p, ul, ol, li, strong, em等标签)。',
+      parameters: Type.Object({
+        sectionIndex: Type.Number({ description: 'Target section index (0-based)' }),
+        title: Type.String({ description: 'Section title (pass the original title to keep it unchanged)' }),
+        content: Type.String({ description: 'New section HTML content (paragraphs, lists, etc. wrapped in <p> tags)' }),
+      }),
+      execute: async (_toolCallId, params) => {
+        const { sectionIndex, title, content } = params;
+        if (sectionIndex < 0 || sectionIndex >= sections.length) return errorResult(`sectionIndex ${sectionIndex} out of range. Valid range: 0-${sections.length - 1}`, {});
+        if (!content) return errorResult('replace_section requires content', {});
+        sections[sectionIndex] = { ...sections[sectionIndex], title, content };
+        rebuildHtml();
+        await sendDocUpdate({ type: 'doc_update', operation: 'replace', sectionIndex, title: sections[sectionIndex].title, content });
+        return textResult(`Section ${sectionIndex} '${sections[sectionIndex].title}' has been updated.`, { operation: 'replace', sectionIndex });
+      },
+    };
+
+    const deleteSection = {
+      name: 'delete_section',
+      label: 'Delete Section',
+      description:
+        '删除指定索引的章节。不能删除 Section 0（文档标题区域）。',
+      parameters: Type.Object({
+        sectionIndex: Type.Number({ description: 'Target section index (0-based). Cannot delete Section 0.' }),
+      }),
+      execute: async (_toolCallId, params) => {
+        const { sectionIndex } = params;
+        if (sectionIndex === 0) return errorResult('Cannot delete Section 0 (document title area)', {});
+        if (sectionIndex < 0 || sectionIndex >= sections.length) return errorResult(`sectionIndex ${sectionIndex} out of range. Valid range: 1-${sections.length - 1}`, {});
+        const deletedTitle = sections[sectionIndex].title;
+        sections.splice(sectionIndex, 1);
+        rebuildHtml();
+        await sendDocUpdate({ type: 'doc_update', operation: 'delete', sectionIndex });
+        return textResult(`Section ${sectionIndex} '${deletedTitle}' has been deleted.`, { operation: 'delete', sectionIndex });
+      },
+    };
+
+    const insertSection = {
+      name: 'insert_section',
+      label: 'Insert Section',
+      description:
+        '在指定位置之前插入一个新章节。需要提供sectionIndex(插入位置)、title(标题)和content(内容)。' +
+        '内容使用HTML格式(p, ul, ol, li, strong, em等标签)。',
+      parameters: Type.Object({
+        sectionIndex: Type.Number({ description: 'Insert new section before this index (0-based)' }),
+        title: Type.String({ description: 'Section title (plain text, will be wrapped in h1/h2)' }),
+        content: Type.String({ description: 'Section HTML content (paragraphs, lists, etc. wrapped in <p> tags)' }),
+      }),
+      execute: async (_toolCallId, params) => {
+        const { sectionIndex, title, content } = params;
+        if (sectionIndex < 0 || sectionIndex > sections.length) return errorResult(`sectionIndex ${sectionIndex} out of range for insert. Valid range: 0-${sections.length}`, {});
+        if (!title) return errorResult('insert_section requires title', {});
+        if (!content) return errorResult('insert_section requires content', {});
+        sections.splice(sectionIndex, 0, { index: sectionIndex, title, content });
+        rebuildHtml();
+        await sendDocUpdate({ type: 'doc_update', operation: 'insert', sectionIndex, title, content });
+        return textResult(`New section '${title}' inserted at position ${sectionIndex}.`, { operation: 'insert', sectionIndex });
       },
     };
 
@@ -593,7 +691,7 @@ class APIRouteHandlers {
           return errorResult(`sectionIndex ${sectionIndex} out of range (0-${sections.length - 1})`, {});
         }
         const pos = position || 'after_section';
-        sendDocUpdate({ type: 'doc_update', operation: 'insert_image', sectionIndex, imageUrl, imageDescription, position: pos });
+        await sendDocUpdate({ type: 'doc_update', operation: 'insert_image', sectionIndex, imageUrl, imageDescription, position: pos });
         return textResult(`Image inserted ${pos === 'before_section' ? 'before' : 'after'} Section ${sectionIndex}.`, { sectionIndex, imageUrl, position: pos });
       },
     };
@@ -664,7 +762,7 @@ class APIRouteHandlers {
       },
     };
 
-    return [getDocument, updateSection, insertImage, searchWeb, searchImage];
+    return [getDocument, clearDocument, appendSection, replaceSection, deleteSection, insertSection, insertImage, searchWeb, searchImage];
   }
 
   /**
@@ -843,12 +941,18 @@ class APIRouteHandlers {
       return;
     }
 
-    // Commit SSE headers
+    // Commit SSE headers — disable buffering for real-time streaming
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
     });
+    res.flushHeaders();
+    // Disable Nagle's algorithm so small SSE frames are sent immediately
+    if (res.socket) {
+      res.socket.setNoDelay(true);
+    }
 
     // SSE helpers
     const writeSse = (payloads) => {
@@ -857,8 +961,20 @@ class APIRouteHandlers {
       }
     };
 
+    // Flush-aware SSE writer for doc_update events — ensures each event is
+    // flushed to the TCP socket as a separate segment before the tool returns.
+    const writeSseAndFlush = (payload) => {
+      return new Promise(resolve => {
+        if (res.writableEnded) { resolve(); return; }
+        res.write(`data: ${JSON.stringify(payload)}\n\n`, () => {
+          // Yield to event loop after write callback to ensure TCP flush
+          setImmediate(resolve);
+        });
+      });
+    };
+
     // Create doc agent tools with SSE writer
-    const tools = this._createDocAgentTools(documentContent, writeSse, Type);
+    const tools = this._createDocAgentTools(documentContent, writeSse, writeSseAndFlush, Type);
 
     // System prompt (inline port of lib/docAgentPrompt.ts)
     const systemPrompt = `你是一个专业的文档写作助手，擅长创建和修改结构化文档。
@@ -880,7 +996,11 @@ class APIRouteHandlers {
 
 你可以使用的工具：
 - \`get_document\`: 读取当前文档内容，了解文档现有结构和内容
-- \`update_section\`: 创建、替换、插入、删除或清空章节
+- \`clear_document\`: 清空整个文档（无参数）
+- \`append_section\`: 在文档末尾追加新章节（需要 title 和 content）
+- \`replace_section\`: 替换指定章节（需要 sectionIndex、title 和 content）
+- \`delete_section\`: 删除指定章节（需要 sectionIndex）
+- \`insert_section\`: 在指定位置之前插入新章节（需要 sectionIndex、title 和 content）
 - \`insert_image\`: 在指定章节后插入图片
 - \`search_web\`: 搜索网络获取参考资料
 - \`search_image\`: 搜索适合的图片素材
@@ -888,9 +1008,9 @@ class APIRouteHandlers {
 ### 创建文档流程
 当用户要求创建新文档时，你应该：
 1. 理解用户需求（主题、风格、长度、受众等）
-2. **首先调用 update_section(clear_all) 清空编辑器中的旧内容**
+2. **首先调用 clear_document 清空编辑器中的旧内容**
 3. 规划文档结构（标题和各章节标题）
-4. 逐章节编写内容，使用 update_section(append) 逐步构建
+4. 逐章节编写内容，使用 append_section 逐步构建
 5. 如有需要，使用 search_web 获取参考资料
 6. 如有需要，使用 search_image + insert_image 为文档配图
 7. 完成后给出总结
@@ -899,9 +1019,9 @@ class APIRouteHandlers {
 当用户要求修改现有文档时：
 1. 先调用 get_document 了解当前文档内容
 2. 理解用户的修改需求
-3. 使用 update_section(replace) 修改需要改动的章节
-4. 如需新增章节，使用 update_section(append/insert)
-5. 如需删除章节，使用 update_section(delete)
+3. 使用 replace_section 修改需要改动的章节
+4. 如需新增章节，使用 append_section 或 insert_section
+5. 如需删除章节，使用 delete_section
 6. 完成后说明修改了哪些内容
 
 ## 写作规范
@@ -926,8 +1046,9 @@ class APIRouteHandlers {
 
 ## 重要注意事项
 - 每次只修改需要修改的部分，不要替换整个文档
-- **创建新文档时，必须先调用 update_section(clear_all) 清空旧内容，再用 append 逐章节构建**
-- 使用 update_section 时，content 参数不要包含标题标签（h1/h2），标题通过 title 参数传递
+- **创建新文档时，必须先调用 clear_document 清空旧内容，再用 append_section 逐章节构建**
+- content 参数不要包含标题标签（h1/h2），标题通过 title 参数传递
+- 使用 replace_section 时，必须传入 title 参数——如果不需要修改标题，传入原标题即可
 - 在创建文档时，先追加 Section 0（标题和引言），再逐个追加后续章节
 - 如果用户没有明确指定语言，默认使用与用户消息相同的语言
 - 回复用户时，简洁说明你做了什么或计划做什么，不要过度解释`;

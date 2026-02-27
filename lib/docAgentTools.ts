@@ -24,7 +24,7 @@ import {
   sectionsToHtml,
   reindexSections,
 } from './docSectionParser';
-import { buildFlaskApiUrl } from './flaskConfig';
+import { fetchFlask } from './flaskConfig';
 import { logger } from './logger';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -465,21 +465,13 @@ export const createDocAgentTools = (
 
       logger.info('search_web called', { query, maxResults: limit }, 'DocAgentTools');
 
-      const flaskUrl = buildFlaskApiUrl('/api/search-services/search');
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      // Forward abort from the agent's signal
-      if (signal) {
-        signal.addEventListener('abort', () => controller.abort(), { once: true });
-      }
-
       try {
-        const response = await fetch(flaskUrl, {
+        const response = await fetchFlask('/api/search-services/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query, maxResults: limit }),
-          signal: controller.signal,
+          timeout: 15000,
+          signal: signal ?? undefined,
         });
 
         if (!response.ok) {
@@ -494,7 +486,7 @@ export const createDocAgentTools = (
           );
         }
 
-        const data = await response.json();
+        const data = await response.json() as { success?: boolean; error?: string; results?: unknown[] };
 
         if (!data.success) {
           return errorResult(data.error || 'Search service returned an error', {});
@@ -525,8 +517,6 @@ export const createDocAgentTools = (
           'Ensure the Flask backend is running and search service is configured.',
           {},
         );
-      } finally {
-        clearTimeout(timeoutId);
       }
     },
   };
@@ -546,20 +536,13 @@ export const createDocAgentTools = (
 
       logger.info('search_image called', { keywords, count: perPage }, 'DocAgentTools');
 
-      const flaskUrl = buildFlaskApiUrl('/api/image-services/search');
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-      if (signal) {
-        signal.addEventListener('abort', () => controller.abort(), { once: true });
-      }
-
       try {
-        const response = await fetch(flaskUrl, {
+        const response = await fetchFlask('/api/image-services/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: keywords, perPage }),
-          signal: controller.signal,
+          timeout: 10000,
+          signal: signal ?? undefined,
         });
 
         if (!response.ok) {
@@ -574,7 +557,7 @@ export const createDocAgentTools = (
           );
         }
 
-        const data = await response.json();
+        const data = await response.json() as { success?: boolean; error?: string; images?: Record<string, unknown>[] };
 
         if (!data.success) {
           return errorResult(data.error || 'Image service returned an error', {});
@@ -610,8 +593,6 @@ export const createDocAgentTools = (
           'Ensure the Flask backend is running and image service is configured.',
           {},
         );
-      } finally {
-        clearTimeout(timeoutId);
       }
     },
   };

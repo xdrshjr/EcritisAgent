@@ -12,9 +12,11 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock flaskConfig
+// Mock flaskConfig — provide fetchFlask as a vi.fn() so tests can override it
+const mockFetchFlask = vi.fn();
 vi.mock('@/lib/flaskConfig', () => ({
   buildFlaskApiUrl: vi.fn((endpoint: string) => `http://127.0.0.1:5000${endpoint}`),
+  fetchFlask: (...args: unknown[]) => mockFetchFlask(...args),
 }));
 
 import { createDocAgentTools } from '../docAgentTools';
@@ -444,26 +446,22 @@ describe('insert_image', () => {
 // ── search_web ───────────────────────────────────────────────────────────────
 
 describe('search_web', () => {
-  let originalFetch: typeof globalThis.fetch;
-
-  beforeEach(() => {
-    originalFetch = globalThis.fetch;
-  });
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    mockFetchFlask.mockReset();
   });
 
   it('returns search results on success', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    mockFetchFlask.mockResolvedValue({
       ok: true,
+      status: 200,
       json: () => Promise.resolve({
         success: true,
         results: [
           { title: 'Result 1', url: 'https://example.com/1', content: 'Summary 1', score: 0.9 },
         ],
       }),
-    }) as unknown as typeof fetch;
+      text: () => Promise.resolve(''),
+    });
 
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
@@ -479,11 +477,11 @@ describe('search_web', () => {
   });
 
   it('returns error when Flask returns non-OK status', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    mockFetchFlask.mockResolvedValue({
       ok: false,
       status: 500,
       text: () => Promise.resolve('Internal Server Error'),
-    }) as unknown as typeof fetch;
+    });
 
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
@@ -495,10 +493,8 @@ describe('search_web', () => {
     expect(text).toContain('500');
   });
 
-  it('returns error when fetch throws', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(
-      new Error('Network failure'),
-    ) as unknown as typeof fetch;
+  it('returns error when fetchFlask throws', async () => {
+    mockFetchFlask.mockRejectedValue(new Error('Network failure'));
 
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
@@ -511,10 +507,12 @@ describe('search_web', () => {
   });
 
   it('clamps maxResults to valid range', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    mockFetchFlask.mockResolvedValue({
       ok: true,
+      status: 200,
       json: () => Promise.resolve({ success: true, results: [] }),
-    }) as unknown as typeof fetch;
+      text: () => Promise.resolve(''),
+    });
 
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
@@ -522,16 +520,18 @@ describe('search_web', () => {
 
     await searchTool.execute(CALL_ID, { query: 'test', maxResults: 100 });
 
-    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const fetchCall = mockFetchFlask.mock.calls[0];
     const body = JSON.parse(fetchCall[1].body);
     expect(body.maxResults).toBe(10);
   });
 
   it('does not emit SSE events', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    mockFetchFlask.mockResolvedValue({
       ok: true,
+      status: 200,
       json: () => Promise.resolve({ success: true, results: [] }),
-    }) as unknown as typeof fetch;
+      text: () => Promise.resolve(''),
+    });
 
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
@@ -545,19 +545,14 @@ describe('search_web', () => {
 // ── search_image ─────────────────────────────────────────────────────────────
 
 describe('search_image', () => {
-  let originalFetch: typeof globalThis.fetch;
-
-  beforeEach(() => {
-    originalFetch = globalThis.fetch;
-  });
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    mockFetchFlask.mockReset();
   });
 
   it('returns image results on success', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    mockFetchFlask.mockResolvedValue({
       ok: true,
+      status: 200,
       json: () => Promise.resolve({
         success: true,
         images: [
@@ -568,7 +563,8 @@ describe('search_image', () => {
           },
         ],
       }),
-    }) as unknown as typeof fetch;
+      text: () => Promise.resolve(''),
+    });
 
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
@@ -584,11 +580,11 @@ describe('search_image', () => {
   });
 
   it('returns error when Flask returns non-OK', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    mockFetchFlask.mockResolvedValue({
       ok: false,
       status: 404,
       text: () => Promise.resolve('Not found'),
-    }) as unknown as typeof fetch;
+    });
 
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
@@ -600,10 +596,12 @@ describe('search_image', () => {
   });
 
   it('clamps count to valid range', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    mockFetchFlask.mockResolvedValue({
       ok: true,
+      status: 200,
       json: () => Promise.resolve({ success: true, images: [] }),
-    }) as unknown as typeof fetch;
+      text: () => Promise.resolve(''),
+    });
 
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
@@ -611,7 +609,7 @@ describe('search_image', () => {
 
     await imgTool.execute(CALL_ID, { keywords: 'test', count: 50 });
 
-    const fetchCall = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    const fetchCall = mockFetchFlask.mock.calls[0];
     const body = JSON.parse(fetchCall[1].body);
     expect(body.perPage).toBe(5);
   });

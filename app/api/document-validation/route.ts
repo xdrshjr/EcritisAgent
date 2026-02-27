@@ -73,8 +73,6 @@ export async function POST(request: NextRequest) {
 
     // Forward request to Flask backend using Node.js http directly
     // (bypasses Next.js patched fetch which can break local connections)
-    const controller = new AbortController();
-
     let flaskResponse: Awaited<ReturnType<typeof fetchFlask>>;
 
     try {
@@ -91,7 +89,6 @@ export async function POST(request: NextRequest) {
           modelId: modelId,
         }),
         timeout: 120000,
-        signal: controller.signal,
       });
       
       logger.debug('Flask backend validation response received', {
