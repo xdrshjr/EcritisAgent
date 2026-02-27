@@ -1618,8 +1618,8 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
             <span className="text-sm font-medium">{dict.docValidation.editorToolbar.insertImage}</span>
           </button>
 
-          {/* Model Selector */}
-          {availableModels.length > 0 && (
+          {/* Model Selector — only shown when parent provides onModelChange */}
+          {availableModels.length > 0 && onModelChange && (
             <>
               <div className="w-px h-6 bg-border mx-2" />
               <select
