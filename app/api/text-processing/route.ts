@@ -5,7 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
-import { buildFlaskApiUrl } from '@/lib/flaskConfig';
+import { buildFlaskApiUrl, fetchFlask } from '@/lib/flaskConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -62,16 +62,10 @@ export async function POST(request: NextRequest) {
     const flaskUrl = buildFlaskApiUrl('/api/text-processing');
     logger.debug('Text processing API: Flask URL', { flaskUrl }, 'API:TextProcessing');
 
-    // Set timeout for text processing (2 minutes)
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-      logger.warn('Text processing API: Request timeout (2min)', undefined, 'API:TextProcessing');
-      controller.abort();
-    }, 120000);
-
-    let flaskResponse: Response;
+    // Forward request to Flask backend using Node.js http directly
+    let flaskResponse: Awaited<ReturnType<typeof fetchFlask>>;
     try {
-      flaskResponse = await fetch(flaskUrl, {
+      flaskResponse = await fetchFlask('/api/text-processing', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -81,14 +75,14 @@ export async function POST(request: NextRequest) {
           type,
           modelId,
         }),
-        signal: controller.signal,
+        timeout: 120000,
       });
     } catch (fetchError) {
       logger.error('Text processing API: Failed to connect to Flask backend', {
         error: fetchError instanceof Error ? fetchError.message : 'Unknown error',
         flaskUrl,
       }, 'API:TextProcessing');
-      
+
       return new Response(
         JSON.stringify({
           error: 'Failed to connect to backend',
@@ -99,8 +93,6 @@ export async function POST(request: NextRequest) {
           headers: { 'Content-Type': 'application/json' },
         }
       );
-    } finally {
-      clearTimeout(timeout);
     }
 
     // Handle non-OK responses from Flask

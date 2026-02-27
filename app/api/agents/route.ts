@@ -5,7 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
-import { buildFlaskApiUrl } from '@/lib/flaskConfig';
+import { buildFlaskApiUrl, fetchFlask } from '@/lib/flaskConfig';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,29 +19,22 @@ export async function GET(request: NextRequest) {
     const flaskUrl = buildFlaskApiUrl('/api/agents');
     logger.debug('Agents List API: Flask URL', { flaskUrl }, 'API:Agents');
 
-    // Set timeout (10 seconds should be enough for getting agent list)
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-      logger.warn('Agents List API: Request timeout (10s)', undefined, 'API:Agents');
-      controller.abort();
-    }, 10000);
-
-    let flaskResponse: Response;
+    // Forward request to Flask backend using Node.js http directly
+    let flaskResponse: Awaited<ReturnType<typeof fetchFlask>>;
     try {
-      flaskResponse = await fetch(flaskUrl, {
+      flaskResponse = await fetchFlask('/api/agents', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        signal: controller.signal,
+        timeout: 10000,
       });
     } catch (fetchError) {
-      clearTimeout(timeout);
       logger.error('Agents List API: Failed to connect to Flask backend', {
         error: fetchError instanceof Error ? fetchError.message : 'Unknown error',
         flaskUrl,
       }, 'API:Agents');
-      
+
       return new Response(
         JSON.stringify({
           error: 'Failed to connect to backend',
@@ -52,8 +45,6 @@ export async function GET(request: NextRequest) {
           headers: { 'Content-Type': 'application/json' },
         }
       );
-    } finally {
-      clearTimeout(timeout);
     }
 
     // Get response body

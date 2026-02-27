@@ -6,7 +6,7 @@
 
 import { NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
-import { buildFlaskApiUrl } from '@/lib/flaskConfig';
+import { buildFlaskApiUrl, fetchFlask } from '@/lib/flaskConfig';
 
 // Use Node.js runtime for proper HTTP streaming support
 export const runtime = 'nodejs';
@@ -71,14 +71,14 @@ export async function POST(request: NextRequest) {
       modelId: modelId || 'default',
     }, 'API:DocumentValidation');
 
-    // Forward request to Flask backend
+    // Forward request to Flask backend using Node.js http directly
+    // (bypasses Next.js patched fetch which can break local connections)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout
 
-    let flaskResponse: Response;
-    
+    let flaskResponse: Awaited<ReturnType<typeof fetchFlask>>;
+
     try {
-      flaskResponse = await fetch(flaskUrl, {
+      flaskResponse = await fetchFlask('/api/document-validation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,23 +88,21 @@ export async function POST(request: NextRequest) {
           chunkIndex,
           totalChunks,
           language: normalizedLanguage,
-          modelId: modelId, // Pass modelId to Flask backend
+          modelId: modelId,
         }),
+        timeout: 120000,
         signal: controller.signal,
       });
-      
-      clearTimeout(timeoutId);
       
       logger.debug('Flask backend validation response received', {
         status: flaskResponse.status,
         statusText: flaskResponse.statusText,
         ok: flaskResponse.ok,
         chunkIndex,
-        contentType: flaskResponse.headers.get('content-type'),
+        contentType: flaskResponse.headers['content-type'],
       }, 'API:DocumentValidation');
-      
+
     } catch (fetchError) {
-      clearTimeout(timeoutId);
       
       const errorDetails = {
         error: fetchError instanceof Error ? fetchError.message : 'Unknown error',
@@ -341,16 +339,16 @@ export async function GET() {
     const flaskUrl = buildFlaskApiUrl('/api/document-validation');
     
     logger.debug('Checking Flask backend validation endpoint', { url: flaskUrl }, 'API:DocumentValidation');
-    
-    // Forward health check to Flask
-    const response = await fetch(flaskUrl, {
+
+    // Forward health check to Flask using Node.js http directly
+    const response = await fetchFlask('/api/document-validation', {
       method: 'GET',
     });
 
     if (response.ok) {
-      const data = await response.json();
+      const data = await response.json() as { configured?: boolean; model?: string };
       logger.success('Flask validation endpoint is healthy', { data }, 'API:DocumentValidation');
-      
+
       return new Response(
         JSON.stringify({
           status: 'ok',

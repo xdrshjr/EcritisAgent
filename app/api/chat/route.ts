@@ -6,7 +6,7 @@
 
 import { NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
-import { buildFlaskApiUrl, checkFlaskBackendHealth } from '@/lib/flaskConfig';
+import { buildFlaskApiUrl, checkFlaskBackendHealth, fetchFlask } from '@/lib/flaskConfig';
 import type { ChatMessage } from '@/lib/chatClient';
 
 // Use Node.js runtime for proper HTTP streaming support
@@ -50,32 +50,25 @@ export async function DELETE(request: NextRequest) {
       sessionId 
     }, 'API:Chat');
 
-    // Forward stop request to Flask backend
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout for stop
+    // Forward stop request to Flask backend using Node.js http directly
+    let flaskResponse: Awaited<ReturnType<typeof fetchFlask>>;
 
-    let flaskResponse: Response;
-    
     try {
-      flaskResponse = await fetch(flaskUrl, {
+      flaskResponse = await fetchFlask('/api/chat/stop', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ sessionId }),
-        signal: controller.signal,
+        timeout: 5000,
       });
-      
-      clearTimeout(timeoutId);
-      
+
       logger.debug('Flask backend stop response received', {
         status: flaskResponse.status,
         ok: flaskResponse.ok,
       }, 'API:Chat');
-      
+
     } catch (fetchError) {
-      clearTimeout(timeoutId);
-      
       logger.error('Failed to connect to Flask backend for stop', {
         error: fetchError instanceof Error ? fetchError.message : 'Unknown error',
         sessionId,
@@ -215,33 +208,27 @@ export async function POST(request: NextRequest) {
       ...(networkSearchEnabled !== undefined && { networkSearchEnabled }), // Include network search enabled flag
     };
 
-    // Forward request to Flask backend
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 second timeout
+    // Forward request to Flask backend using Node.js http directly
+    let flaskResponse: Awaited<ReturnType<typeof fetchFlask>>;
 
-    let flaskResponse: Response;
-    
     try {
-      flaskResponse = await fetch(flaskUrl, {
+      flaskResponse = await fetchFlask('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(flaskRequestBody),
-        signal: controller.signal,
+        timeout: 120000,
       });
-      
-      clearTimeout(timeoutId);
-      
+
       logger.debug('Flask backend response received', {
         status: flaskResponse.status,
         statusText: flaskResponse.statusText,
         ok: flaskResponse.ok,
-        contentType: flaskResponse.headers.get('content-type'),
+        contentType: flaskResponse.headers['content-type'],
       }, 'API:Chat');
-      
+
     } catch (fetchError) {
-      clearTimeout(timeoutId);
       
       const errorDetails = {
         error: fetchError instanceof Error ? fetchError.message : 'Unknown error',
@@ -515,15 +502,15 @@ export async function GET() {
     
     logger.debug('Checking Flask backend chat endpoint', { url: flaskUrl }, 'API:Chat');
     
-    // Forward health check to Flask
-    const response = await fetch(flaskUrl, {
+    // Forward health check to Flask using Node.js http directly
+    const response = await fetchFlask('/api/chat', {
       method: 'GET',
     });
 
     if (response.ok) {
-      const data = await response.json();
+      const data = await response.json() as { configured?: boolean; model?: string };
       logger.success('Flask chat endpoint is healthy', { data }, 'API:Chat');
-      
+
       return new Response(
         JSON.stringify({
           status: 'ok',
