@@ -95,17 +95,17 @@ describe('get_document', () => {
   });
 });
 
-// ── update_section: replace ──────────────────────────────────────────────────
+// ── replace_section ──────────────────────────────────────────────────────────
 
-describe('update_section — replace', () => {
+describe('replace_section', () => {
   it('replaces content of an existing section', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const replaceTool = tools.find((t) => t.name === 'replace_section')!;
 
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'replace',
+    const result = await replaceTool.execute(CALL_ID, {
       sectionIndex: 1,
+      title: 'Chapter 1',
       content: '<p>New chapter 1 content</p>',
     });
 
@@ -124,10 +124,9 @@ describe('update_section — replace', () => {
   it('replaces title when provided', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const replaceTool = tools.find((t) => t.name === 'replace_section')!;
 
-    await updateTool.execute(CALL_ID, {
-      operation: 'replace',
+    await replaceTool.execute(CALL_ID, {
       sectionIndex: 1,
       title: 'New Title',
       content: '<p>New content</p>',
@@ -146,11 +145,11 @@ describe('update_section — replace', () => {
   it('returns error for out-of-range index', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const replaceTool = tools.find((t) => t.name === 'replace_section')!;
 
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'replace',
+    const result = await replaceTool.execute(CALL_ID, {
       sectionIndex: 99,
+      title: 'Chapter 1',
       content: '<p>Bad</p>',
     });
 
@@ -160,28 +159,15 @@ describe('update_section — replace', () => {
     expect(controller.chunks).toHaveLength(0);
   });
 
-  it('returns error when sectionIndex is missing', async () => {
+  it('returns error when content is empty', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const replaceTool = tools.find((t) => t.name === 'replace_section')!;
 
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'replace',
-      content: '<p>No index</p>',
-    });
-
-    const text = result.content[0].type === 'text' ? result.content[0].text : '';
-    expect(text).toContain('Error');
-  });
-
-  it('returns error when content is missing', async () => {
-    const controller = createMockSSEController();
-    const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
-
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'replace',
+    const result = await replaceTool.execute(CALL_ID, {
       sectionIndex: 1,
+      title: 'Chapter 1',
+      content: '',
     });
 
     const text = result.content[0].type === 'text' ? result.content[0].text : '';
@@ -189,16 +175,15 @@ describe('update_section — replace', () => {
   });
 });
 
-// ── update_section: append ───────────────────────────────────────────────────
+// ── append_section ───────────────────────────────────────────────────────────
 
-describe('update_section — append', () => {
+describe('append_section', () => {
   it('appends a new section at the end', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const appendTool = tools.find((t) => t.name === 'append_section')!;
 
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'append',
+    const result = await appendTool.execute(CALL_ID, {
       title: 'Chapter 3',
       content: '<p>New chapter content</p>',
     });
@@ -222,13 +207,13 @@ describe('update_section — append', () => {
     expect(events[0].sectionIndex).toBe(3);
   });
 
-  it('returns error when title is missing', async () => {
+  it('returns error when title is empty', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const appendTool = tools.find((t) => t.name === 'append_section')!;
 
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'append',
+    const result = await appendTool.execute(CALL_ID, {
+      title: '',
       content: '<p>No title</p>',
     });
 
@@ -236,14 +221,14 @@ describe('update_section — append', () => {
     expect(text).toContain('Error');
   });
 
-  it('returns error when content is missing', async () => {
+  it('returns error when content is empty', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const appendTool = tools.find((t) => t.name === 'append_section')!;
 
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'append',
+    const result = await appendTool.execute(CALL_ID, {
       title: 'New Section',
+      content: '',
     });
 
     const text = result.content[0].type === 'text' ? result.content[0].text : '';
@@ -251,16 +236,15 @@ describe('update_section — append', () => {
   });
 });
 
-// ── update_section: insert ───────────────────────────────────────────────────
+// ── insert_section ───────────────────────────────────────────────────────────
 
-describe('update_section — insert', () => {
+describe('insert_section', () => {
   it('inserts a section at the specified position', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const insertTool = tools.find((t) => t.name === 'insert_section')!;
 
-    await updateTool.execute(CALL_ID, {
-      operation: 'insert',
+    await insertTool.execute(CALL_ID, {
       sectionIndex: 1,
       title: 'Inserted Chapter',
       content: '<p>Inserted content</p>',
@@ -281,10 +265,9 @@ describe('update_section — insert', () => {
   it('returns error for out-of-range index', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const insertTool = tools.find((t) => t.name === 'insert_section')!;
 
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'insert',
+    const result = await insertTool.execute(CALL_ID, {
       sectionIndex: 100,
       title: 'Bad',
       content: '<p>Bad</p>',
@@ -297,10 +280,9 @@ describe('update_section — insert', () => {
   it('allows inserting at position equal to length (same as append)', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const insertTool = tools.find((t) => t.name === 'insert_section')!;
 
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'insert',
+    const result = await insertTool.execute(CALL_ID, {
       sectionIndex: 3, // sections.length === 3
       title: 'At End',
       content: '<p>End</p>',
@@ -311,16 +293,15 @@ describe('update_section — insert', () => {
   });
 });
 
-// ── update_section: delete ───────────────────────────────────────────────────
+// ── delete_section ───────────────────────────────────────────────────────────
 
-describe('update_section — delete', () => {
+describe('delete_section', () => {
   it('deletes the specified section', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const deleteTool = tools.find((t) => t.name === 'delete_section')!;
 
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'delete',
+    const result = await deleteTool.execute(CALL_ID, {
       sectionIndex: 1,
     });
 
@@ -340,10 +321,9 @@ describe('update_section — delete', () => {
   it('cannot delete Section 0', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const deleteTool = tools.find((t) => t.name === 'delete_section')!;
 
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'delete',
+    const result = await deleteTool.execute(CALL_ID, {
       sectionIndex: 0,
     });
 
@@ -355,16 +335,46 @@ describe('update_section — delete', () => {
   it('returns error for out-of-range index', async () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
-    const updateTool = tools.find((t) => t.name === 'update_section')!;
+    const deleteTool = tools.find((t) => t.name === 'delete_section')!;
 
-    const result = await updateTool.execute(CALL_ID, {
-      operation: 'delete',
+    const result = await deleteTool.execute(CALL_ID, {
       sectionIndex: 50,
     });
 
     const text = result.content[0].type === 'text' ? result.content[0].text : '';
     expect(text).toContain('Error');
     expect(text).toContain('out of range');
+  });
+});
+
+// ── clear_document ───────────────────────────────────────────────────────────
+
+describe('clear_document', () => {
+  it('clears all sections', async () => {
+    const controller = createMockSSEController();
+    const tools = createDocAgentTools(SAMPLE_HTML, controller);
+    const clearTool = tools.find((t) => t.name === 'clear_document')!;
+
+    const result = await clearTool.execute(CALL_ID, {});
+
+    const text = result.content[0].type === 'text' ? result.content[0].text : '';
+    expect(text).toContain('cleared');
+
+    // Verify document is empty
+    const getTool = tools.find((t) => t.name === 'get_document')!;
+    const getResult = await getTool.execute(CALL_ID, {});
+    const data = JSON.parse(
+      getResult.content[0].type === 'text' ? getResult.content[0].text : '{}',
+    );
+    expect(data.totalSections).toBe(0);
+
+    // SSE event
+    const events = parseSSEChunks(controller.chunks);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: 'doc_update',
+      operation: 'clear_all',
+    });
   });
 });
 
@@ -610,14 +620,18 @@ describe('search_image', () => {
 // ── Tool creation ────────────────────────────────────────────────────────────
 
 describe('createDocAgentTools', () => {
-  it('returns 5 tools with correct names', () => {
+  it('returns 9 tools with correct names', () => {
     const controller = createMockSSEController();
     const tools = createDocAgentTools(SAMPLE_HTML, controller);
 
-    expect(tools).toHaveLength(5);
+    expect(tools).toHaveLength(9);
     const names = tools.map((t) => t.name);
     expect(names).toContain('get_document');
-    expect(names).toContain('update_section');
+    expect(names).toContain('clear_document');
+    expect(names).toContain('append_section');
+    expect(names).toContain('replace_section');
+    expect(names).toContain('delete_section');
+    expect(names).toContain('insert_section');
     expect(names).toContain('insert_image');
     expect(names).toContain('search_web');
     expect(names).toContain('search_image');

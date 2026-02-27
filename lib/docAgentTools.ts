@@ -6,11 +6,15 @@
  * (delivered via the request body) rather than the file system.
  *
  * Tools:
- *   get_document    — read current editor content as structured sections
- *   update_section  — replace / append / insert / delete sections
- *   insert_image    — insert an image after/before a section
- *   search_web      — search the web via Tavily
- *   search_image    — search images via Unsplash
+ *   get_document      — read current editor content as structured sections
+ *   clear_document    — clear all sections from the document
+ *   append_section    — append a new section at the end
+ *   replace_section   — replace an existing section's title and content
+ *   delete_section    — delete a section by index
+ *   insert_section    — insert a new section at a given position
+ *   insert_image      — insert an image after/before a section
+ *   search_web        — search the web via Tavily
+ *   search_image      — search images via Unsplash
  */
 
 import { Type, type Static } from '@sinclair/typebox';
@@ -76,22 +80,44 @@ const errorResult = <T>(message: string, details: T): AgentToolResult<T> => ({
 
 const GetDocumentParams = Type.Object({});
 
-const UpdateSectionParams = Type.Object({
-  operation: Type.Union([
-    Type.Literal('replace'),
-    Type.Literal('append'),
-    Type.Literal('insert'),
-    Type.Literal('delete'),
-    Type.Literal('clear_all'),
-  ], { description: 'Operation type: replace, append, insert, delete, or clear_all' }),
-  sectionIndex: Type.Number({
-    description: 'Target section index (0-based). Required for replace, insert, delete. Use 0 for append and clear_all.',
-  }),
+const ClearDocumentParams = Type.Object({});
+
+const AppendSectionParams = Type.Object({
   title: Type.String({
-    description: 'Section title (plain text, will be wrapped in h1/h2). Required for append and insert. Use empty string for delete and clear_all.',
+    description: 'Section title (plain text, will be wrapped in h1/h2)',
   }),
   content: Type.String({
-    description: 'Section HTML content (paragraphs, lists, etc. wrapped in <p> tags). Required for replace, append, insert. Use empty string for delete and clear_all.',
+    description: 'Section HTML content (paragraphs, lists, etc. wrapped in <p> tags)',
+  }),
+});
+
+const ReplaceSectionParams = Type.Object({
+  sectionIndex: Type.Number({
+    description: 'Target section index (0-based)',
+  }),
+  title: Type.String({
+    description: 'Section title (pass the original title to keep it unchanged)',
+  }),
+  content: Type.String({
+    description: 'New section HTML content (paragraphs, lists, etc. wrapped in <p> tags)',
+  }),
+});
+
+const DeleteSectionParams = Type.Object({
+  sectionIndex: Type.Number({
+    description: 'Target section index (0-based). Cannot delete Section 0.',
+  }),
+});
+
+const InsertSectionParams = Type.Object({
+  sectionIndex: Type.Number({
+    description: 'Insert new section before this index (0-based)',
+  }),
+  title: Type.String({
+    description: 'Section title (plain text, will be wrapped in h1/h2)',
+  }),
+  content: Type.String({
+    description: 'Section HTML content (paragraphs, lists, etc. wrapped in <p> tags)',
   }),
 });
 
@@ -186,169 +212,201 @@ export const createDocAgentTools = (
     },
   };
 
-  // ── update_section ───────────────────────────────────────────────────────
+  // ── clear_document ──────────────────────────────────────────────────────
 
-  const updateSection: AgentTool<typeof UpdateSectionParams> = {
-    name: 'update_section',
-    label: 'Update Section',
+  const clearDocument: AgentTool<typeof ClearDocumentParams> = {
+    name: 'clear_document',
+    label: 'Clear Document',
     description:
-      '对文档进行章节级别的编辑操作。所有参数(operation, sectionIndex, title, content)都必须提供。' +
-      '支持五种操作：' +
-      'replace(替换指定章节，需要sectionIndex和content，title可为空串表示保留原标题)、' +
-      'append(在文档末尾追加新章节，需要title和content，sectionIndex传0)、' +
-      'insert(在指定位置之前插入新章节，需要sectionIndex、title和content)、' +
-      'delete(删除指定章节，需要sectionIndex，title和content传空串)、' +
-      'clear_all(清空整个文档，sectionIndex传0，title和content传空串)。' +
+      '清空整个文档的所有章节。通常在创建新文档之前调用，以清除编辑器中的旧内容。',
+    parameters: ClearDocumentParams,
+    execute: async () => {
+      logger.info('clear_document called', {}, 'DocAgentTools');
+
+      sections = [];
+      rebuildHtml();
+
+      sendDocUpdate(sseController, {
+        type: 'doc_update',
+        operation: 'clear_all',
+      });
+
+      return textResult(
+        'Document has been cleared. You can now build the document from scratch using append_section.',
+        { operation: 'clear_all' },
+      );
+    },
+  };
+
+  // ── append_section ─────────────────────────────────────────────────────
+
+  const appendSection: AgentTool<typeof AppendSectionParams> = {
+    name: 'append_section',
+    label: 'Append Section',
+    description:
+      '在文档末尾追加一个新章节。需要提供章节标题(title)和HTML内容(content)。' +
       '内容使用HTML格式(p, ul, ol, li, strong, em等标签)。',
-    parameters: UpdateSectionParams,
+    parameters: AppendSectionParams,
     execute: async (_toolCallId, params) => {
-      const { operation, sectionIndex, title, content } = params as Static<typeof UpdateSectionParams>;
+      const { title, content } = params as Static<typeof AppendSectionParams>;
 
-      logger.info('update_section called', { operation, sectionIndex, title: title?.substring(0, 50) }, 'DocAgentTools');
+      logger.info('append_section called', { title: title.substring(0, 50) }, 'DocAgentTools');
 
-      // ── Validation ─────────────────────────────────────────────────────
-      switch (operation) {
-        case 'replace': {
-          if (sectionIndex == null || sectionIndex < 0 || sectionIndex >= sections.length) {
-            return errorResult(
-              `sectionIndex ${sectionIndex} out of range. Valid range: 0-${sections.length - 1}`,
-              {},
-            );
-          }
-          if (!content) {
-            return errorResult('replace operation requires content', {});
-          }
-
-          // Apply
-          sections[sectionIndex] = {
-            ...sections[sectionIndex],
-            content,
-            ...(title !== undefined ? { title } : {}),
-          };
-          rebuildHtml();
-
-          sendDocUpdate(sseController, {
-            type: 'doc_update',
-            operation: 'replace',
-            sectionIndex,
-            title: sections[sectionIndex].title,
-            content,
-          });
-
-          return textResult(
-            `Section ${sectionIndex} '${sections[sectionIndex].title}' has been updated.`,
-            { operation: 'replace', sectionIndex },
-          );
-        }
-
-        case 'append': {
-          if (!title) {
-            return errorResult('append operation requires title', {});
-          }
-          if (!content) {
-            return errorResult('append operation requires content', {});
-          }
-
-          const newIndex = sections.length;
-          sections.push({ index: newIndex, title, content });
-          rebuildHtml();
-
-          sendDocUpdate(sseController, {
-            type: 'doc_update',
-            operation: 'append',
-            sectionIndex: newIndex,
-            title,
-            content,
-          });
-
-          return textResult(
-            `New section '${title}' appended as Section ${newIndex}.`,
-            { operation: 'append', sectionIndex: newIndex },
-          );
-        }
-
-        case 'insert': {
-          if (sectionIndex == null || sectionIndex < 0 || sectionIndex > sections.length) {
-            return errorResult(
-              `sectionIndex ${sectionIndex} out of range for insert. Valid range: 0-${sections.length}`,
-              {},
-            );
-          }
-          if (!title) {
-            return errorResult('insert operation requires title', {});
-          }
-          if (!content) {
-            return errorResult('insert operation requires content', {});
-          }
-
-          sections.splice(sectionIndex, 0, { index: sectionIndex, title, content });
-          rebuildHtml();
-
-          sendDocUpdate(sseController, {
-            type: 'doc_update',
-            operation: 'insert',
-            sectionIndex,
-            title,
-            content,
-          });
-
-          return textResult(
-            `New section '${title}' inserted at position ${sectionIndex}.`,
-            { operation: 'insert', sectionIndex },
-          );
-        }
-
-        case 'delete': {
-          if (sectionIndex == null) {
-            return errorResult('delete operation requires sectionIndex', {});
-          }
-          if (sectionIndex === 0) {
-            return errorResult('Cannot delete Section 0 (document title area)', {});
-          }
-          if (sectionIndex < 0 || sectionIndex >= sections.length) {
-            return errorResult(
-              `sectionIndex ${sectionIndex} out of range. Valid range: 1-${sections.length - 1}`,
-              {},
-            );
-          }
-
-          const deletedTitle = sections[sectionIndex].title;
-          sections.splice(sectionIndex, 1);
-          rebuildHtml();
-
-          sendDocUpdate(sseController, {
-            type: 'doc_update',
-            operation: 'delete',
-            sectionIndex,
-          });
-
-          return textResult(
-            `Section ${sectionIndex} '${deletedTitle}' has been deleted.`,
-            { operation: 'delete', sectionIndex },
-          );
-        }
-
-        case 'clear_all': {
-          sections = [];
-          rebuildHtml();
-
-          sendDocUpdate(sseController, {
-            type: 'doc_update',
-            operation: 'clear_all',
-          });
-
-          return textResult(
-            'Document has been cleared. You can now build the document from scratch using append.',
-            { operation: 'clear_all' },
-          );
-        }
-
-        default:
-          return errorResult(
-            `Unknown operation '${operation}'. Use replace, append, insert, delete, or clear_all.`,
-            {},
-          );
+      if (!title) {
+        return errorResult('append_section requires title', {});
       }
+      if (!content) {
+        return errorResult('append_section requires content', {});
+      }
+
+      const newIndex = sections.length;
+      sections.push({ index: newIndex, title, content });
+      rebuildHtml();
+
+      sendDocUpdate(sseController, {
+        type: 'doc_update',
+        operation: 'append',
+        sectionIndex: newIndex,
+        title,
+        content,
+      });
+
+      return textResult(
+        `New section '${title}' appended as Section ${newIndex}.`,
+        { operation: 'append', sectionIndex: newIndex },
+      );
+    },
+  };
+
+  // ── replace_section ────────────────────────────────────────────────────
+
+  const replaceSection: AgentTool<typeof ReplaceSectionParams> = {
+    name: 'replace_section',
+    label: 'Replace Section',
+    description:
+      '替换指定章节的标题和内容。需要提供sectionIndex(章节索引)、title(标题)和content(新内容)。' +
+      '如果不需要修改标题，请传入原标题。' +
+      '内容使用HTML格式(p, ul, ol, li, strong, em等标签)。',
+    parameters: ReplaceSectionParams,
+    execute: async (_toolCallId, params) => {
+      const { sectionIndex, title, content } = params as Static<typeof ReplaceSectionParams>;
+
+      logger.info('replace_section called', { sectionIndex, title: title.substring(0, 50) }, 'DocAgentTools');
+
+      if (sectionIndex < 0 || sectionIndex >= sections.length) {
+        return errorResult(
+          `sectionIndex ${sectionIndex} out of range. Valid range: 0-${sections.length - 1}`,
+          {},
+        );
+      }
+      if (!content) {
+        return errorResult('replace_section requires content', {});
+      }
+
+      sections[sectionIndex] = {
+        ...sections[sectionIndex],
+        title,
+        content,
+      };
+      rebuildHtml();
+
+      sendDocUpdate(sseController, {
+        type: 'doc_update',
+        operation: 'replace',
+        sectionIndex,
+        title: sections[sectionIndex].title,
+        content,
+      });
+
+      return textResult(
+        `Section ${sectionIndex} '${sections[sectionIndex].title}' has been updated.`,
+        { operation: 'replace', sectionIndex },
+      );
+    },
+  };
+
+  // ── delete_section ─────────────────────────────────────────────────────
+
+  const deleteSection: AgentTool<typeof DeleteSectionParams> = {
+    name: 'delete_section',
+    label: 'Delete Section',
+    description:
+      '删除指定索引的章节。不能删除 Section 0（文档标题区域）。',
+    parameters: DeleteSectionParams,
+    execute: async (_toolCallId, params) => {
+      const { sectionIndex } = params as Static<typeof DeleteSectionParams>;
+
+      logger.info('delete_section called', { sectionIndex }, 'DocAgentTools');
+
+      if (sectionIndex === 0) {
+        return errorResult('Cannot delete Section 0 (document title area)', {});
+      }
+      if (sectionIndex < 0 || sectionIndex >= sections.length) {
+        return errorResult(
+          `sectionIndex ${sectionIndex} out of range. Valid range: 1-${sections.length - 1}`,
+          {},
+        );
+      }
+
+      const deletedTitle = sections[sectionIndex].title;
+      sections.splice(sectionIndex, 1);
+      rebuildHtml();
+
+      sendDocUpdate(sseController, {
+        type: 'doc_update',
+        operation: 'delete',
+        sectionIndex,
+      });
+
+      return textResult(
+        `Section ${sectionIndex} '${deletedTitle}' has been deleted.`,
+        { operation: 'delete', sectionIndex },
+      );
+    },
+  };
+
+  // ── insert_section ─────────────────────────────────────────────────────
+
+  const insertSection: AgentTool<typeof InsertSectionParams> = {
+    name: 'insert_section',
+    label: 'Insert Section',
+    description:
+      '在指定位置之前插入一个新章节。需要提供sectionIndex(插入位置)、title(标题)和content(内容)。' +
+      '内容使用HTML格式(p, ul, ol, li, strong, em等标签)。',
+    parameters: InsertSectionParams,
+    execute: async (_toolCallId, params) => {
+      const { sectionIndex, title, content } = params as Static<typeof InsertSectionParams>;
+
+      logger.info('insert_section called', { sectionIndex, title: title.substring(0, 50) }, 'DocAgentTools');
+
+      if (sectionIndex < 0 || sectionIndex > sections.length) {
+        return errorResult(
+          `sectionIndex ${sectionIndex} out of range for insert. Valid range: 0-${sections.length}`,
+          {},
+        );
+      }
+      if (!title) {
+        return errorResult('insert_section requires title', {});
+      }
+      if (!content) {
+        return errorResult('insert_section requires content', {});
+      }
+
+      sections.splice(sectionIndex, 0, { index: sectionIndex, title, content });
+      rebuildHtml();
+
+      sendDocUpdate(sseController, {
+        type: 'doc_update',
+        operation: 'insert',
+        sectionIndex,
+        title,
+        content,
+      });
+
+      return textResult(
+        `New section '${title}' inserted at position ${sectionIndex}.`,
+        { operation: 'insert', sectionIndex },
+      );
     },
   };
 
@@ -563,7 +621,11 @@ export const createDocAgentTools = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allTools: AgentTool<any>[] = [
     getDocument,
-    updateSection,
+    clearDocument,
+    appendSection,
+    replaceSection,
+    deleteSection,
+    insertSection,
     insertImage,
     searchWeb,
     searchImage,
