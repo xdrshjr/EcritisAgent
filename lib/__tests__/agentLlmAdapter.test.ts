@@ -254,7 +254,7 @@ describe('convertToAgentLLMConfig', () => {
 // ── getAgentLLMConfig ────────────────────────────────────────────────────────
 
 describe('getAgentLLMConfig', () => {
-  it('converts a standard ModelConfig', () => {
+  it('converts a standard ModelConfig', async () => {
     const model = {
       id: 'model_123',
       type: 'standard' as const,
@@ -265,14 +265,14 @@ describe('getAgentLLMConfig', () => {
       modelName: 'gpt-4o',
     };
 
-    const result = getAgentLLMConfig(model, undefined, undefined, 'openai');
+    const result = await getAgentLLMConfig(model, undefined, undefined, 'openai');
 
     expect(result.model.id).toBe('gpt-4o');
     expect(result.model.provider).toBe('openai');
     expect(result.streamOptions.apiKey).toBe('sk-test');
   });
 
-  it('converts a custom ModelConfig', () => {
+  it('converts a custom ModelConfig', async () => {
     const model = {
       id: 'model_456',
       type: 'custom' as const,
@@ -282,14 +282,14 @@ describe('getAgentLLMConfig', () => {
       modelName: 'llama3',
     };
 
-    const result = getAgentLLMConfig(model, undefined, undefined, 'openai');
+    const result = await getAgentLLMConfig(model, undefined, undefined, 'openai');
 
     expect(result.model.id).toBe('llama3');
     expect(result.model.baseUrl).toBe('https://my-server.com/v1');
     expect(result.streamOptions.apiKey).toBe('custom-key');
   });
 
-  it('converts a codingPlan ModelConfig with resolved URL and model', () => {
+  it('converts a codingPlan ModelConfig with resolved URL and model', async () => {
     const model = {
       id: 'model_789',
       type: 'codingPlan' as const,
@@ -298,7 +298,7 @@ describe('getAgentLLMConfig', () => {
       apiKey: 'kimi-key',
     };
 
-    const result = getAgentLLMConfig(
+    const result = await getAgentLLMConfig(
       model,
       'https://api.moonshot.cn/v1',
       'kimi-k2.5',
@@ -313,7 +313,7 @@ describe('getAgentLLMConfig', () => {
     expect(result.streamOptions.headers).toEqual({ 'anthropic-version': '2023-06-01' });
   });
 
-  it('passes defaultParams through', () => {
+  it('passes defaultParams through', async () => {
     const model = {
       id: 'model_1',
       type: 'standard' as const,
@@ -324,7 +324,7 @@ describe('getAgentLLMConfig', () => {
       modelName: 'gpt-4',
     };
 
-    const result = getAgentLLMConfig(
+    const result = await getAgentLLMConfig(
       model,
       undefined,
       undefined,

@@ -15,7 +15,7 @@ import type {
 } from '@mariozechner/pi-ai';
 
 import type { ModelConfig } from './modelConfig';
-import { getLLMConfigFromModel } from './modelConfig';
+import { getLLMConfigFromModel, isCodingPlanModel, loadProviders } from './modelConfig';
 import { logger } from './logger';
 
 // ── CallConfig (mirrors the Python backend call_config) ──────────────────────
@@ -159,17 +159,42 @@ export const convertToAgentLLMConfig = (callConfig: CallConfig): AgentLLMConfig 
 /**
  * One-step conversion: take a project `ModelConfig` → `AgentLLMConfig`.
  *
- * For `codingPlan` models, the caller must supply the resolved apiUrl and
- * modelName (from the provider template), just like `getLLMConfigFromModel`.
+ * For `codingPlan` models, automatically resolves apiUrl, modelName, protocol,
+ * extraHeaders, and defaultParams from the provider template via `loadProviders()`.
  */
-export const getAgentLLMConfig = (
+export const getAgentLLMConfig = async (
   selectedModel: ModelConfig,
   resolvedApiUrl?: string,
   resolvedModelName?: string,
   protocol?: 'openai' | 'anthropic',
   extraHeaders?: Record<string, string>,
   defaultParams?: CallConfig['defaultParams'],
-): AgentLLMConfig => {
+): Promise<AgentLLMConfig> => {
+  // For codingPlan models, resolve provider template fields automatically
+  if (isCodingPlanModel(selectedModel) && !resolvedApiUrl) {
+    const providers = await loadProviders();
+    const service = providers.codingPlan.find(s => s.id === selectedModel.serviceId);
+
+    if (service) {
+      resolvedApiUrl = service.apiUrl;
+      resolvedModelName = service.model;
+      protocol = protocol ?? service.protocol;
+      extraHeaders = extraHeaders ?? service.extraHeaders;
+      defaultParams = defaultParams ?? service.defaultParams as CallConfig['defaultParams'];
+
+      logger.debug('Resolved codingPlan service template', {
+        serviceId: selectedModel.serviceId,
+        apiUrl: service.apiUrl,
+        model: service.model,
+        protocol: service.protocol,
+      }, 'AgentLlmAdapter');
+    } else {
+      logger.error('CodingPlan service template not found', {
+        serviceId: selectedModel.serviceId,
+      }, 'AgentLlmAdapter');
+    }
+  }
+
   // Reuse the existing helper to get apiKey / apiUrl / modelName / timeout
   const llmConfig = getLLMConfigFromModel(selectedModel, resolvedApiUrl, resolvedModelName);
 
