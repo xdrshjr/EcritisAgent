@@ -84,15 +84,15 @@ const UpdateSectionParams = Type.Object({
     Type.Literal('delete'),
     Type.Literal('clear_all'),
   ], { description: 'Operation type: replace, append, insert, delete, or clear_all' }),
-  sectionIndex: Type.Optional(Type.Number({
-    description: 'Target section index (0-based). Required for replace, insert, delete.',
-  })),
-  title: Type.Optional(Type.String({
-    description: 'Section title (plain text, will be wrapped in h1/h2). Optional for replace, required for append/insert.',
-  })),
-  content: Type.Optional(Type.String({
-    description: 'Section HTML content (paragraphs, lists, etc.). Required for replace, append, insert.',
-  })),
+  sectionIndex: Type.Number({
+    description: 'Target section index (0-based). Required for replace, insert, delete. Use 0 for append and clear_all.',
+  }),
+  title: Type.String({
+    description: 'Section title (plain text, will be wrapped in h1/h2). Required for append and insert. Use empty string for delete and clear_all.',
+  }),
+  content: Type.String({
+    description: 'Section HTML content (paragraphs, lists, etc. wrapped in <p> tags). Required for replace, append, insert. Use empty string for delete and clear_all.',
+  }),
 });
 
 const InsertImageParams = Type.Object({
@@ -192,12 +192,13 @@ export const createDocAgentTools = (
     name: 'update_section',
     label: 'Update Section',
     description:
-      '对文档进行章节级别的编辑操作。支持五种操作：' +
-      'replace(替换指定章节的标题和内容)、' +
-      'append(在文档末尾追加新章节)、' +
-      'insert(在指定位置之前插入新章节)、' +
-      'delete(删除指定章节，不可删除section 0)、' +
-      'clear_all(清空整个文档，用于重新编写时先清除旧内容)。' +
+      '对文档进行章节级别的编辑操作。所有参数(operation, sectionIndex, title, content)都必须提供。' +
+      '支持五种操作：' +
+      'replace(替换指定章节，需要sectionIndex和content，title可为空串表示保留原标题)、' +
+      'append(在文档末尾追加新章节，需要title和content，sectionIndex传0)、' +
+      'insert(在指定位置之前插入新章节，需要sectionIndex、title和content)、' +
+      'delete(删除指定章节，需要sectionIndex，title和content传空串)、' +
+      'clear_all(清空整个文档，sectionIndex传0，title和content传空串)。' +
       '内容使用HTML格式(p, ul, ol, li, strong, em等标签)。',
     parameters: UpdateSectionParams,
     execute: async (_toolCallId, params) => {
@@ -208,10 +209,7 @@ export const createDocAgentTools = (
       // ── Validation ─────────────────────────────────────────────────────
       switch (operation) {
         case 'replace': {
-          if (sectionIndex === undefined || sectionIndex === null) {
-            return errorResult('replace operation requires sectionIndex', {});
-          }
-          if (sectionIndex < 0 || sectionIndex >= sections.length) {
+          if (sectionIndex == null || sectionIndex < 0 || sectionIndex >= sections.length) {
             return errorResult(
               `sectionIndex ${sectionIndex} out of range. Valid range: 0-${sections.length - 1}`,
               {},
@@ -270,10 +268,7 @@ export const createDocAgentTools = (
         }
 
         case 'insert': {
-          if (sectionIndex === undefined || sectionIndex === null) {
-            return errorResult('insert operation requires sectionIndex', {});
-          }
-          if (sectionIndex < 0 || sectionIndex > sections.length) {
+          if (sectionIndex == null || sectionIndex < 0 || sectionIndex > sections.length) {
             return errorResult(
               `sectionIndex ${sectionIndex} out of range for insert. Valid range: 0-${sections.length}`,
               {},
@@ -304,7 +299,7 @@ export const createDocAgentTools = (
         }
 
         case 'delete': {
-          if (sectionIndex === undefined || sectionIndex === null) {
+          if (sectionIndex == null) {
             return errorResult('delete operation requires sectionIndex', {});
           }
           if (sectionIndex === 0) {
