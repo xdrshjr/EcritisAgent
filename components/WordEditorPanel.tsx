@@ -231,24 +231,16 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
               try {
                 // Get selection position in viewport
                 const coords = editor.view.coordsAtPos(to); // Use 'to' position (end of selection)
-                const editorRect = editorContentRef.current.getBoundingClientRect();
-                
-                // Calculate toolbar width (approximately 300px for three buttons)
+                // Calculate toolbar position in viewport coordinates (fixed positioning)
                 const toolbarWidth = 300;
-                
-                // Calculate desired position (center of toolbar)
-                let desiredLeft = coords.right - editorRect.left + 20; // Small offset to the right of selection end
-                
-                // Clamp position to stay within editor boundaries
-                // Since toolbar uses translateX(-50%), left is the center position
-                const minLeft = toolbarWidth / 2; // Minimum left position (half toolbar width from left edge)
-                const maxLeft = editorRect.width - toolbarWidth / 2; // Maximum left position (half toolbar width from right edge)
-                
-                const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
-                
+                const vpMargin = 8;
+                let toolbarLeft = coords.right + 20;
+                toolbarLeft = Math.max(vpMargin, Math.min(window.innerWidth - toolbarWidth - vpMargin, toolbarLeft));
+                const toolbarTop = Math.max(vpMargin, coords.top - 50);
+
                 const position = {
-                  top: coords.top - editorRect.top + editorContentRef.current.scrollTop - 50,
-                  left: clampedLeft,
+                  top: toolbarTop,
+                  left: toolbarLeft,
                 };
                 
                 setTextSelection({
@@ -1327,31 +1319,15 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
         resultLength: result.result.length,
       }, 'WordEditorPanel');
 
-      // Calculate position for comparison view
+      // Calculate comparison view position in viewport coordinates (fixed positioning)
       logger.debug('Calculating comparison view position for polish', undefined, 'WordEditorPanel');
       const coords = editor.view.coordsAtPos(textSelection.from);
-      const editorRect = editorContentRef.current?.getBoundingClientRect();
-      
-      let position = { top: 0, left: 0 };
-      if (editorRect && editorContentRef.current) {
-        // Calculate comparison view width (max-w-2xl = 672px)
-        const comparisonWidth = 672;
-        
-        // Calculate desired position (center of comparison view)
-        const desiredLeft = coords.left - editorRect.left + (coords.right - coords.left) / 2;
-        
-        // Clamp position to stay within editor boundaries
-        // Since comparison view uses translateX(-50%), left is the center position
-        const minLeft = comparisonWidth / 2; // Minimum left position (half width from left edge)
-        const maxLeft = editorRect.width - comparisonWidth / 2; // Maximum left position (half width from right edge)
-        
-        const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
-        
-        position = {
-          top: coords.top - editorRect.top + editorContentRef.current.scrollTop + 30,
-          left: clampedLeft,
-        };
-      }
+      const comparisonWidth = 672;
+      const vpMargin = 8;
+      let compLeft = coords.left + (coords.right - coords.left) / 2 - comparisonWidth / 2;
+      compLeft = Math.max(vpMargin, Math.min(window.innerWidth - comparisonWidth - vpMargin, compLeft));
+      const compTop = Math.max(vpMargin, coords.top + 30);
+      const position = { top: compTop, left: compLeft };
 
       // Show comparison view
       setTextComparison({
@@ -1420,31 +1396,15 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
         resultLength: result.result.length,
       }, 'WordEditorPanel');
 
-      // Calculate position for comparison view
+      // Calculate comparison view position in viewport coordinates (fixed positioning)
       logger.debug('Calculating comparison view position for rewrite', undefined, 'WordEditorPanel');
       const coords = editor.view.coordsAtPos(textSelection.from);
-      const editorRect = editorContentRef.current?.getBoundingClientRect();
-      
-      let position = { top: 0, left: 0 };
-      if (editorRect && editorContentRef.current) {
-        // Calculate comparison view width (max-w-2xl = 672px)
-        const comparisonWidth = 672;
-        
-        // Calculate desired position (center of comparison view)
-        const desiredLeft = coords.left - editorRect.left + (coords.right - coords.left) / 2;
-        
-        // Clamp position to stay within editor boundaries
-        // Since comparison view uses translateX(-50%), left is the center position
-        const minLeft = comparisonWidth / 2; // Minimum left position (half width from left edge)
-        const maxLeft = editorRect.width - comparisonWidth / 2; // Maximum left position (half width from right edge)
-        
-        const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
-        
-        position = {
-          top: coords.top - editorRect.top + editorContentRef.current.scrollTop + 30,
-          left: clampedLeft,
-        };
-      }
+      const comparisonWidth = 672;
+      const vpMargin = 8;
+      let compLeft = coords.left + (coords.right - coords.left) / 2 - comparisonWidth / 2;
+      compLeft = Math.max(vpMargin, Math.min(window.innerWidth - comparisonWidth - vpMargin, compLeft));
+      const compTop = Math.max(vpMargin, coords.top + 30);
+      const position = { top: compTop, left: compLeft };
 
       // Show comparison view
       setTextComparison({
@@ -1517,49 +1477,21 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
         issueCount: result.issues.length,
       }, 'WordEditorPanel');
 
-      // Calculate position for check result view
+      // Calculate check result view position in viewport coordinates (fixed positioning)
       logger.debug('Calculating check result view position', undefined, 'WordEditorPanel');
-      
-      const coords = editor.view.coordsAtPos(textSelection.from);
-      const editorRect = editorContentRef.current?.getBoundingClientRect();
-      
-      let position = { top: 0, left: 0 };
-      if (editorRect && editorContentRef.current) {
-        // Calculate check result view width (max-w-2xl = 672px)
-        const resultViewWidth = 672;
-        
-        // Calculate desired position (center of result view)
-        const desiredLeft = coords.left - editorRect.left + (coords.right - coords.left) / 2;
-        
-        // Clamp position to stay within editor boundaries
-        // Since result view uses translateX(-50%), left is the center position
-        const minLeft = resultViewWidth / 2; // Minimum left position (half width from left edge)
-        const maxLeft = editorRect.width - resultViewWidth / 2; // Maximum left position (half width from right edge)
-        
-        const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
-        
-        position = {
-          top: coords.top - editorRect.top + editorContentRef.current.scrollTop + 30,
-          left: clampedLeft,
-        };
 
-        logger.debug('Check result view position calculated', {
-          position,
-          editorRect: {
-            width: editorRect.width,
-            height: editorRect.height,
-          },
-          coords: {
-            left: coords.left,
-            top: coords.top,
-          },
-        }, 'WordEditorPanel');
-      } else {
-        logger.warn('Could not calculate check result view position', {
-          hasEditorRect: !!editorRect,
-          hasEditorContentRef: !!editorContentRef.current,
-        }, 'WordEditorPanel');
-      }
+      const coords = editor.view.coordsAtPos(textSelection.from);
+      const resultViewWidth = 672;
+      const vpMargin = 8;
+      let resultLeft = coords.left + (coords.right - coords.left) / 2 - resultViewWidth / 2;
+      resultLeft = Math.max(vpMargin, Math.min(window.innerWidth - resultViewWidth - vpMargin, resultLeft));
+      const resultTop = Math.max(vpMargin, coords.top + 30);
+      const position = { top: resultTop, left: resultLeft };
+
+      logger.debug('Check result view position calculated', {
+        position,
+        coords: { left: coords.left, top: coords.top },
+      }, 'WordEditorPanel');
 
       // Show check result view
       logger.debug('Setting check result view', {
@@ -1588,23 +1520,14 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
       logger.debug('Preparing error display in check result view', undefined, 'WordEditorPanel');
       
       const coords = editor.view.coordsAtPos(textSelection.from);
-      const editorRect = editorContentRef.current?.getBoundingClientRect();
-      
-      let position = { top: 0, left: 0 };
-      if (editorRect && editorContentRef.current) {
-        const resultViewWidth = 672;
-        const desiredLeft = coords.left - editorRect.left + (coords.right - coords.left) / 2;
-        const minLeft = resultViewWidth / 2;
-        const maxLeft = editorRect.width - resultViewWidth / 2;
-        const clampedLeft = Math.max(minLeft, Math.min(maxLeft, desiredLeft));
-        
-        position = {
-          top: coords.top - editorRect.top + editorContentRef.current.scrollTop + 30,
-          left: clampedLeft,
-        };
+      const resultViewWidth = 672;
+      const vpMargin = 8;
+      let errorLeft = coords.left + (coords.right - coords.left) / 2 - resultViewWidth / 2;
+      errorLeft = Math.max(vpMargin, Math.min(window.innerWidth - resultViewWidth - vpMargin, errorLeft));
+      const errorTop = Math.max(vpMargin, coords.top + 30);
+      const position = { top: errorTop, left: errorLeft };
 
-        logger.debug('Error position calculated', { position }, 'WordEditorPanel');
-      }
+      logger.debug('Error position calculated', { position }, 'WordEditorPanel');
       
       const errorMessage = error instanceof Error ? error.message : '未知错误';
       logger.debug('Setting error check result view', {
@@ -1976,7 +1899,6 @@ const WordEditorPanel = forwardRef<WordEditorPanelRef, WordEditorPanelProps>(
             issues={checkResult.issues}
             position={checkResult.position}
             onClose={() => setCheckResult(null)}
-            editorContainerRef={editorContentRef}
           />
         )}
       </div>

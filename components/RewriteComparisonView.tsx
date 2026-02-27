@@ -3,12 +3,14 @@
  * Displays original and processed text side by side
  * Allows user to accept or reject the processed text
  * Used for both rewrite and polish operations
+ * Uses fixed positioning with viewport boundary constraints and drag support
  */
 
 'use client';
 
-import { Check, X } from 'lucide-react';
+import { Check, X, GripVertical } from 'lucide-react';
 import { logger } from '@/lib/logger';
+import { useDraggablePopup } from '@/lib/useDraggablePopup';
 
 interface RewriteComparisonViewProps {
   originalText: string;
@@ -26,10 +28,12 @@ const RewriteComparisonView = ({
   originalText,
   processedText,
   type,
-  position,
+  position: initialPosition,
   onAccept,
   onReject,
 }: RewriteComparisonViewProps) => {
+  const { position, isDragging, panelRef, handleDragStart } = useDraggablePopup(initialPosition);
+
   const handleAccept = () => {
     logger.info(`${type === 'rewrite' ? 'Rewrite' : 'Polish'} accepted`, undefined, 'RewriteComparisonView');
     onAccept();
@@ -44,22 +48,32 @@ const RewriteComparisonView = ({
   const processedLabel = type === 'rewrite' ? '重写后' : '润色后';
 
   const panelStyle: React.CSSProperties = {
-    position: 'absolute',
+    position: 'fixed',
     top: `${position.top}px`,
     left: `${position.left}px`,
-    transform: 'translateX(-50%)',
-    zIndex: 1001,
+    zIndex: 99999,
+    cursor: isDragging ? 'grabbing' : 'default',
+    userSelect: isDragging ? 'none' : 'auto',
   };
 
   return (
     <div
-      className="bg-card border border-border rounded shadow-lg p-4 rewrite-comparison-view max-w-2xl"
+      ref={panelRef}
+      className={`bg-card border border-border rounded shadow-lg p-4 rewrite-comparison-view max-w-2xl ${isDragging ? 'select-none' : ''}`}
       style={panelStyle}
     >
       <div className="flex flex-col gap-4">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border pb-2">
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        {/* Header - Draggable */}
+        <div
+          className="flex items-center justify-between border-b border-border pb-2 cursor-grab active:cursor-grabbing"
+          onMouseDown={handleDragStart}
+        >
+          <div className="flex items-center gap-2">
+            <div className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
+              <GripVertical className="w-4 h-4" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleAccept}
@@ -110,4 +124,3 @@ const RewriteComparisonView = ({
 };
 
 export default RewriteComparisonView;
-

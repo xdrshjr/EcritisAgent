@@ -2,12 +2,14 @@
  * TextSelectionToolbar Component
  * Floating toolbar that appears above selected text in the editor
  * Provides polish, rewrite, and check functionality
+ * Uses fixed positioning with viewport boundary constraints and drag support
  */
 
 'use client';
 
-import { Sparkles, RefreshCw, CheckCircle2, Loader2 } from 'lucide-react';
+import { Sparkles, RefreshCw, CheckCircle2, Loader2, GripVertical } from 'lucide-react';
 import { logger } from '@/lib/logger';
+import { useDraggablePopup } from '@/lib/useDraggablePopup';
 
 interface TextSelectionToolbarProps {
   position: {
@@ -23,7 +25,7 @@ interface TextSelectionToolbarProps {
 }
 
 const TextSelectionToolbar = ({
-  position,
+  position: initialPosition,
   onPolish,
   onRewrite,
   onCheck,
@@ -31,6 +33,8 @@ const TextSelectionToolbar = ({
   processingType = null,
   onClose,
 }: TextSelectionToolbarProps) => {
+  const { position, isDragging, panelRef, handleDragStart } = useDraggablePopup(initialPosition);
+
   const handlePolish = () => {
     logger.info('Polish button clicked', undefined, 'TextSelectionToolbar');
     onPolish();
@@ -47,19 +51,29 @@ const TextSelectionToolbar = ({
   };
 
   const panelStyle: React.CSSProperties = {
-    position: 'absolute',
+    position: 'fixed',
     top: `${position.top}px`,
     left: `${position.left}px`,
-    transform: 'translateX(-50%)',
-    zIndex: 1000,
+    zIndex: 99999,
+    cursor: isDragging ? 'grabbing' : 'default',
+    userSelect: isDragging ? 'none' : 'auto',
   };
 
   return (
     <div
-      className="bg-card border border-border rounded shadow-lg px-3 py-2 text-selection-toolbar whitespace-nowrap"
+      ref={panelRef}
+      className={`bg-card border border-border rounded shadow-lg px-3 py-2 text-selection-toolbar whitespace-nowrap ${isDragging ? 'select-none' : ''}`}
       style={panelStyle}
     >
       <div className="flex items-center gap-3">
+        {/* Drag Handle */}
+        <div
+          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+          onMouseDown={handleDragStart}
+        >
+          <GripVertical className="w-4 h-4" />
+        </div>
+
         {/* Polish Button */}
         <button
           onClick={handlePolish}
@@ -125,4 +139,3 @@ const TextSelectionToolbar = ({
 };
 
 export default TextSelectionToolbar;
-

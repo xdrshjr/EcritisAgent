@@ -2,13 +2,14 @@
  * TextCheckResultView Component
  * Displays text check results in a beautiful panel
  * Shows all issues found during text checking
+ * Uses fixed positioning with viewport boundary constraints and drag support
  */
 
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { X, AlertCircle, CheckCircle2, AlertTriangle, FileText, Lightbulb, GripVertical } from 'lucide-react';
+import { X, AlertCircle, CheckCircle2, AlertTriangle, Lightbulb, GripVertical } from 'lucide-react';
 import { logger } from '@/lib/logger';
+import { useDraggablePopup } from '@/lib/useDraggablePopup';
 
 interface CheckIssue {
   type: 'grammar' | 'spelling' | 'style' | 'other';
@@ -23,156 +24,19 @@ interface TextCheckResultViewProps {
     left: number;
   };
   onClose: () => void;
-  editorContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 const TextCheckResultView = ({
   issues,
   position: initialPosition,
   onClose,
-  editorContainerRef,
 }: TextCheckResultViewProps) => {
-  const [position, setPosition] = useState(initialPosition);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  // Update position when initialPosition changes
-  useEffect(() => {
-    setPosition(initialPosition);
-  }, [initialPosition]);
+  const { position, isDragging, panelRef, handleDragStart } = useDraggablePopup(initialPosition);
 
   const handleClose = () => {
     logger.info('Text check result view closed', undefined, 'TextCheckResultView');
     onClose();
   };
-
-  // Calculate boundary constraints
-  const getBoundaries = useCallback(() => {
-    if (!panelRef.current || !editorContainerRef?.current) {
-      return { minLeft: 0, maxLeft: window.innerWidth, minTop: 0, maxTop: window.innerHeight };
-    }
-
-    const panelRect = panelRef.current.getBoundingClientRect();
-    const editorRect = editorContainerRef.current.getBoundingClientRect();
-    const panelWidth = panelRect.width;
-    const panelHeight = panelRect.height;
-
-    // Calculate boundaries relative to editor container
-    const minLeft = panelWidth / 2; // Half width from left edge (since we use translateX(-50%))
-    const maxLeft = editorRect.width - panelWidth / 2; // Half width from right edge
-    const minTop = 0;
-    const maxTop = editorRect.height - panelHeight;
-
-    logger.debug('Calculated drag boundaries', {
-      minLeft,
-      maxLeft,
-      minTop,
-      maxTop,
-      editorWidth: editorRect.width,
-      editorHeight: editorRect.height,
-      panelWidth,
-      panelHeight,
-    }, 'TextCheckResultView');
-
-    return { minLeft, maxLeft, minTop, maxTop };
-  }, [editorContainerRef]);
-
-  // Handle drag start
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // Only allow dragging from header area
-    const target = e.target as HTMLElement;
-    if (!target.closest('.drag-handle') && !target.closest('.drag-header')) {
-      return;
-    }
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!panelRef.current || !editorContainerRef?.current) return;
-
-    const panelRect = panelRef.current.getBoundingClientRect();
-    const editorRect = editorContainerRef.current.getBoundingClientRect();
-    
-    // Calculate mouse position relative to editor container
-    const mouseXRelativeToEditor = e.clientX - editorRect.left;
-    const mouseYRelativeToEditor = e.clientY - editorRect.top;
-
-    // Panel center position relative to editor container (position.left is the center due to translateX(-50%))
-    const panelCenterX = position.left;
-    const panelTop = position.top;
-
-    // Calculate offset: mouse position relative to panel center/top
-    const offsetX = mouseXRelativeToEditor - panelCenterX;
-    const offsetY = mouseYRelativeToEditor - panelTop;
-
-    setDragOffset({ x: offsetX, y: offsetY });
-    setIsDragging(true);
-
-    logger.debug('Drag started', {
-      mouseX: e.clientX,
-      mouseY: e.clientY,
-      mouseXRelativeToEditor,
-      mouseYRelativeToEditor,
-      panelCenterX,
-      panelTop,
-      offsetX,
-      offsetY,
-      currentPosition: position,
-    }, 'TextCheckResultView');
-  }, [editorContainerRef, position]);
-
-  // Handle drag move
-  useEffect(() => {
-    if (!isDragging) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!panelRef.current || !editorContainerRef?.current) return;
-
-      const editorRect = editorContainerRef.current.getBoundingClientRect();
-      const boundaries = getBoundaries();
-
-      // Calculate mouse position relative to editor container
-      const mouseXRelativeToEditor = e.clientX - editorRect.left;
-      const mouseYRelativeToEditor = e.clientY - editorRect.top;
-
-      // Calculate new panel center position: mouse position minus the offset
-      // Since position.left represents the center (due to translateX(-50%)), 
-      // we directly use mouse position minus offset
-      let newLeft = mouseXRelativeToEditor - dragOffset.x;
-      let newTop = mouseYRelativeToEditor - dragOffset.y;
-
-      // Clamp to boundaries
-      newLeft = Math.max(boundaries.minLeft, Math.min(boundaries.maxLeft, newLeft));
-      newTop = Math.max(boundaries.minTop, Math.min(boundaries.maxTop, newTop));
-
-      setPosition({ top: newTop, left: newLeft });
-
-      logger.debug('Drag move', {
-        mouseX: e.clientX,
-        mouseY: e.clientY,
-        mouseXRelativeToEditor,
-        mouseYRelativeToEditor,
-        dragOffset,
-        newLeft,
-        newTop,
-        clamped: newLeft !== mouseXRelativeToEditor - dragOffset.x || newTop !== mouseYRelativeToEditor - dragOffset.y,
-      }, 'TextCheckResultView');
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      logger.debug('Drag ended', { finalPosition: position }, 'TextCheckResultView');
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, dragOffset, getBoundaries, editorContainerRef, position]);
 
   const getIssueTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
@@ -232,11 +96,10 @@ const TextCheckResultView = ({
   };
 
   const panelStyle: React.CSSProperties = {
-    position: 'absolute',
+    position: 'fixed',
     top: `${position.top}px`,
     left: `${position.left}px`,
-    transform: 'translateX(-50%)',
-    zIndex: 1001,
+    zIndex: 99999,
     cursor: isDragging ? 'grabbing' : 'default',
     userSelect: isDragging ? 'none' : 'auto',
   };
@@ -255,16 +118,16 @@ const TextCheckResultView = ({
     >
       <div className="flex flex-col gap-4 p-5">
         {/* Header - Draggable */}
-        <div 
-          className="flex items-center justify-between border-b border-border/50 pb-3 drag-header cursor-grab active:cursor-grabbing"
-          onMouseDown={handleMouseDown}
+        <div
+          className="flex items-center justify-between border-b border-border/50 pb-3 cursor-grab active:cursor-grabbing"
+          onMouseDown={handleDragStart}
         >
           <div className="flex items-center gap-3 flex-1">
             {/* Drag Handle */}
-            <div className="drag-handle cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
+            <div className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
               <GripVertical className="w-4 h-4" />
             </div>
-            
+
             {issues.length === 0 ? (
               <div className="relative">
                 <div className="absolute inset-0 bg-green-500/20 rounded-full blur-md" />
@@ -340,7 +203,7 @@ const TextCheckResultView = ({
                         <div className={`flex-shrink-0 w-8 h-8 rounded-lg ${config.iconBgColor} flex items-center justify-center`}>
                           <AlertTriangle className={`w-4 h-4 ${config.iconColor}`} />
                         </div>
-                        
+
                         {/* Issue Content */}
                         <div className="flex-1 flex flex-col gap-2.5 min-w-0">
                           {/* Issue Header with Type Badge */}
@@ -352,12 +215,12 @@ const TextCheckResultView = ({
                               {index + 1}
                             </div>
                           </div>
-                          
+
                           {/* Issue Message */}
                           <div className={`${config.textColor} text-sm leading-relaxed font-medium`}>
                             {issue.message}
                           </div>
-                          
+
                           {/* Suggestion */}
                           {issue.suggestion && (
                             <div className={`mt-2 pl-3 border-l ${config.borderColor} ${config.textColor} opacity-90`}>
@@ -389,4 +252,3 @@ const TextCheckResultView = ({
 };
 
 export default TextCheckResultView;
-
