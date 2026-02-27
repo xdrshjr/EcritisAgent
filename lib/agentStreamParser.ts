@@ -33,7 +33,7 @@ export interface AgentStreamCallbacks {
   onToolUpdate?: (update: { toolId: string; toolName: string; content: string }) => void;
   onToolResult?: (result: { toolId: string; toolName: string; content: string; isError: boolean }) => void;
   onTurnEnd?: () => void;
-  onComplete?: () => void;
+  onComplete?: (messages?: unknown[]) => void;
   onError?: (error: string) => void;
 }
 
@@ -164,7 +164,7 @@ const dispatchEvent = (
       break;
 
     case 'complete':
-      callbacks.onComplete?.();
+      callbacks.onComplete?.(data.messages as unknown[] | undefined);
       break;
 
     case 'error':

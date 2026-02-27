@@ -93,6 +93,7 @@ const ChatPanel = ({
   const isUserScrollingRef = useRef(false);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const agentHistoryRef = useRef<Map<string, unknown[]>>(new Map());
 
   // Agent mode state
   const [agentMode, setAgentMode] = useState(false);
@@ -483,6 +484,7 @@ const ChatPanel = ({
       const requestBody = {
         message: content,
         workDir: agentWorkDir,
+        history: agentHistoryRef.current.get(convId),
         llmConfig: {
           model: llmConfig.model,
           streamOptions: llmConfig.streamOptions,
@@ -644,7 +646,10 @@ const ChatPanel = ({
           flushBlocks();
         },
 
-        onComplete: () => {
+        onComplete: (messages) => {
+          if (messages && convId) {
+            agentHistoryRef.current.set(convId, messages);
+          }
           closeContentBlock();
           logger.success('Agent loop completed', {
             contentLength: assistantContent.length,
@@ -1963,9 +1968,10 @@ const ChatPanel = ({
     onMessagesMapChange(newMapForClear);
     
     setStreamingContent('');
-    
-    logger.debug('Chat context cleared', { 
-      newMessageCount: messages.length + 1 
+    agentHistoryRef.current.delete(conversationId);
+
+    logger.debug('Chat context cleared', {
+      newMessageCount: messages.length + 1
     }, 'ChatPanel');
   };
 

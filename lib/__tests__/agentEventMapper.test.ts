@@ -37,7 +37,7 @@ describe('mapAgentEventToSSE', () => {
 
   it('maps agent_end to complete', () => {
     const result = mapAgentEventToSSE({ type: 'agent_end', messages: [] });
-    expect(result).toEqual([{ type: 'complete' }]);
+    expect(result).toEqual([{ type: 'complete', messages: [] }]);
   });
 
   it('maps turn_start to empty array', () => {

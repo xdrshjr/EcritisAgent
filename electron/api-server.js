@@ -412,7 +412,7 @@ class APIRouteHandlers {
     const mapEvent = (event) => {
       switch (event.type) {
         case 'agent_start':   return [{ type: 'agent_start' }];
-        case 'agent_end':     return [{ type: 'complete' }];
+        case 'agent_end':     return [{ type: 'complete', messages: event.messages }];
         case 'turn_start':    return [];
         case 'turn_end':      return [{ type: 'turn_end' }];
         case 'message_start': return [{ type: 'thinking_start' }];
@@ -1088,7 +1088,7 @@ class APIRouteHandlers {
     const mapEvent = (event) => {
       switch (event.type) {
         case 'agent_start':   return [{ type: 'agent_start' }];
-        case 'agent_end':     return [{ type: 'complete' }];
+        case 'agent_end':     return [{ type: 'complete', messages: event.messages }];
         case 'turn_start':    return [];
         case 'turn_end':      return [{ type: 'turn_end' }];
         case 'message_start': return [{ type: 'thinking_start' }];

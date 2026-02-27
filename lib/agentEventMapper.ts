@@ -56,6 +56,7 @@ export interface SSEToolResult {
 
 export interface SSEComplete {
   type: 'complete';
+  messages?: unknown[];
 }
 
 export interface SSETurnEnd {
@@ -117,7 +118,7 @@ export const mapAgentEventToSSE = (event: AgentEvent): SSEPayload[] => {
       return [{ type: 'agent_start' }];
 
     case 'agent_end':
-      return [{ type: 'complete' }];
+      return [{ type: 'complete', messages: event.messages }];
 
     case 'turn_start':
       return []; // no SSE needed — the first message_start will signal the UI
