@@ -73,16 +73,19 @@ const ContentBlockView = ({ block }: { block: AgentContentBlock }) => {
               );
             }
             return (
-              <div className="relative my-1">
-                <pre className="bg-[#0d1117] rounded-md p-2 overflow-x-auto">
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
-                </pre>
-              </div>
+              <code className={className} {...props}>
+                {children}
+              </code>
             );
           },
           /* eslint-enable @typescript-eslint/no-explicit-any */
+          pre: ({ node: _n, children, ...props }) => (
+            <div className="relative my-1">
+              <pre className="bg-[#0d1117] rounded-md p-2 overflow-x-auto" {...props}>
+                {children}
+              </pre>
+            </div>
+          ),
           a: ({ node: _n, children, ...props }) => (
             <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 underline underline-offset-2">
               {children}
