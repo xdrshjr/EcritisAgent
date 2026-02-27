@@ -12,6 +12,7 @@ import FloatingChatButton from '@/components/FloatingChatButton';
 import { FileCheck, MessageSquare, PenSquare } from 'lucide-react';
 import { getDictionary } from '@/lib/i18n/dictionaries';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import type { Conversation } from '@/components/ConversationList';
 import type { Message } from '@/components/ChatPanel';
@@ -24,6 +25,7 @@ export default function Home() {
   const dict = getDictionary(locale);
   
   const [activeTaskId, setActiveTaskId] = useState('ai-chat');
+  const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set(['ai-chat']));
   
   // AI Doc Validation state
   const [editorContent, setEditorContent] = useState<string>('');
@@ -170,8 +172,8 @@ export default function Home() {
   ];
 
   const handleTaskChange = (taskId: string) => {
-    logger.info('Active task changed', { 
-      fromTask: activeTaskId, 
+    logger.info('Active task changed', {
+      fromTask: activeTaskId,
       toTask: taskId,
       floatingChatButtonVisible: taskId !== 'ai-chat',
       preservedState: {
@@ -181,11 +183,23 @@ export default function Home() {
         validationResults: validationResults.length,
       }
     }, 'Home');
+    setMountedPanels(prev => {
+      if (prev.has(taskId)) return prev;
+      const next = new Set(prev);
+      next.add(taskId);
+      return next;
+    });
     setActiveTaskId(taskId);
   };
 
   const handleSettingsClick = () => {
     logger.info('Settings button clicked', undefined, 'Home');
+    setMountedPanels(prev => {
+      if (prev.has('settings')) return prev;
+      const next = new Set(prev);
+      next.add('settings');
+      return next;
+    });
     setActiveTaskId('settings');
   };
 
@@ -331,10 +345,10 @@ export default function Home() {
       <div className="flex-1 flex overflow-hidden">
         <Taskbar tasks={tasks} onTaskChange={handleTaskChange} />
         
-        <main className="flex-1 bg-background overflow-hidden">
-          {activeTaskId === 'ai-chat' && (
-            isAIChatStateReady ? (
-              <AIChatContainer 
+        <main className="flex-1 bg-background overflow-hidden relative">
+          <div className={cn('absolute inset-0', activeTaskId !== 'ai-chat' && 'hidden')}>
+            {isAIChatStateReady ? (
+              <AIChatContainer
                 conversations={conversations}
                 activeConversationId={activeConversationId}
                 messagesMap={messagesMap}
@@ -346,34 +360,40 @@ export default function Home() {
               <div className="h-full flex items-center justify-center text-muted-foreground">
                 <p className="text-sm">Loading chat history...</p>
               </div>
-            )
+            )}
+          </div>
+          {mountedPanels.has('ai-doc-validation') && (
+            <div className={cn('absolute inset-0', activeTaskId !== 'ai-doc-validation' && 'hidden')}>
+              <AIDocValidationContainer
+                onExportRequest={handleExport}
+                onContentChange={handleContentChange}
+                onExportReadyChange={handleExportReadyChange}
+                validationResults={validationResults}
+                onValidationResultsChange={handleValidationResultsChange}
+                leftPanelWidth={docValidationLeftPanelWidth}
+                onLeftPanelWidthChange={handleDocValidationPanelWidthChange}
+                selectedModelId={selectedModelId}
+                onSelectedModelIdChange={handleSelectedModelIdChange}
+                getDocumentContent={getDocumentContentFn}
+                updateDocumentContent={updateDocumentContentFn}
+                onDocumentFunctionsReady={handleDocumentFunctionsReady}
+              />
+            </div>
           )}
-          {activeTaskId === 'ai-doc-validation' && (
-            <AIDocValidationContainer 
-              onExportRequest={handleExport}
-              onContentChange={handleContentChange}
-              onExportReadyChange={handleExportReadyChange}
-              validationResults={validationResults}
-              onValidationResultsChange={handleValidationResultsChange}
-              leftPanelWidth={docValidationLeftPanelWidth}
-              onLeftPanelWidthChange={handleDocValidationPanelWidthChange}
-              selectedModelId={selectedModelId}
-              onSelectedModelIdChange={handleSelectedModelIdChange}
-              getDocumentContent={getDocumentContentFn}
-              updateDocumentContent={updateDocumentContentFn}
-              onDocumentFunctionsReady={handleDocumentFunctionsReady}
-            />
+          {mountedPanels.has('ai-auto-writer') && (
+            <div className={cn('absolute inset-0', activeTaskId !== 'ai-auto-writer' && 'hidden')}>
+              <AIAutoWriterContainer
+                leftPanelWidth={autoWriterLeftPanelWidth}
+                onLeftPanelWidthChange={setAutoWriterLeftPanelWidth}
+                onContentChange={handleContentChange}
+                selectedModelId={selectedModelId}
+              />
+            </div>
           )}
-          {activeTaskId === 'ai-auto-writer' && (
-            <AIAutoWriterContainer
-              leftPanelWidth={autoWriterLeftPanelWidth}
-              onLeftPanelWidthChange={setAutoWriterLeftPanelWidth}
-              onContentChange={handleContentChange}
-              selectedModelId={selectedModelId}
-            />
-          )}
-          {activeTaskId === 'settings' && (
-            <SettingsContainer />
+          {mountedPanels.has('settings') && (
+            <div className={cn('absolute inset-0', activeTaskId !== 'settings' && 'hidden')}>
+              <SettingsContainer />
+            </div>
           )}
         </main>
       </div>
