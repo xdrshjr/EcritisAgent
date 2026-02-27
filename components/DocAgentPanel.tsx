@@ -11,6 +11,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { Loader2, Trash2, Send, Bot } from 'lucide-react';
+import AgentToggle from './AgentToggle';
 import AgentExecutionTimeline from './AgentExecutionTimeline';
 import AgentThinkingIndicator from './AgentThinkingIndicator';
 import { logger } from '@/lib/logger';
@@ -88,6 +89,7 @@ const prepareDocAgentHistory = (messages: DocAgentMessage[]): SimplifiedHistoryM
 // ── Storage ─────────────────────────────────────────────────────────────────
 
 const STORAGE_KEY = 'aidocmaster.docAgentMessages';
+const AGENT_MODE_KEY = 'aidocmaster.docAgentMode';
 
 const saveMessages = (messages: DocAgentMessage[]): void => {
   try {
@@ -140,6 +142,21 @@ const DocAgentPanel = ({
 
   // Model
   const [selectedModel, setSelectedModel] = useState<ModelConfig | null>(null);
+
+  // Agent mode (true = use tools, false = Q&A only)
+  const [agentMode, setAgentMode] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = localStorage.getItem(AGENT_MODE_KEY);
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  // ── Agent mode toggle ───────────────────────────────────────────────────
+
+  const handleAgentModeChange = useCallback((enabled: boolean) => {
+    setAgentMode(enabled);
+    localStorage.setItem(AGENT_MODE_KEY, String(enabled));
+    logger.info('Doc agent mode changed', { agentMode: enabled }, 'DocAgentPanel');
+  }, []);
 
   // ── Load messages from localStorage ─────────────────────────────────────
 
@@ -317,6 +334,7 @@ const DocAgentPanel = ({
           model: llmConfig.model,
           streamOptions: llmConfig.streamOptions,
         },
+        agentMode,
       };
 
       const apiUrl = await buildApiUrl('/api/doc-agent-chat');
@@ -519,7 +537,7 @@ const DocAgentPanel = ({
       setStreamingBlocks([]);
       abortControllerRef.current = null;
     }
-  }, [inputValue, isStreaming, selectedModel, messages, getDocumentContent, handleDocUpdate]);
+  }, [inputValue, isStreaming, selectedModel, messages, getDocumentContent, handleDocUpdate, agentMode]);
 
   // ── Stop streaming ──────────────────────────────────────────────────────
 
@@ -552,21 +570,11 @@ const DocAgentPanel = ({
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div className="flex items-center px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
           <Bot className="w-4 h-4 text-primary" />
           <span className="text-sm font-medium">{dict.chat.docAgentTitle}</span>
         </div>
-        <button
-          onClick={handleClearHistory}
-          disabled={isStreaming || messages.length === 0}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label={dict.chat.docAgentClearHistory}
-          title={dict.chat.docAgentClearHistory}
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          <span>{dict.chat.docAgentClearHistory}</span>
-        </button>
       </div>
 
       {/* Messages */}
@@ -644,6 +652,29 @@ const DocAgentPanel = ({
 
       {/* Input area */}
       <div className="border-t border-border px-4 py-3">
+        {/* Agent mode toggle + Clear button */}
+        <div className="flex items-center justify-between mb-2">
+          <div
+            title={agentMode ? dict.chat.docAgentModeOn : dict.chat.docAgentModeOff}
+          >
+            <AgentToggle
+              enabled={agentMode}
+              onChange={handleAgentModeChange}
+              disabled={isStreaming}
+            />
+          </div>
+          <button
+            onClick={handleClearHistory}
+            disabled={isStreaming || messages.length === 0}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label={dict.chat.docAgentClearHistory}
+            title={dict.chat.docAgentClearHistory}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>{dict.chat.docAgentClearHistory}</span>
+          </button>
+        </div>
+        {/* Input + Send button */}
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}

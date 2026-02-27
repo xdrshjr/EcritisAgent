@@ -8,7 +8,7 @@
  * search_image) to interact with the TipTap editor.
  *
  * POST /api/doc-agent-chat
- * Body: { message, documentContent, history?, llmConfig }
+ * Body: { message, documentContent, history?, llmConfig, agentMode? }
  * Response: text/event-stream
  */
 
@@ -46,6 +46,9 @@ interface DocAgentChatRequestBody {
     model: Model<any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     streamOptions: Omit<StreamOptions, 'signal'>;
   };
+  /** When true (default), agent uses tools to edit the document.
+   *  When false, agent only answers questions without tools. */
+  agentMode?: boolean;
 }
 
 // ── History conversion ──────────────────────────────────────────────────────
@@ -106,7 +109,7 @@ export async function POST(request: NextRequest) {
     return jsonError('Invalid JSON body', 400);
   }
 
-  const { message, documentContent = '', history, llmConfig } = body;
+  const { message, documentContent = '', history, llmConfig, agentMode = true } = body;
 
   if (!message || typeof message !== 'string') {
     return jsonError('message is required', 400);
@@ -122,10 +125,11 @@ export async function POST(request: NextRequest) {
     modelId: llmConfig.model.id,
     hasHistory: !!history?.length,
     historyLength: history?.length ?? 0,
+    agentMode,
   }, 'API:DocAgentChat');
 
   // ── Build Agent ────────────────────────────────────────────────────────
-  const systemPrompt = buildDocAgentSystemPrompt();
+  const systemPrompt = buildDocAgentSystemPrompt(agentMode);
   const { model, streamOptions } = llmConfig;
 
   // SSE stream setup — the controller is captured inside start() so
@@ -148,22 +152,24 @@ export async function POST(request: NextRequest) {
         }
       };
 
-      // Create document tools with the SSE controller
-      const tools = createDocAgentTools(
-        documentContent,
-        { enqueue: (chunk: Uint8Array | string) => {
-          if (streamClosed) return;
-          try {
-            if (typeof chunk === 'string') {
-              controller.enqueue(encoder.encode(chunk));
-            } else {
-              controller.enqueue(chunk);
-            }
-          } catch {
-            streamClosed = true;
-          }
-        }},
-      );
+      // Create document tools with the SSE controller (only in agent mode)
+      const tools = agentMode
+        ? createDocAgentTools(
+            documentContent,
+            { enqueue: (chunk: Uint8Array | string) => {
+              if (streamClosed) return;
+              try {
+                if (typeof chunk === 'string') {
+                  controller.enqueue(encoder.encode(chunk));
+                } else {
+                  controller.enqueue(chunk);
+                }
+              } catch {
+                streamClosed = true;
+              }
+            }},
+          )
+        : [];
 
       const agent = new Agent({
         initialState: {
